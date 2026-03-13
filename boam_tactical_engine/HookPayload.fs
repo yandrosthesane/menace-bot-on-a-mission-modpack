@@ -80,3 +80,39 @@ let parseTileScores (root: JsonElement) : TileScoresPayload =
 let parseMovementFinished (root: JsonElement) : MovementFinishedPayload =
     { ActorId = root.GetProperty("actorId").GetInt32()
       Tile = root.GetProperty("tile") |> parseTilePos }
+
+let private parseBehaviorChoice (el: JsonElement) : BehaviorChoice =
+    { BehaviorId = tryInt el "behaviorId" 0
+      Name = tryStr el "name" ""
+      Score = tryInt el "score" 0 }
+
+let private parseActionTarget (root: JsonElement) : ActionTarget =
+    match root.TryGetProperty("target") with
+    | true, t when t.ValueKind <> JsonValueKind.Null ->
+        let pos = { X = tryInt t "x" 0; Z = tryInt t "z" 0 }
+        let apCost = tryInt t "apCost" 0
+        TileTarget (pos, apCost)
+    | _ -> NoTarget
+
+let parseActionDecision (root: JsonElement) : ActionDecisionPayload =
+    let actorId = root.GetProperty("actorId").GetInt32()
+    { Round = tryInt root "round" 0
+      Faction = root.GetProperty("faction").GetInt32()
+      ActorId = actorId
+      ActorName = tryStr root "actorName" (sprintf "actor%d" actorId)
+      Chosen = root.GetProperty("chosen") |> parseBehaviorChoice
+      Target = parseActionTarget root
+      Alternatives = tryArray root "alternatives" parseBehaviorChoice }
+
+let parsePlayerAction (root: JsonElement) : PlayerActionPayload =
+    let actorId = root.GetProperty("actorId").GetInt32()
+    { Round = tryInt root "round" 0
+      Faction = root.GetProperty("faction").GetInt32()
+      ActorId = actorId
+      ActorName = tryStr root "actorName" (sprintf "actor%d" actorId)
+      ActionType = tryStr root "actionType" "unknown"
+      SkillName = tryStr root "skillName" ""
+      Tile = root.GetProperty("tile") |> parseTilePos }
+
+let parseBattleStart (root: JsonElement) : BattleStartPayload =
+    { Timestamp = tryStr root "timestamp" (System.DateTime.Now.ToString("yyyyMMdd_HHmmss")) }

@@ -103,3 +103,42 @@ type MovementFinishedPayload = {
     ActorId: int
     Tile: TilePos
 }
+
+/// A single AI behavior alternative and its score.
+type BehaviorChoice = {
+    BehaviorId: int
+    Name: string
+    Score: int
+}
+
+/// Details about the chosen behavior's target.
+type ActionTarget =
+    | TileTarget of TilePos * apCost: int
+    | NoTarget
+
+/// AI action decision: chosen behavior + all alternatives.
+type ActionDecisionPayload = {
+    Round: int
+    Faction: FactionId
+    ActorId: int
+    ActorName: string
+    Chosen: BehaviorChoice
+    Target: ActionTarget
+    Alternatives: BehaviorChoice list
+}
+
+/// Player action (skill use or movement).
+type PlayerActionPayload = {
+    Round: int
+    Faction: FactionId
+    ActorId: int
+    ActorName: string
+    ActionType: string   // "move", "skill"
+    SkillName: string    // empty for move
+    Tile: TilePos
+}
+
+/// Battle session start info.
+type BattleStartPayload = {
+    Timestamp: string
+}

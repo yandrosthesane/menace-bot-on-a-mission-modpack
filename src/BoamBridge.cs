@@ -6,7 +6,9 @@ using System.Threading;
 using HarmonyLib;
 using Il2CppMenace.Tactical;
 using Il2CppMenace.Tactical.AI;
+using Il2CppMenace.Tactical.AI.Behaviors;
 using Il2CppMenace.Tactical.AI.Data;
+using Il2CppMenace.Tactical.Skills;
 using Il2CppMenace.Tools;
 using MelonLoader;
 using Menace.ModpackLoader;
@@ -85,11 +87,18 @@ public class BoamBridge : IModpackPlugin
             _round = 1;
             _lastFaction = -1;
 
-            // Movement-finished is handled via direct Harmony patch (Patch_MovementFinished below)
-            // SDK TacticalEventHooks fails to init ("TacticalManager type not found") so we patch directly
+            // Start a new battle session in the sidecar
+            var ts = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            var startPayload = JsonSerializer.Serialize(new { timestamp = ts });
+            ThreadPool.QueueUserWorkItem(_ => SidecarPost("/hook/battle-start", startPayload));
         }
         else
         {
+            if (_inTactical)
+            {
+                // End battle session when leaving tactical
+                ThreadPool.QueueUserWorkItem(_ => SidecarPost("/hook/battle-end", "{}"));
+            }
             _inTactical = false;
             _ready = false;
         }
@@ -411,10 +420,202 @@ static class Patch_MovementFinished
 
             BoamBridge.Log.Msg($"[BOAM] movement-finished f{factionId} actor={actorId} tile=({tileX},{tileZ})");
             BoamBridge.SidecarPost("/hook/movement-finished", payload);
+
+            // Also log as player action if this is a player faction unit
+            if (factionId == 1 || factionId == 2)
+            {
+                var (_, _, _, templateName) = actorInfo.Value;
+                var playerPayload = JsonSerializer.Serialize(new
+                {
+                    hook = "player-action",
+                    round = BoamBridge.Instance?.Round ?? 0,
+                    faction = factionId,
+                    actorId,
+                    actorName = templateName,
+                    actionType = "move",
+                    skillName = "",
+                    tile = new { x = tileX, z = tileZ }
+                });
+                BoamBridge.SidecarPost("/hook/player-action", playerPayload);
+            }
         }
         catch (Exception ex)
         {
             BoamBridge.Log.Error($"[BOAM] movement-finished error: {ex.Message}");
+        }
+    }
+}
+
+/// <summary>
+/// Harmony patch: intercepts Agent.Execute to capture AI behavior decisions.
+/// By this point, PickBehavior() has run and m_ActiveBehavior is set.
+/// We log the chosen behavior + all alternatives with their scores.
+/// </summary>
+[HarmonyPatch(typeof(Agent), nameof(Agent.Execute))]
+static class Patch_AgentExecute
+{
+    static void Prefix(Agent __instance)
+    {
+        try
+        {
+            var bridge = BoamBridge.Instance;
+            if (bridge == null || !bridge.IsReady) return;
+
+            var actor = __instance.m_Actor;
+            if (actor == null) return;
+
+            var active = __instance.m_ActiveBehavior;
+            if (active == null) return;
+
+            var info = BoamBridge.GetActorInfo(actor);
+            if (info == null) return;
+            var (gameObj, factionId, actorEntityId, actorName) = info.Value;
+
+            // Build chosen behavior info
+            var chosenId = (int)active.GetID();
+            var chosenName = active.GetName() ?? active.GetID().ToString();
+            var chosenScore = active.GetScore();
+
+            // Try to get target tile for Move or SkillBehavior
+            object target = null;
+            try
+            {
+                var moveBehavior = active.TryCast<Move>();
+                if (moveBehavior != null)
+                {
+                    var targetTile = moveBehavior.GetTargetTile();
+                    if (targetTile?.Tile != null)
+                    {
+                        target = new
+                        {
+                            x = targetTile.Tile.GetX(),
+                            z = targetTile.Tile.GetZ(),
+                            apCost = targetTile.APCost
+                        };
+                    }
+                }
+            }
+            catch { }
+
+            if (target == null)
+            {
+                try
+                {
+                    var skillBehavior = active.TryCast<Il2CppMenace.Tactical.AI.SkillBehavior>();
+                    if (skillBehavior != null && skillBehavior.m_TargetTile != null)
+                    {
+                        target = new
+                        {
+                            x = skillBehavior.m_TargetTile.GetX(),
+                            z = skillBehavior.m_TargetTile.GetZ(),
+                            apCost = 0
+                        };
+                    }
+                }
+                catch { }
+            }
+
+            // Build alternatives list from all behaviors
+            var alternatives = new System.Collections.Generic.List<object>();
+            try
+            {
+                var behaviors = __instance.GetBehaviors();
+                if (behaviors != null)
+                {
+                    for (int i = 0; i < behaviors.Count; i++)
+                    {
+                        var b = behaviors[i];
+                        if (b == null) continue;
+                        alternatives.Add(new
+                        {
+                            behaviorId = (int)b.GetID(),
+                            name = b.GetName() ?? b.GetID().ToString(),
+                            score = b.GetScore()
+                        });
+                    }
+                }
+            }
+            catch { }
+
+            int round = bridge.Round;
+
+            var payload = JsonSerializer.Serialize(new
+            {
+                hook = "action-decision",
+                round,
+                faction = factionId,
+                actorId = actorEntityId,
+                actorName,
+                chosen = new
+                {
+                    behaviorId = chosenId,
+                    name = chosenName,
+                    score = chosenScore
+                },
+                target,
+                alternatives
+            });
+
+            BoamBridge.Log.Msg($"[BOAM] action-decision f{factionId} {actorName}: {chosenName}({chosenScore})");
+            BoamBridge.SidecarPost("/hook/action-decision", payload);
+        }
+        catch (Exception ex)
+        {
+            BoamBridge.Log.Error($"[BOAM] action-decision error: {ex.Message}");
+        }
+    }
+}
+
+/// <summary>
+/// Harmony patch: intercepts TacticalManager.InvokeOnSkillUse to capture player skill usage.
+/// Fires for both AI and player — we filter to player factions only.
+/// </summary>
+[HarmonyPatch(typeof(Il2CppMenace.Tactical.TacticalManager), "InvokeOnSkillUse")]
+static class Patch_OnSkillUse
+{
+    static void Postfix(Il2CppMenace.Tactical.TacticalManager __instance, Actor _actor, Il2CppMenace.Tactical.Skills.Skill _skill, Il2CppMenace.Tactical.Tile _targetTile)
+    {
+        try
+        {
+            var bridge = BoamBridge.Instance;
+            if (bridge == null || !bridge.IsReady) return;
+            if (_actor == null) return;
+
+            var actorInfo = BoamBridge.GetActorInfo(_actor);
+            if (actorInfo == null) return;
+            var (_, factionId, actorId, templateName) = actorInfo.Value;
+
+            // Only log player faction skill usage
+            if (factionId != 1 && factionId != 2) return;
+
+            var skillName = "";
+            try { skillName = _skill?.GetTitle() ?? ""; } catch { }
+
+            int tileX = 0, tileZ = 0;
+            try
+            {
+                if (_targetTile != null) { tileX = _targetTile.GetX(); tileZ = _targetTile.GetZ(); }
+            }
+            catch { }
+
+            var payload = JsonSerializer.Serialize(new
+            {
+                hook = "player-action",
+                round = bridge.Round,
+                faction = factionId,
+                actorId,
+                actorName = templateName,
+                actionType = "skill",
+                skillName,
+                tile = new { x = tileX, z = tileZ }
+            });
+
+            BoamBridge.Log.Msg($"[BOAM] player-action f{factionId} {templateName}: skill={skillName} tile=({tileX},{tileZ})");
+            BoamBridge.SidecarPost("/hook/player-action", payload);
+        }
+        catch (Exception ex)
+        {
+            BoamBridge.Log.Error($"[BOAM] player-action error: {ex.Message}");
         }
     }
 }

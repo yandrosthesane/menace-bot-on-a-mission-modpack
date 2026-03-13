@@ -22,6 +22,7 @@
     <Compile Include="Registry.fs" />
     <Compile Include="Walker.fs" />
     <Compile Include="Rendering.fs" />
+    <Compile Include="ActionLog.fs" />
     <Compile Include="HookPayload.fs" />
     <Compile Include="HeatmapRenderer.fs" />
     <Compile Include="Program.fs" />

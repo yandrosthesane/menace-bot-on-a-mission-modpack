@@ -228,7 +228,10 @@ Plain `Dictionary` caused "concurrent collection corrupted" when multiple tile-s
 
 ## Next Steps
 
-- [ ] Hook `EvaluateBehaviors`/`PickBehavior` for decision summary (which behavior won, runner-up, score gap)
+- [x] Codebase refactoring — module extraction (Step 5)
+- [x] Unified border rendering + C# bridge helpers (Step 6)
+- [x] Config externalization (Step 7)
+- [x] Action decision logging — Agent.Execute hook + battle session dirs (Step 8)
 - [ ] Capture opponent-based behavior evaluations (InflictDamage targets, hit chance, expected damage)
 - [ ] Optional per-criterion breakdown (re-enable U/S/D view if needed)
 - [ ] Graph engine integration — nodes that modify tile scores based on custom logic

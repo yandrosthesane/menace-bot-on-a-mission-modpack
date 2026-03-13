@@ -15,6 +15,7 @@ open BOAM.Sidecar.Walker
 open BOAM.Sidecar.HookPayload
 open BOAM.Sidecar.Naming
 open BOAM.Sidecar.HeatmapRenderer
+open BOAM.Sidecar.ActionLog
 
 let private version = "0.3.0"
 let private build = 3
@@ -31,8 +32,8 @@ let private gameDir =
     |> Option.defaultValue (IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
         ".steam/steam/steamapps/common/Menace"))
 let private tacticalMapFolder = IO.Path.Combine(gameDir, "Mods", "TacticalMap")
-let private heatmapOutputDir = IO.Path.Combine(gameDir, "Mods", "BOAM", "heatmaps")
-let private iconBaseDir = IO.Path.Combine(gameDir, "Mods", "BOAM", "icons")
+let private boamModDir = IO.Path.Combine(gameDir, "Mods", "BOAM")
+let private iconBaseDir = IO.Path.Combine(boamModDir, "icons")
 let private logDir = IO.Path.Combine(gameDir, "Mods", "BOAM", "logs")
 let private logFilePath =
     IO.Directory.CreateDirectory(logDir) |> ignore
@@ -166,9 +167,17 @@ let main argv =
                 message = "no tile data"
             |})
         else
+            let outputDir =
+                match currentBattleDir () with
+                | Some dir -> dir
+                | None ->
+                    let fallback = IO.Path.Combine(boamModDir, "heatmaps")
+                    IO.Directory.CreateDirectory(fallback) |> ignore
+                    fallback
+
             try
                 let label = makeHeatmapLabel payload.ActorName payload.ActorId payload.Round
-                let images = HeatmapRenderer.renderAll tacticalMapFolder payload.Tiles payload.ActorPosition payload.Units payload.Faction iconBaseDir heatmapOutputDir label payload.ActorId payload.VisionRange
+                let images = HeatmapRenderer.renderAll tacticalMapFolder payload.Tiles payload.ActorPosition payload.Units payload.Faction iconBaseDir outputDir label payload.ActorId payload.VisionRange
 
                 for (_, path) in images do
                     heatmapPaths.[payload.ActorId] <- path
@@ -179,7 +188,7 @@ let main argv =
                     hook = "tile-scores"
                     status = "ok"
                     images = List.length images
-                    outputDir = heatmapOutputDir
+                    outputDir = outputDir
                 |})
             with ex ->
                 logWarn (sprintf "Heatmap render failed: %s" ex.Message)
@@ -208,6 +217,46 @@ let main argv =
             logHook (sprintf "  no heatmap for actor %d (not rendered yet)" payload.ActorId)
 
         return Results.Ok({| hook = "movement-finished"; status = "ok"; actorId = payload.ActorId |})
+    })) |> ignore
+
+    app.MapPost("/hook/battle-start", Func<HttpRequest, Threading.Tasks.Task<IResult>>(fun req -> task {
+        let! root = readJson req
+        let payload = parseBattleStart root
+        let dir = ActionLog.startBattle boamModDir payload.Timestamp
+        logHook (sprintf "battle-start  session=%s" (IO.Path.GetFileName(dir)))
+        return Results.Ok({| hook = "battle-start"; status = "ok"; battleDir = dir |})
+    })) |> ignore
+
+    app.MapPost("/hook/battle-end", Func<IResult>(fun () ->
+        ActionLog.endBattle ()
+        logHook "battle-end"
+        Results.Ok({| hook = "battle-end"; status = "ok" |})
+    )) |> ignore
+
+    app.MapPost("/hook/action-decision", Func<HttpRequest, Threading.Tasks.Task<IResult>>(fun req -> task {
+        let! root = readJson req
+        let payload = parseActionDecision root
+        let chosenName = payload.Chosen.Name
+        let altCount = List.length payload.Alternatives
+
+        logHook (sprintf "action-decision  round=%d  faction=%d  actor=%s  chosen=%s(%d)  alts=%d"
+            payload.Round payload.Faction payload.ActorName chosenName payload.Chosen.Score altCount)
+
+        ActionLog.logActionDecision payload
+
+        return Results.Ok({| hook = "action-decision"; status = "ok" |})
+    })) |> ignore
+
+    app.MapPost("/hook/player-action", Func<HttpRequest, Threading.Tasks.Task<IResult>>(fun req -> task {
+        let! root = readJson req
+        let payload = parsePlayerAction root
+
+        logHook (sprintf "player-action  round=%d  actor=%s  type=%s  tile=(%d,%d)"
+            payload.Round payload.ActorName payload.ActionType payload.Tile.X payload.Tile.Z)
+
+        ActionLog.logPlayerAction payload
+
+        return Results.Ok({| hook = "player-action"; status = "ok" |})
     })) |> ignore
 
     app.MapPost("/shutdown", Func<IResult>(fun () ->

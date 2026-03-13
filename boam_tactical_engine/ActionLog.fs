@@ -1,0 +1,86 @@
+/// Action logging — writes per-actor and shared JSONL logs for AI decisions and player actions.
+module BOAM.Sidecar.ActionLog
+
+open System
+open System.IO
+open System.Text.Json
+open BOAM.Sidecar.GameTypes
+open BOAM.Sidecar.Naming
+
+/// The active battle directory, set on battle-start. None = no active battle.
+let mutable private battleDir: string option = None
+
+/// Get the current battle directory, or None if no battle is active.
+let currentBattleDir () = battleDir
+
+/// Start a new battle session. Creates the directory and returns its path.
+let startBattle (baseDir: string) (timestamp: string) =
+    let folder = sprintf "battle_%s" timestamp
+    let dir = Path.Combine(baseDir, "battle_reports", folder)
+    Directory.CreateDirectory(dir) |> ignore
+    battleDir <- Some dir
+    dir
+
+/// End the current battle session.
+let endBattle () =
+    battleDir <- None
+
+/// Append a JSON line to a file.
+let private appendJsonLine (filePath: string) (json: string) =
+    File.AppendAllText(filePath, json + "\n")
+
+/// Build the per-actor log filename.
+let private actorLogName (faction: int) (actorId: int) (actorName: string) =
+    let sn = shortName actorName
+    sprintf "actor_%d_%d_%s.jsonl" faction actorId sn
+
+/// Serialize an action target to a JSON-compatible object.
+let private targetToJson (target: ActionTarget) =
+    match target with
+    | TileTarget (pos, apCost) ->
+        JsonSerializer.Serialize({| x = pos.X; z = pos.Z; apCost = apCost |})
+    | NoTarget -> "null"
+
+/// Log an AI action decision.
+let logActionDecision (payload: ActionDecisionPayload) =
+    match battleDir with
+    | None -> ()
+    | Some dir ->
+        let alts =
+            payload.Alternatives
+            |> List.map (fun a -> {| behaviorId = a.BehaviorId; name = a.Name; score = a.Score |})
+        let targetStr = targetToJson payload.Target
+        let entry =
+            sprintf """{"round":%d,"faction":%d,"actorId":%d,"actor":"%s","type":"ai_decision","chosen":{"behaviorId":%d,"name":"%s","score":%d},"target":%s,"alternatives":%s}"""
+                payload.Round payload.Faction payload.ActorId
+                (payload.ActorName.Replace("\"", "\\\""))
+                payload.Chosen.BehaviorId
+                (payload.Chosen.Name.Replace("\"", "\\\""))
+                payload.Chosen.Score
+                targetStr
+                (JsonSerializer.Serialize(alts))
+
+        let actorFile = Path.Combine(dir, actorLogName payload.Faction payload.ActorId payload.ActorName)
+        appendJsonLine actorFile entry
+
+        let sharedFile = Path.Combine(dir, "round_log.jsonl")
+        appendJsonLine sharedFile entry
+
+/// Log a player action (move or skill use).
+let logPlayerAction (payload: PlayerActionPayload) =
+    match battleDir with
+    | None -> ()
+    | Some dir ->
+        let entry =
+            sprintf """{"round":%d,"faction":%d,"actorId":%d,"actor":"%s","type":"player_%s","skill":"%s","tile":{"x":%d,"z":%d}}"""
+                payload.Round payload.Faction payload.ActorId
+                (payload.ActorName.Replace("\"", "\\\""))
+                payload.ActionType
+                (payload.SkillName.Replace("\"", "\\\""))
+                payload.Tile.X payload.Tile.Z
+
+        let actorFile = Path.Combine(dir, actorLogName payload.Faction payload.ActorId payload.ActorName)
+        appendJsonLine actorFile entry
+
+        let sharedFile = Path.Combine(dir, "round_log.jsonl")
+        appendJsonLine sharedFile entry
