@@ -16,6 +16,7 @@ open BOAM.Sidecar.HookPayload
 open BOAM.Sidecar.Naming
 open BOAM.Sidecar.HeatmapRenderer
 open BOAM.Sidecar.ActionLog
+open BOAM.Sidecar.Replay
 
 let private version = "0.3.0"
 let private build = 3
@@ -238,9 +239,10 @@ let main argv =
         let payload = parseActionDecision root
         let chosenName = payload.Chosen.Name
         let altCount = List.length payload.Alternatives
+        let candCount = List.length payload.AttackCandidates
 
-        logHook (sprintf "action-decision  round=%d  faction=%d  actor=%s  chosen=%s(%d)  alts=%d"
-            payload.Round payload.Faction payload.ActorName chosenName payload.Chosen.Score altCount)
+        logHook (sprintf "action-decision  round=%d  faction=%d  actor=%s  chosen=%s(%d)  alts=%d  candidates=%d"
+            payload.Round payload.Faction payload.ActorName chosenName payload.Chosen.Score altCount candCount)
 
         ActionLog.logActionDecision payload
 
@@ -267,6 +269,80 @@ let main argv =
         } |> Async.Start
         Results.Ok({| status = "shutting down" |})
     )) |> ignore
+
+    // --- Replay endpoints ---
+    let replayClient = new Net.Http.HttpClient()
+    let bridgeUrl = "http://127.0.0.1:7655"
+
+    app.MapGet("/replay/battles", Func<IResult>(fun () ->
+        let reportsDir = IO.Path.Combine(boamModDir, "battle_reports")
+        if not (IO.Directory.Exists(reportsDir)) then
+            Results.Ok({| battles = [||]; count = 0 |})
+        else
+            let battles =
+                IO.Directory.GetDirectories(reportsDir)
+                |> Array.filter (fun d -> IO.File.Exists(IO.Path.Combine(d, "round_log.jsonl")))
+                |> Array.map (fun d ->
+                    let logPath = IO.Path.Combine(d, "round_log.jsonl")
+                    let rounds = Replay.getRounds logPath
+                    let actions = Replay.loadActions logPath
+                    {| name = IO.Path.GetFileName(d); rounds = rounds; actionCount = List.length actions |})
+                |> Array.sortByDescending (fun b -> b.name)
+            Results.Ok({| battles = battles; count = Array.length battles |})
+    )) |> ignore
+
+    app.MapGet("/replay/actions/{battleName}", Func<string, IResult>(fun battleName ->
+        let logPath = IO.Path.Combine(boamModDir, "battle_reports", battleName, "round_log.jsonl")
+        if not (IO.File.Exists(logPath)) then
+            Results.NotFound({| error = sprintf "No round_log.jsonl in %s" battleName |})
+        else
+            let actions = Replay.loadActions logPath
+            let rounds = Replay.getRounds logPath
+            Results.Ok({| battle = battleName; rounds = rounds; actions = actions; count = List.length actions |})
+    )) |> ignore
+
+    app.MapPost("/replay/run", Func<HttpRequest, Threading.Tasks.Task<IResult>>(fun req -> task {
+        let! root = readJson req
+        let battleName =
+            match root.TryGetProperty("battle") with
+            | true, v -> v.GetString() |> Option.ofObj |> Option.defaultValue ""
+            | _ -> ""
+        let round =
+            match root.TryGetProperty("round") with
+            | true, v -> Some (v.GetInt32())
+            | _ -> None
+        let delayMs =
+            match root.TryGetProperty("delayMs") with
+            | true, v -> v.GetInt32()
+            | _ -> 2000
+
+        if String.IsNullOrEmpty(battleName) then
+            return Results.BadRequest({| error = "missing 'battle' field" |})
+        else
+            let logPath = IO.Path.Combine(boamModDir, "battle_reports", battleName, "round_log.jsonl")
+            if not (IO.File.Exists(logPath)) then
+                return Results.NotFound({| error = sprintf "No round_log.jsonl in %s" battleName |})
+            else
+                logInfo (sprintf "Replay started: %s (round=%s, delay=%dms)" battleName (match round with Some r -> string r | None -> "all") delayMs)
+
+                let! result =
+                    match round with
+                    | Some r -> Replay.replayRound replayClient bridgeUrl logPath r delayMs
+                    | None -> Replay.replayAll replayClient bridgeUrl logPath delayMs
+
+                logInfo (sprintf "Replay done: %d/%d succeeded" result.Succeeded result.Total)
+                for line in result.Log do
+                    logEngine (sprintf "  %s" line)
+
+                return Results.Ok({|
+                    battle = battleName
+                    round = round |> Option.toNullable
+                    total = result.Total
+                    succeeded = result.Succeeded
+                    failed = result.Failed
+                    log = result.Log
+                |})
+    })) |> ignore
 
     let listenUrl = sprintf "http://127.0.0.1:%d" port
     logInfo (sprintf "Listening on %s" (cyan listenUrl))

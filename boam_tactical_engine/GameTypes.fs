@@ -116,6 +116,12 @@ type ActionTarget =
     | TileTarget of TilePos * apCost: int
     | NoTarget
 
+/// An attack candidate: tile + score.
+type AttackCandidate = {
+    Position: TilePos
+    Score: float32
+}
+
 /// AI action decision: chosen behavior + all alternatives.
 type ActionDecisionPayload = {
     Round: int
@@ -125,6 +131,7 @@ type ActionDecisionPayload = {
     Chosen: BehaviorChoice
     Target: ActionTarget
     Alternatives: BehaviorChoice list
+    AttackCandidates: AttackCandidate list
 }
 
 /// Player action (skill use or movement).

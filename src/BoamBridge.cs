@@ -515,6 +515,39 @@ static class Patch_AgentExecute
                 catch { }
             }
 
+            // Try to extract attack candidates (target tiles + scores) for Attack behaviors
+            object attackCandidates = null;
+            try
+            {
+                var attackBehavior = active.TryCast<Attack>();
+                if (attackBehavior != null)
+                {
+                    var candidates = attackBehavior.m_Candidates;
+                    if (candidates != null && candidates.Count > 0)
+                    {
+                        var candList = new System.Collections.Generic.List<object>();
+                        for (int i = 0; i < candidates.Count; i++)
+                        {
+                            try
+                            {
+                                var cand = candidates[i];
+                                if (cand.Target == null) continue;
+                                candList.Add(new
+                                {
+                                    x = cand.Target.GetX(),
+                                    z = cand.Target.GetZ(),
+                                    score = cand.Score
+                                });
+                            }
+                            catch { }
+                        }
+                        if (candList.Count > 0)
+                            attackCandidates = candList;
+                    }
+                }
+            }
+            catch { }
+
             // Build alternatives list from all behaviors
             var alternatives = new System.Collections.Generic.List<object>();
             try
@@ -553,7 +586,8 @@ static class Patch_AgentExecute
                     score = chosenScore
                 },
                 target,
-                alternatives
+                alternatives,
+                attackCandidates
             });
 
             BoamBridge.Log.Msg($"[BOAM] action-decision f{factionId} {actorName}: {chosenName}({chosenScore})");

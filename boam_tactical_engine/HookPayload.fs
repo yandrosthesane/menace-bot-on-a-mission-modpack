@@ -94,6 +94,10 @@ let private parseActionTarget (root: JsonElement) : ActionTarget =
         TileTarget (pos, apCost)
     | _ -> NoTarget
 
+let private parseAttackCandidate (el: JsonElement) : AttackCandidate =
+    { Position = { X = tryInt el "x" 0; Z = tryInt el "z" 0 }
+      Score = match el.TryGetProperty("score") with | true, v -> v.GetSingle() | _ -> 0f }
+
 let parseActionDecision (root: JsonElement) : ActionDecisionPayload =
     let actorId = root.GetProperty("actorId").GetInt32()
     { Round = tryInt root "round" 0
@@ -102,7 +106,8 @@ let parseActionDecision (root: JsonElement) : ActionDecisionPayload =
       ActorName = tryStr root "actorName" (sprintf "actor%d" actorId)
       Chosen = root.GetProperty("chosen") |> parseBehaviorChoice
       Target = parseActionTarget root
-      Alternatives = tryArray root "alternatives" parseBehaviorChoice }
+      Alternatives = tryArray root "alternatives" parseBehaviorChoice
+      AttackCandidates = tryArray root "attackCandidates" parseAttackCandidate }
 
 let parsePlayerAction (root: JsonElement) : PlayerActionPayload =
     let actorId = root.GetProperty("actorId").GetInt32()

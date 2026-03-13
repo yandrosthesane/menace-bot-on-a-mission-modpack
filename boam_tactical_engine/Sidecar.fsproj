@@ -25,6 +25,7 @@
     <Compile Include="ActionLog.fs" />
     <Compile Include="HookPayload.fs" />
     <Compile Include="HeatmapRenderer.fs" />
+    <Compile Include="Replay.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 

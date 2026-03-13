@@ -50,8 +50,14 @@ let logActionDecision (payload: ActionDecisionPayload) =
             payload.Alternatives
             |> List.map (fun a -> {| behaviorId = a.BehaviorId; name = a.Name; score = a.Score |})
         let targetStr = targetToJson payload.Target
+        let attackCandStr =
+            if List.isEmpty payload.AttackCandidates then "null"
+            else
+                payload.AttackCandidates
+                |> List.map (fun c -> {| x = c.Position.X; z = c.Position.Z; score = c.Score |})
+                |> JsonSerializer.Serialize
         let entry =
-            sprintf """{"round":%d,"faction":%d,"actorId":%d,"actor":"%s","type":"ai_decision","chosen":{"behaviorId":%d,"name":"%s","score":%d},"target":%s,"alternatives":%s}"""
+            sprintf """{"round":%d,"faction":%d,"actorId":%d,"actor":"%s","type":"ai_decision","chosen":{"behaviorId":%d,"name":"%s","score":%d},"target":%s,"alternatives":%s,"attackCandidates":%s}"""
                 payload.Round payload.Faction payload.ActorId
                 (payload.ActorName.Replace("\"", "\\\""))
                 payload.Chosen.BehaviorId
@@ -59,6 +65,7 @@ let logActionDecision (payload: ActionDecisionPayload) =
                 payload.Chosen.Score
                 targetStr
                 (JsonSerializer.Serialize(alts))
+                attackCandStr
 
         let actorFile = Path.Combine(dir, actorLogName payload.Faction payload.ActorId payload.ActorName)
         appendJsonLine actorFile entry
