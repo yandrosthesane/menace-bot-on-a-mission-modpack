@@ -8,12 +8,16 @@
 
   <ItemGroup>
     <Compile Include="GameTypes.fs" />
+    <Compile Include="FactionTheme.fs" />
+    <Compile Include="Naming.fs" />
     <Compile Include="StateKey.fs" />
     <Compile Include="StateStore.fs" />
     <Compile Include="NodeContext.fs" />
     <Compile Include="Node.fs" />
     <Compile Include="Registry.fs" />
     <Compile Include="Walker.fs" />
+    <Compile Include="Rendering.fs" />
+    <Compile Include="HookPayload.fs" />
     <Compile Include="HeatmapRenderer.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>

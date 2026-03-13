@@ -1,0 +1,82 @@
+/// JSON parsing helpers and hook-specific payload parsers.
+/// Converts raw JsonElement data from HTTP requests into domain types.
+module BOAM.Sidecar.HookPayload
+
+open System.Text.Json
+open BOAM.Sidecar.GameTypes
+
+// --- Reusable JSON helpers ---
+
+let tryInt (el: JsonElement) (prop: string) defaultVal =
+    match el.TryGetProperty(prop) with
+    | true, v -> v.GetInt32() | _ -> defaultVal
+
+let tryStr (el: JsonElement) (prop: string) defaultVal =
+    match el.TryGetProperty(prop) with
+    | true, v -> v.GetString() |> Option.ofObj |> Option.defaultValue defaultVal | _ -> defaultVal
+
+let tryBool (el: JsonElement) (prop: string) defaultVal =
+    match el.TryGetProperty(prop) with
+    | true, v -> v.GetBoolean() | _ -> defaultVal
+
+let tryArray (el: JsonElement) (prop: string) mapper =
+    match el.TryGetProperty(prop) with
+    | true, arr when arr.ValueKind = JsonValueKind.Array ->
+        [ for item in arr.EnumerateArray() -> mapper item ]
+    | _ -> []
+
+// --- Shared sub-parsers ---
+
+let parseTilePos (el: JsonElement) : TilePos =
+    { X = el.GetProperty("x").GetInt32(); Z = el.GetProperty("z").GetInt32() }
+
+let parseOptionalTilePos (el: JsonElement) (prop: string) : TilePos option =
+    match el.TryGetProperty(prop) with
+    | true, p -> Some (parseTilePos p)
+    | _ -> None
+
+// --- Hook-specific parsers ---
+
+let private parseOpponent (el: JsonElement) : OpponentInfo =
+    { ActorId = el.GetProperty("actorId").GetInt32()
+      TemplateName = tryStr el "templateName" ""
+      Position =
+        match el.TryGetProperty("position") with
+        | true, p -> parseTilePos p
+        | _ -> { X = 0; Z = 0 }
+      TTL = tryInt el "ttl" -2
+      IsKnown = tryBool el "isKnown" false
+      IsAlive = tryBool el "isAlive" true }
+
+let parseOnTurnStart (root: JsonElement) : FactionState =
+    { FactionIndex = root.GetProperty("faction").GetInt32()
+      IsAlliedWithPlayer = tryBool root "isAlliedWithPlayer" false
+      Opponents = tryArray root "opponents" parseOpponent
+      Actors = []
+      Round = tryInt root "round" 0 }
+
+let private parseTileScore (el: JsonElement) : TileScoreData =
+    { X = el.GetProperty("x").GetInt32()
+      Z = el.GetProperty("z").GetInt32()
+      Combined = el.GetProperty("combined").GetSingle() }
+
+let private parseUnit (el: JsonElement) : UnitInfo =
+    { Faction = el.GetProperty("faction").GetInt32()
+      Position = { X = el.GetProperty("x").GetInt32(); Z = el.GetProperty("z").GetInt32() }
+      Name = tryStr el "name" ""
+      Leader = tryStr el "leader" "" }
+
+let parseTileScores (root: JsonElement) : TileScoresPayload =
+    let actorId = root.GetProperty("actorId").GetInt32()
+    { Round = tryInt root "round" 0
+      Faction = root.GetProperty("faction").GetInt32()
+      ActorId = actorId
+      ActorName = tryStr root "actorName" (sprintf "actor%d" actorId)
+      ActorPosition = parseOptionalTilePos root "actorPosition"
+      Tiles = tryArray root "tiles" parseTileScore
+      Units = tryArray root "units" parseUnit
+      VisionRange = tryInt root "visionRange" 0 }
+
+let parseMovementFinished (root: JsonElement) : MovementFinishedPayload =
+    { ActorId = root.GetProperty("actorId").GetInt32()
+      Tile = root.GetProperty("tile") |> parseTilePos }

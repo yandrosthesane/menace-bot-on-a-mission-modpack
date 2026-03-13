@@ -78,3 +78,28 @@ type TileScoreInfo = {
     DistanceScore: float
     CombinedScore: float
 }
+
+/// A single tile's combined score as received from the bridge.
+type TileScoreData = {
+    X: int
+    Z: int
+    Combined: float32
+}
+
+/// Parsed tile-scores hook payload from the C# bridge.
+type TileScoresPayload = {
+    Round: int
+    Faction: FactionId
+    ActorId: int
+    ActorName: string
+    ActorPosition: TilePos option
+    Tiles: TileScoreData list
+    Units: UnitInfo list
+    VisionRange: int
+}
+
+/// Parsed movement-finished hook payload from the C# bridge.
+type MovementFinishedPayload = {
+    ActorId: int
+    Tile: TilePos
+}

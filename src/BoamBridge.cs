@@ -145,6 +145,25 @@ public class BoamBridge : IModpackPlugin
         _lastFaction = factionIdx;
     }
 
+    /// Extract common actor info: GameObj, factionId, entityId, templateName.
+    internal static (GameObj gameObj, int factionId, int entityId, string templateName)?
+        GetActorInfo(Actor actor)
+    {
+        if (actor == null) return null;
+        var gameObj = new GameObj(actor.Pointer);
+        var info = EntitySpawner.GetEntityInfo(gameObj);
+        var tplObj = gameObj.ReadObj("m_Template");
+        var templateName = tplObj.IsNull ? "" : (tplObj.GetName() ?? "");
+        return (gameObj, info?.FactionIndex ?? 0, info?.EntityId ?? 0, templateName);
+    }
+
+    /// Extract position from a GameObj via EntityMovement.
+    internal static (int x, int z) GetPos(GameObj gameObj)
+    {
+        var pos = EntityMovement.GetPosition(gameObj);
+        return pos.HasValue ? (pos.Value.x, pos.Value.y) : (0, 0);
+    }
+
     public void OnGUI() { }
 
     public void OnUnload()
@@ -177,7 +196,6 @@ static class Patch_OnTurnStart
             var opponents = __instance.m_Opponents;
             int opponentCount = opponents?.Count ?? 0;
 
-            // Serialize opponent data
             var oppList = new System.Collections.Generic.List<object>();
             if (opponents != null)
             {
@@ -186,27 +204,22 @@ static class Patch_OnTurnStart
                     try
                     {
                         var opp = opponents[i];
-                        var actor = opp.Actor;
-                        if (actor == null) continue;
-
-                        var gameObj = new GameObj(actor.Pointer);
-                        var pos = EntityMovement.GetPosition(gameObj);
-                        int px = 0, pz = 0;
-                        if (pos.HasValue) { px = pos.Value.x; pz = pos.Value.y; }
-                        var templateObj = gameObj.ReadObj("m_Template");
-                        var templateName = templateObj.IsNull ? "" : templateObj.GetName() ?? "";
+                        var actorInfo = BoamBridge.GetActorInfo(opp.Actor);
+                        if (actorInfo == null) continue;
+                        var (gameObj, _, entityId, templateName) = actorInfo.Value;
+                        var (px, pz) = BoamBridge.GetPos(gameObj);
 
                         oppList.Add(new
                         {
-                            actorId = gameObj.ReadInt("EntityIdx"),
+                            actorId = entityId,
                             templateName,
                             position = new { x = px, z = pz },
                             ttl = opp.TTL,
                             isKnown = opp.IsKnown(),
-                            isAlive = actor.IsAlive()
+                            isAlive = opp.Actor.IsAlive()
                         });
                     }
-                    catch { } // skip individual opponent on error
+                    catch { }
                 }
             }
 
@@ -254,18 +267,12 @@ static class Patch_PostProcessTileScores
             var tiles = __instance.m_Tiles;
             if (tiles == null || tiles.Count == 0) return;
 
-            var gameObj = new GameObj(actor.Pointer);
-            var actorInfo = EntitySpawner.GetEntityInfo(gameObj);
-            int factionId = actorInfo?.FactionIndex ?? 0;
-            int actorEntityId = actorInfo?.EntityId ?? 0;
+            var info = BoamBridge.GetActorInfo(actor);
+            if (info == null) return;
+            var (gameObj, factionId, actorEntityId, actorName) = info.Value;
+            if (string.IsNullOrEmpty(actorName)) actorName = $"actor{actorEntityId}";
 
-            var templateObj = gameObj.ReadObj("m_Template");
-            var actorName = templateObj.IsNull ? $"actor{actorEntityId}" : templateObj.GetName() ?? "";
-
-            // Actor's current position
-            var actorPos = EntityMovement.GetPosition(gameObj);
-            int actorX = 0, actorZ = 0;
-            if (actorPos.HasValue) { actorX = actorPos.Value.x; actorZ = actorPos.Value.y; }
+            var (actorX, actorZ) = BoamBridge.GetPos(gameObj);
 
             var tileList = new System.Collections.Generic.List<object>();
 
@@ -325,7 +332,7 @@ static class Patch_PostProcessTileScores
                                     leaderName = nickname.GetTranslated() ?? "";
                             }
                         }
-                        catch { } // not all actors are UnitActors
+                        catch { }
 
                         unitList.Add(new
                         {
@@ -338,7 +345,7 @@ static class Patch_PostProcessTileScores
                     }
                 }
             }
-            catch { } // non-critical — heatmap still works without units
+            catch { }
 
             // Vision range for overlay
             int visionRange = 0;
@@ -388,10 +395,9 @@ static class Patch_MovementFinished
             if (bridge == null || !bridge.IsReady) return;
             if (_actor == null || _to == null) return;
 
-            var gameObj = new GameObj(_actor.Pointer);
-            var info = EntitySpawner.GetEntityInfo(gameObj);
-            int factionId = info?.FactionIndex ?? -1;
-            int actorId = info?.EntityId ?? 0;
+            var actorInfo = BoamBridge.GetActorInfo(_actor);
+            if (actorInfo == null) return;
+            var (_, factionId, actorId, _) = actorInfo.Value;
             int tileX = _to.GetX();
             int tileZ = _to.GetZ();
 
