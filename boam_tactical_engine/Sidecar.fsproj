@@ -7,6 +7,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Include="config.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="Config.fs" />
     <Compile Include="GameTypes.fs" />
     <Compile Include="FactionTheme.fs" />
     <Compile Include="Naming.fs" />

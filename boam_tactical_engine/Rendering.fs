@@ -7,6 +7,9 @@ open SixLabors.ImageSharp
 open SixLabors.ImageSharp.PixelFormats
 open SixLabors.ImageSharp.Processing
 open BOAM.Sidecar.GameTypes
+open BOAM.Sidecar.Config
+
+let private cfg = Current.Rendering
 
 /// Map metadata from mapbg.info (texW,texH,tilesX,tilesZ).
 type MapInfo = {
@@ -20,9 +23,13 @@ type MapInfo = {
 /// Border style for tile marker overlays.
 type BorderStyle = { Margin: int; Thickness: int; Color: Rgba32 }
 
-let actorBorder    = { Margin = 2; Thickness = 3; Color = Rgba32(255uy, 50uy, 50uy, 220uy) }
-let bestTileBorder = { Margin = 1; Thickness = 2; Color = Rgba32(50uy, 255uy, 50uy, 230uy) }
-let moveDestBorder = { Margin = 3; Thickness = 2; Color = Rgba32(60uy, 140uy, 255uy, 230uy) }
+let private toBorder (bc: Config.BorderConfig) =
+    { Margin = bc.Margin; Thickness = bc.Thickness; Color = Rgba32(bc.Color.[0], bc.Color.[1], bc.Color.[2], bc.Color.[3]) }
+
+let actorBorder    = toBorder cfg.ActorBorder
+let bestTileBorder = toBorder cfg.BestTileBorder
+let moveDestBorder = toBorder cfg.MoveDestBorder
+let visionColor    = Rgba32(cfg.VisionColor.[0], cfg.VisionColor.[1], cfg.VisionColor.[2], cfg.VisionColor.[3])
 
 /// Load mapbg.info from the TacticalMap mod folder.
 let loadMapInfo (modFolder: string) : MapInfo option =
@@ -45,7 +52,7 @@ let loadMapInfo (modFolder: string) : MapInfo option =
             }
 
 /// Minimum pixels per tile — controls upscaling so text is readable.
-let private minTilePixels = 64
+let private minTilePixels = cfg.MinTilePixels
 
 /// Prepare a scaled copy of the background image. Returns (image, scaledPixelsPerTile).
 let prepareBackground (bgPath: string) (mapInfo: MapInfo) =
@@ -57,7 +64,7 @@ let prepareBackground (bgPath: string) (mapInfo: MapInfo) =
         bg.Mutate(fun ctx ->
             ctx.Resize(bg.Width * scale, bg.Height * scale, KnownResamplers.NearestNeighbor) |> ignore)
     // Gamma correction to lift dark pixels (gamma < 1 brightens; 0.35 aggressively lifts shadows)
-    let gamma = 0.35f
+    let gamma = cfg.Gamma
     bg.ProcessPixelRows(fun accessor ->
         for y = 0 to accessor.Height - 1 do
             let row = accessor.GetRowSpan(y)

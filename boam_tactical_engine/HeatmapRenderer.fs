@@ -10,9 +10,12 @@ open SixLabors.ImageSharp.Processing
 open SixLabors.ImageSharp.Drawing.Processing
 open SixLabors.Fonts
 open BOAM.Sidecar.GameTypes
+open BOAM.Sidecar.Config
 open BOAM.Sidecar.Rendering
 open BOAM.Sidecar.Naming
 open BOAM.Sidecar.FactionTheme
+
+let private cfg = Current.Rendering
 
 /// Icon cache to avoid reloading PNGs every frame (concurrent-safe).
 let private iconCache = Collections.Concurrent.ConcurrentDictionary<string, Image<Rgba32> option>()
@@ -126,10 +129,10 @@ let renderCombined
 
     let bg, scaledPpt = prepareBackground bgPath mapInfo
 
-    let fontFamily = SystemFonts.Collection.Get("DejaVu Sans Mono")
-    let fontSize = float32 scaledPpt * 0.32f
+    let fontFamily = SystemFonts.Collection.Get(cfg.FontFamily)
+    let fontSize = float32 scaledPpt * cfg.ScoreFontScale
     let font = fontFamily.CreateFont(fontSize, FontStyle.Bold)
-    let labelFontSize = float32 scaledPpt * 0.33f
+    let labelFontSize = float32 scaledPpt * cfg.LabelFontScale
     let labelFont = fontFamily.CreateFont(labelFontSize, FontStyle.Bold)
 
     let actorLabel = drawUnits bg mapInfo scaledPpt units currentFaction actorPos labelFont iconBaseDir
@@ -156,7 +159,7 @@ let renderCombined
                     if dist <= visionRange then
                         yield (ap.X + dx, ap.Z + dz) ]
             |> Set.ofList
-        drawRangeBorders bg mapInfo scaledPpt visionTiles (Rgba32(255uy, 220uy, 50uy, 200uy))
+        drawRangeBorders bg mapInfo scaledPpt visionTiles visionColor
     | _ -> ()
 
     // Actor marker (red border)

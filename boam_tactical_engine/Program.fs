@@ -18,7 +18,7 @@ open BOAM.Sidecar.HeatmapRenderer
 
 let private version = "0.3.0"
 let private build = 3
-let private port = 7660
+let private port = Config.Current.Port
 let private startTime = DateTime.UtcNow
 
 // Per-actor heatmap file path (actorId → filePath), set when heatmap is rendered
