@@ -1,0 +1,10 @@
+/.idea/
+
+# .NET build output
+boam_tactical_engine/bin/
+boam_tactical_engine/obj/
+boam_asset_pipeline/bin/
+boam_asset_pipeline/obj/
+
+# Custom icon assets (local only, not redistributable)
+boam_tactical_engine/assets/

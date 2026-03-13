@@ -1,0 +1,26 @@
+{
+  "manifestVersion": 2,
+  "name": "BOAM",
+  "version": "0.1.0",
+  "author": "YandrosTheSane",
+  "description": "Bot On A Mission — pilot or influence game AI behaviour by mutating decision weights.",
+  "loadOrder": 102,
+  "patches": {},
+  "assets": {},
+  "code": {
+    "sources": [
+      "src/BoamBridge.cs"
+    ],
+    "references": [
+      "MelonLoader",
+      "0Harmony",
+      "Il2CppInterop.Runtime",
+      "Il2Cppmscorlib",
+      "Assembly-CSharp",
+      "Menace.ModpackLoader",
+      "UnityEngine.CoreModule"
+    ],
+    "prebuiltDlls": []
+  },
+  "securityStatus": "SourceVerified"
+}

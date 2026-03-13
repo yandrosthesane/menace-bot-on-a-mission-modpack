@@ -1,0 +1,152 @@
+/// BOAM Icon Generator — reads icon-config.json and resizes source PNGs to output icons.
+/// Cross-platform: works on both Linux (native) and Windows.
+/// Usage: boam-icons [--force] [--config path/to/icon-config.json]
+module BOAM.AssetPipeline.Main
+
+open System
+open System.IO
+open System.Text.Json
+open SixLabors.ImageSharp
+open SixLabors.ImageSharp.PixelFormats
+open SixLabors.ImageSharp.Processing
+
+let private version = "1.0.0"
+
+type Entry = {
+    Dir: string
+    Source: string
+    Output: string
+    Size: int
+}
+
+type Config = {
+    DefaultSize: int
+    OutputBase: string
+    Sources: Map<string, string>
+    Entries: Entry list
+}
+
+let private parseConfig (configPath: string) =
+    let json = File.ReadAllText(configPath)
+    let doc = JsonDocument.Parse(json)
+    let root = doc.RootElement
+
+    let defaults = root.GetProperty("defaults")
+    let defaultSize = defaults.GetProperty("size").GetInt32()
+    let outputBase = defaults.GetProperty("output_base").GetString()
+
+    let sources =
+        [ for prop in root.GetProperty("sources").EnumerateObject() ->
+            prop.Name, prop.Value.GetString() ]
+        |> Map.ofList
+
+    let parseSection (name: string) =
+        match root.TryGetProperty(name) with
+        | true, arr ->
+            [ for el in arr.EnumerateArray() ->
+                let dir = match el.TryGetProperty("dir") with | true, v -> v.GetString() | _ -> ""
+                let size = match el.TryGetProperty("size") with | true, v -> v.GetInt32() | _ -> defaultSize
+                { Dir = dir; Source = el.GetProperty("source").GetString()
+                  Output = el.GetProperty("output").GetString(); Size = size } ]
+        | _ -> []
+
+    { DefaultSize = defaultSize
+      OutputBase = outputBase
+      Sources = sources
+      Entries = parseSection "factions" @ parseSection "templates" @ parseSection "leaders" }
+
+let private resizeAndSave (srcPath: string) (outPath: string) (size: int) =
+    Directory.CreateDirectory(Path.GetDirectoryName(outPath)) |> ignore
+    use img = Image.Load<Rgba32>(srcPath)
+    if img.Width <> size || img.Height <> size then
+        img.Mutate(fun ctx -> ctx.Resize(size, size, KnownResamplers.Lanczos3) |> ignore)
+    img.Save(outPath)
+
+[<EntryPoint>]
+let main argv =
+    let mutable force = false
+    let mutable configPath = ""
+
+    // Parse args
+    let mutable i = 0
+    while i < argv.Length do
+        match argv.[i] with
+        | "--force" -> force <- true
+        | "--config" when i + 1 < argv.Length ->
+            configPath <- argv.[i + 1]
+            i <- i + 1
+        | arg when arg.EndsWith(".json") -> configPath <- arg
+        | "--help" | "-h" ->
+            printfn "BOAM Icon Generator v%s" version
+            printfn "Usage: boam-icons [--force] [--config icon-config.json]"
+            printfn ""
+            printfn "Options:"
+            printfn "  --force     Overwrite existing output files"
+            printfn "  --config    Path to icon-config.json (default: ./icon-config.json)"
+            exit 0
+        | other ->
+            eprintfn "Unknown argument: %s" other
+            exit 1
+        i <- i + 1
+
+    // Default config: same directory as executable
+    if configPath = "" then
+        let exeDir = AppContext.BaseDirectory
+        let candidate = Path.Combine(exeDir, "icon-config.json")
+        if File.Exists(candidate) then configPath <- candidate
+        else
+            let cwdCandidate = Path.Combine(Environment.CurrentDirectory, "icon-config.json")
+            if File.Exists(cwdCandidate) then configPath <- cwdCandidate
+            else
+                eprintfn "ERROR: icon-config.json not found. Use --config to specify path."
+                exit 1
+
+    if not (File.Exists(configPath)) then
+        eprintfn "ERROR: Config not found: %s" configPath
+        exit 1
+
+    printfn "BOAM Icon Generator v%s" version
+    printfn "  Config: %s" configPath
+
+    let config = parseConfig configPath
+
+    printfn "  Output: %s" config.OutputBase
+    printfn "  Default size: %dx%d" config.DefaultSize config.DefaultSize
+    printfn "  Entries: %d" config.Entries.Length
+    printfn ""
+
+    let mutable generated = 0
+    let mutable skipped = 0
+    let mutable missing = 0
+    let mutable errors = 0
+
+    for entry in config.Entries do
+        let baseDir =
+            match config.Sources.TryFind(entry.Dir) with
+            | Some d -> d
+            | None ->
+                eprintfn "  WARN: unknown source dir '%s' for %s" entry.Dir entry.Output
+                errors <- errors + 1
+                ""
+
+        if baseDir <> "" then
+            let srcPath = Path.Combine(baseDir, entry.Source)
+            let outPath = Path.Combine(config.OutputBase, entry.Output)
+
+            if not (File.Exists(srcPath)) then
+                printfn "  MISSING: %s" entry.Source
+                missing <- missing + 1
+            elif File.Exists(outPath) && not force then
+                skipped <- skipped + 1
+            else
+                try
+                    resizeAndSave srcPath outPath entry.Size
+                    printfn "  OK: %s  (%dx%d)" entry.Output entry.Size entry.Size
+                    generated <- generated + 1
+                with ex ->
+                    printfn "  FAIL: %s (%s)" entry.Output ex.Message
+                    errors <- errors + 1
+
+    printfn ""
+    printfn "Done: %d generated, %d skipped, %d missing, %d errors" generated skipped missing errors
+    if errors > 0 then 1 else 0
