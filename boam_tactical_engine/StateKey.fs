@@ -1,6 +1,6 @@
 /// Typed state keys for cross-node data flow.
 /// Each key has a name, a type, and a lifetime that controls when it's cleared.
-module BOAM.Sidecar.StateKey
+module BOAM.TacticalEngine.StateKey
 
 /// When a state key's value is automatically cleared.
 type Lifetime =

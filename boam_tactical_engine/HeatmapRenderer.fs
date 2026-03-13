@@ -1,6 +1,6 @@
 /// HeatmapRenderer — overlays per-tile score values on the TacticalMap background.
 /// Renders combined score on each tile in a single image.
-module BOAM.Sidecar.HeatmapRenderer
+module BOAM.TacticalEngine.HeatmapRenderer
 
 open System
 open System.IO
@@ -9,11 +9,11 @@ open SixLabors.ImageSharp.PixelFormats
 open SixLabors.ImageSharp.Processing
 open SixLabors.ImageSharp.Drawing.Processing
 open SixLabors.Fonts
-open BOAM.Sidecar.GameTypes
-open BOAM.Sidecar.Config
-open BOAM.Sidecar.Rendering
-open BOAM.Sidecar.Naming
-open BOAM.Sidecar.FactionTheme
+open BOAM.TacticalEngine.GameTypes
+open BOAM.TacticalEngine.Config
+open BOAM.TacticalEngine.Rendering
+open BOAM.TacticalEngine.Naming
+open BOAM.TacticalEngine.FactionTheme
 
 let private cfg = Current.Rendering
 

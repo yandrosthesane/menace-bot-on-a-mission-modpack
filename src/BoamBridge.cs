@@ -17,7 +17,7 @@ using Menace.SDK;
 namespace BOAM;
 
 /// <summary>
-/// Thin C# bridge plugin — calls the BOAM F# sidecar over HTTP
+/// Thin C# bridge plugin — calls the BOAM Tactical Engine over HTTP
 /// at game hook checkpoints and applies the returned modifications.
 /// </summary>
 public class BoamBridge : IModpackPlugin
@@ -26,7 +26,7 @@ public class BoamBridge : IModpackPlugin
     public static MelonLogger.Instance Log { get; private set; }
 
     private HarmonyLib.Harmony _harmony;
-    private volatile bool _sidecarAvailable;
+    private volatile bool _engineAvailable;
     private bool _inTactical;
     private int _initDelay;
     private bool _ready;
@@ -34,7 +34,7 @@ public class BoamBridge : IModpackPlugin
     private int _lastFaction = -1;
 
     // Synchronous HTTP — avoids async deadlocks under Wine CLR
-    internal static string SidecarGet(string path)
+    internal static string EngineGet(string path)
     {
         try
         {
@@ -44,7 +44,7 @@ public class BoamBridge : IModpackPlugin
         catch { return null; }
     }
 
-    internal static string SidecarPost(string path, string json)
+    internal static string EnginePost(string path, string json)
     {
         try
         {
@@ -68,10 +68,10 @@ public class BoamBridge : IModpackPlugin
 
     public void OnSceneLoaded(int buildIndex, string sceneName)
     {
-        if (!_sidecarAvailable)
+        if (!_engineAvailable)
         {
-            // Check sidecar on background thread (non-blocking)
-            var thread = new Thread(CheckSidecar)
+            // Check tactical engine on background thread (non-blocking)
+            var thread = new Thread(CheckEngine)
             {
                 Name = "BOAM-Check",
                 IsBackground = true
@@ -87,17 +87,17 @@ public class BoamBridge : IModpackPlugin
             _round = 1;
             _lastFaction = -1;
 
-            // Start a new battle session in the sidecar
+            // Start a new battle session in the tactical engine
             var ts = DateTime.Now.ToString("yyyyMMdd_HHmmss");
             var startPayload = JsonSerializer.Serialize(new { timestamp = ts });
-            ThreadPool.QueueUserWorkItem(_ => SidecarPost("/hook/battle-start", startPayload));
+            ThreadPool.QueueUserWorkItem(_ => EnginePost("/hook/battle-start", startPayload));
         }
         else
         {
             if (_inTactical)
             {
                 // End battle session when leaving tactical
-                ThreadPool.QueueUserWorkItem(_ => SidecarPost("/hook/battle-end", "{}"));
+                ThreadPool.QueueUserWorkItem(_ => EnginePost("/hook/battle-end", "{}"));
             }
             _inTactical = false;
             _ready = false;
@@ -110,28 +110,27 @@ public class BoamBridge : IModpackPlugin
         if (!_inTactical || _ready) return;
         if (_initDelay > 0) { _initDelay--; return; }
         _ready = true;
-        Log.Msg("[BOAM] Tactical ready, sidecar hooks active");
+        Log.Msg("[BOAM] Tactical ready, engine hooks active");
     }
 
-    private void CheckSidecar()
+    private void CheckEngine()
     {
         const int maxRetries = 5;
         const int retryDelayMs = 2000;
 
         for (int attempt = 1; attempt <= maxRetries; attempt++)
         {
-            Log.Msg($"[BOAM] Checking sidecar (attempt {attempt}/{maxRetries})");
+            Log.Msg($"[BOAM] Checking tactical engine (attempt {attempt}/{maxRetries})");
 
-            var json = SidecarGet("/status");
+            var json = EngineGet("/status");
             if (json != null)
             {
                 try
                 {
                     var doc = JsonSerializer.Deserialize<JsonElement>(json);
-                    var sidecar = doc.GetProperty("sidecar").GetString();
                     var status = doc.GetProperty("status").GetString();
-                    Log.Msg($"[BOAM] Sidecar found: {sidecar} (status: {status})");
-                    _sidecarAvailable = true;
+                    Log.Msg($"[BOAM] Tactical engine found (status: {status})");
+                    _engineAvailable = true;
                     return;
                 }
                 catch { }
@@ -141,10 +140,10 @@ public class BoamBridge : IModpackPlugin
                 Thread.Sleep(retryDelayMs);
         }
 
-        Log.Warning("[BOAM] Sidecar not available — AI hooks will be no-ops");
+        Log.Warning("[BOAM] Tactical engine not available — AI hooks will be no-ops");
     }
 
-    public bool IsReady => _ready && _sidecarAvailable;
+    public bool IsReady => _ready && _engineAvailable;
     public int Round => _round;
 
     public void TrackRound(int factionIdx)
@@ -177,16 +176,16 @@ public class BoamBridge : IModpackPlugin
 
     public void OnUnload()
     {
-        if (_sidecarAvailable)
+        if (_engineAvailable)
         {
-            try { SidecarPost("/shutdown", "{}"); } catch { }
-            Log.Msg("[BOAM] Sent shutdown to sidecar");
+            try { EnginePost("/shutdown", "{}"); } catch { }
+            Log.Msg("[BOAM] Sent shutdown to tactical engine");
         }
     }
 }
 
 /// <summary>
-/// Harmony patch: intercepts AIFaction.OnTurnStart and sends faction state to sidecar.
+/// Harmony patch: intercepts AIFaction.OnTurnStart and sends faction state to tactical engine.
 /// Uses synchronous WebClient to avoid async deadlocks under Wine CLR.
 /// </summary>
 [HarmonyPatch(typeof(AIFaction), nameof(AIFaction.OnTurnStart))]
@@ -240,10 +239,10 @@ static class Patch_OnTurnStart
                 opponents = oppList
             });
 
-            var response = BoamBridge.SidecarPost("/hook/on-turn-start", payload);
+            var response = BoamBridge.EnginePost("/hook/on-turn-start", payload);
             if (response != null)
             {
-                BoamBridge.Log.Msg($"[BOAM] on-turn-start f{factionIdx}: sidecar OK ({response.Length}b, {oppList.Count} opponents)");
+                BoamBridge.Log.Msg($"[BOAM] on-turn-start f{factionIdx}: engine OK ({response.Length}b, {oppList.Count} opponents)");
             }
         }
         catch (Exception ex)
@@ -375,7 +374,7 @@ static class Patch_PostProcessTileScores
                 visionRange
             });
 
-            var response = BoamBridge.SidecarPost("/hook/tile-scores", payload);
+            var response = BoamBridge.EnginePost("/hook/tile-scores", payload);
             if (response != null)
             {
                 BoamBridge.Log.Msg($"[BOAM] tile-scores f{factionId} {actorName}: {tileList.Count} tiles");
@@ -419,7 +418,7 @@ static class Patch_MovementFinished
             });
 
             BoamBridge.Log.Msg($"[BOAM] movement-finished f{factionId} actor={actorId} tile=({tileX},{tileZ})");
-            BoamBridge.SidecarPost("/hook/movement-finished", payload);
+            BoamBridge.EnginePost("/hook/movement-finished", payload);
 
             // Also log as player action if this is a player faction unit
             if (factionId == 1 || factionId == 2)
@@ -436,7 +435,7 @@ static class Patch_MovementFinished
                     skillName = "",
                     tile = new { x = tileX, z = tileZ }
                 });
-                BoamBridge.SidecarPost("/hook/player-action", playerPayload);
+                BoamBridge.EnginePost("/hook/player-action", playerPayload);
             }
         }
         catch (Exception ex)
@@ -591,7 +590,7 @@ static class Patch_AgentExecute
             });
 
             BoamBridge.Log.Msg($"[BOAM] action-decision f{factionId} {actorName}: {chosenName}({chosenScore})");
-            BoamBridge.SidecarPost("/hook/action-decision", payload);
+            BoamBridge.EnginePost("/hook/action-decision", payload);
         }
         catch (Exception ex)
         {
@@ -645,7 +644,7 @@ static class Patch_OnSkillUse
             });
 
             BoamBridge.Log.Msg($"[BOAM] player-action f{factionId} {templateName}: skill={skillName} tile=({tileX},{tileZ})");
-            BoamBridge.SidecarPost("/hook/player-action", payload);
+            BoamBridge.EnginePost("/hook/player-action", payload);
         }
         catch (Exception ex)
         {

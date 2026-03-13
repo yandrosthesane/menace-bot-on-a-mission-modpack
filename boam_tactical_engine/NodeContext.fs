@@ -1,10 +1,10 @@
 /// Context passed to each node's run function.
 /// Provides typed read/write access to the state store and hook-specific data.
-module BOAM.Sidecar.NodeContext
+module BOAM.TacticalEngine.NodeContext
 
-open BOAM.Sidecar.GameTypes
-open BOAM.Sidecar.StateKey
-open BOAM.Sidecar.StateStore
+open BOAM.TacticalEngine.GameTypes
+open BOAM.TacticalEngine.StateKey
+open BOAM.TacticalEngine.StateStore
 
 /// The context a node receives when it runs.
 type NodeContext = {
@@ -14,7 +14,7 @@ type NodeContext = {
     Store: StateStore
     /// Name of the node currently executing (for logging).
     NodeName: string
-    /// Log function (writes to sidecar console).
+    /// Log function (writes to tactical engine console).
     Log: string -> unit
 }
 

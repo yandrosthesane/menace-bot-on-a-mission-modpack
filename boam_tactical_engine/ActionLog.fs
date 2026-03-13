@@ -1,11 +1,11 @@
 /// Action logging — writes per-actor and shared JSONL logs for AI decisions and player actions.
-module BOAM.Sidecar.ActionLog
+module BOAM.TacticalEngine.ActionLog
 
 open System
 open System.IO
 open System.Text.Json
-open BOAM.Sidecar.GameTypes
-open BOAM.Sidecar.Naming
+open BOAM.TacticalEngine.GameTypes
+open BOAM.TacticalEngine.Naming
 
 /// The active battle directory, set on battle-start. None = no active battle.
 let mutable private battleDir: string option = None

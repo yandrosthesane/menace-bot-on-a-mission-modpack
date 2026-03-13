@@ -1,8 +1,8 @@
 /// Node registry — collects nodes, groups by hook, validates dependencies.
-module BOAM.Sidecar.Registry
+module BOAM.TacticalEngine.Registry
 
 open System.Collections.Generic
-open BOAM.Sidecar.Node
+open BOAM.TacticalEngine.Node
 
 /// Validation result for a single state key.
 type KeyValidation =

@@ -1,24 +1,24 @@
-/// BOAM Sidecar — F# graph engine HTTP server.
+/// BOAM Tactical Engine — F# graph engine HTTP server.
 /// Listens on http://127.0.0.1:7660 for hook calls from the game plugin.
-module BOAM.Sidecar.Main
+module BOAM.TacticalEngine.Main
 
 open System
 open System.Text.Json
 open Microsoft.AspNetCore.Builder
 open Microsoft.AspNetCore.Http
 open Microsoft.Extensions.Logging
-open BOAM.Sidecar.GameTypes
-open BOAM.Sidecar.StateStore
-open BOAM.Sidecar.Node
-open BOAM.Sidecar.Registry
-open BOAM.Sidecar.Walker
-open BOAM.Sidecar.HookPayload
-open BOAM.Sidecar.Naming
-open BOAM.Sidecar.HeatmapRenderer
-open BOAM.Sidecar.ActionLog
-open BOAM.Sidecar.Replay
+open BOAM.TacticalEngine.GameTypes
+open BOAM.TacticalEngine.StateStore
+open BOAM.TacticalEngine.Node
+open BOAM.TacticalEngine.Registry
+open BOAM.TacticalEngine.Walker
+open BOAM.TacticalEngine.HookPayload
+open BOAM.TacticalEngine.Naming
+open BOAM.TacticalEngine.HeatmapRenderer
+open BOAM.TacticalEngine.ActionLog
+open BOAM.TacticalEngine.Replay
 
-let private version = "0.3.0"
+let private version = "1.0.0"
 let private build = 3
 let private port = Config.Current.Port
 let private startTime = DateTime.UtcNow
@@ -38,7 +38,7 @@ let private iconBaseDir = IO.Path.Combine(boamModDir, "icons")
 let private logDir = IO.Path.Combine(gameDir, "Mods", "BOAM", "logs")
 let private logFilePath =
     IO.Directory.CreateDirectory(logDir) |> ignore
-    IO.Path.Combine(logDir, sprintf "sidecar_%s.log" (DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss")))
+    IO.Path.Combine(logDir, sprintf "tactical_engine_%s.log" (DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss")))
 
 // --- File + console logging ---
 
@@ -77,11 +77,11 @@ let private readJson (req: HttpRequest) = task {
 
 [<EntryPoint>]
 let main argv =
-    let title = sprintf "BOAM Sidecar v%s" version
+    let title = sprintf "BOAM Tactical Engine v%s" version
     Console.Title <- title
 
     printfn ""
-    printfn "  %s %s" (bold "BOAM Sidecar") (dim (sprintf "v%s" version))
+    printfn "  %s %s" (bold "BOAM Tactical Engine") (dim (sprintf "v%s" version))
     printfn "  %s" (dim (sprintf "Build: #%d" build))
     printfn "  %s" (dim "─────────────────────────────────")
     printfn "  Port:    %s" (cyan (string port))
@@ -123,7 +123,7 @@ let main argv =
     app.MapGet("/status", Func<IResult>(fun () ->
         logInfo "Status check"
         Results.Ok({|
-            sidecar = sprintf "BOAM Sidecar v%s" version
+            engine = sprintf "BOAM Tactical Engine v%s" version
             build = sprintf "#%d" build
             status = "ready"
             uptime = (DateTime.UtcNow - startTime).TotalSeconds

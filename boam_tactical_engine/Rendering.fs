@@ -1,13 +1,13 @@
 /// Low-level pixel operations and rendering primitives for heatmap images.
-module BOAM.Sidecar.Rendering
+module BOAM.TacticalEngine.Rendering
 
 open System
 open System.IO
 open SixLabors.ImageSharp
 open SixLabors.ImageSharp.PixelFormats
 open SixLabors.ImageSharp.Processing
-open BOAM.Sidecar.GameTypes
-open BOAM.Sidecar.Config
+open BOAM.TacticalEngine.GameTypes
+open BOAM.TacticalEngine.Config
 
 let private cfg = Current.Rendering
 

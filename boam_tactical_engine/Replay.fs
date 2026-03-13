@@ -1,5 +1,5 @@
 /// Replay engine — reads round_log.jsonl and drives player actions through the game bridge.
-module BOAM.Sidecar.Replay
+module BOAM.TacticalEngine.Replay
 
 open System
 open System.IO

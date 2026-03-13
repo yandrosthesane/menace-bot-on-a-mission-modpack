@@ -1,8 +1,8 @@
 /// Node definition — the unit of work in BOAM.
 /// Each node declares its hook, timing, state dependencies, and a run function.
-module BOAM.Sidecar.Node
+module BOAM.TacticalEngine.Node
 
-open BOAM.Sidecar.NodeContext
+open BOAM.TacticalEngine.NodeContext
 
 /// When a node fires relative to the hooked method.
 type Timing =

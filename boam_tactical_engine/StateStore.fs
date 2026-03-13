@@ -1,9 +1,9 @@
 /// In-memory key-value store for cross-node state.
 /// Values are boxed (obj) at runtime; type safety is enforced by StateKey<'t> at call sites.
-module BOAM.Sidecar.StateStore
+module BOAM.TacticalEngine.StateStore
 
 open System.Collections.Generic
-open BOAM.Sidecar.StateKey
+open BOAM.TacticalEngine.StateKey
 
 type StateStore() =
     let store = Dictionary<string, obj>()

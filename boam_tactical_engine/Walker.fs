@@ -1,12 +1,12 @@
 /// Walker — executes registered nodes for a given hook invocation.
-module BOAM.Sidecar.Walker
+module BOAM.TacticalEngine.Walker
 
 open System.Diagnostics
-open BOAM.Sidecar.GameTypes
-open BOAM.Sidecar.StateStore
-open BOAM.Sidecar.NodeContext
-open BOAM.Sidecar.Node
-open BOAM.Sidecar.Registry
+open BOAM.TacticalEngine.GameTypes
+open BOAM.TacticalEngine.StateStore
+open BOAM.TacticalEngine.NodeContext
+open BOAM.TacticalEngine.Node
+open BOAM.TacticalEngine.Registry
 
 /// Result of running all nodes for a hook.
 type WalkResult = {

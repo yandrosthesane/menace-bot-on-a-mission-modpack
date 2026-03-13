@@ -1,5 +1,5 @@
 /// Loads config.json at startup. No hot reload.
-module BOAM.Sidecar.Config
+module BOAM.TacticalEngine.Config
 
 open System
 open System.IO
@@ -18,7 +18,7 @@ type RenderingConfig = {
     VisionColor: byte array
     FactionColors: Map<int, byte array>
 }
-type SidecarConfig = {
+type TacticalEngineConfig = {
     Port: int
     Rendering: RenderingConfig
 }
@@ -37,7 +37,7 @@ let private parseFactionColors (el: JsonElement) : Map<int, byte array> =
         int prop.Name, parseColorArray prop.Value ]
     |> Map.ofList
 
-let private load () : SidecarConfig =
+let private load () : TacticalEngineConfig =
     let exeDir = AppContext.BaseDirectory
     let configPath = Path.Combine(exeDir, "config.json")
     // Fallback to source dir (for development / dotnet run)

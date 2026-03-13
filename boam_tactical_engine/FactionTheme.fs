@@ -1,8 +1,8 @@
 /// Faction visual configuration — colors, icon names, label prefixes.
-module BOAM.Sidecar.FactionTheme
+module BOAM.TacticalEngine.FactionTheme
 
 open SixLabors.ImageSharp.PixelFormats
-open BOAM.Sidecar.Config
+open BOAM.TacticalEngine.Config
 
 let private cfg = Current.Rendering
 

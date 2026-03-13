@@ -1,7 +1,7 @@
 /// Mirror types for game concepts.
 /// These are plain F# records that the C# bridge serializes Il2Cpp objects into.
-/// The sidecar has no access to Il2Cpp — this is the contract between bridge and sidecar.
-module BOAM.Sidecar.GameTypes
+/// The tactical engine has no access to Il2Cpp — this is the contract between bridge and engine.
+module BOAM.TacticalEngine.GameTypes
 
 /// 2D tile position on the tactical map (max 42x42).
 type TilePos = { X: int; Z: int }

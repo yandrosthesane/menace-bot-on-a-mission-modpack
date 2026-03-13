@@ -1,6 +1,6 @@
 /// IconGenerator — produces placeholder icon PNGs for the BOAM heatmap overlay.
 /// All icons are white on transparent, tinted at runtime with faction color.
-module BOAM.Sidecar.IconGenerator
+module BOAM.TacticalEngine.IconGenerator
 
 open System
 open System.IO

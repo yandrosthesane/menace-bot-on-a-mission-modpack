@@ -1,7 +1,7 @@
 /// Label and filename logic for units and heatmaps.
-module BOAM.Sidecar.Naming
+module BOAM.TacticalEngine.Naming
 
-open BOAM.Sidecar.GameTypes
+open BOAM.TacticalEngine.GameTypes
 
 /// Noise words to strip from template names for compact labels.
 let private stopwords =

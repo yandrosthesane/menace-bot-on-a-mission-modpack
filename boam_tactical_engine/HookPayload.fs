@@ -1,9 +1,9 @@
 /// JSON parsing helpers and hook-specific payload parsers.
 /// Converts raw JsonElement data from HTTP requests into domain types.
-module BOAM.Sidecar.HookPayload
+module BOAM.TacticalEngine.HookPayload
 
 open System.Text.Json
-open BOAM.Sidecar.GameTypes
+open BOAM.TacticalEngine.GameTypes
 
 // --- Reusable JSON helpers ---
 
