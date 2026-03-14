@@ -174,6 +174,17 @@ handleClick.Invoke(currentAction, new[] { tileProxy, actorProxy });
 - Embark: double-click on vehicle tile
 - Disembark: double-click on adjacent tile while inside vehicle
 
+## Issue 12: BOAM command server — independent from DevConsole (DONE)
+
+**Implemented:** BoamBridge runs its own HTTP listener on port 7661.
+- `BoamCommandServer.cs` — receives commands via `POST /execute`
+- `BoamCommandExecutor.cs` — executes on main thread: click (m_CurrentTile write + HandleLeftClickOnTile), useskill, endturn, select
+- `BoamBridge.OnUpdate` drains command queue every frame
+- Replay engine sends commands to port 7661 instead of game bridge `/cmd`
+- DevConsole `boam_click` etc. can be removed — all replay actions go through the command server
+
+**Confirmed working:** Movement via `POST http://127.0.0.1:7661/execute {"action":"click","x":12,"z":2}`
+
 ## Implementation Order
 
 1. **Stable actor UUIDs** (Issue 0) — foundation done: `ActorRegistry.fs`, `/dramatis_personae` endpoint, replay ID mapping. Shared service refactor (Issue 6) deferred.
@@ -233,15 +244,15 @@ Both methods take `(Tile, Actor)` where Actor = active actor.
 
 ## Confirmed replay command mapping
 
-| Recorded Action | Replay Command Sequence |
-|----------------|------------------------|
-| `player_move` | `hover(tile)` → `click(tile)` → `click(tile)` |
-| `player_embark` | `hover(vehicleTile)` → `click(vehicleTile)` → `click(vehicleTile)` |
-| `player_disembark` | `hover(targetTile)` → `click(targetTile)` → `click(targetTile)` |
-| `player_skill` (Deploy, Get Up) | `useskill "Name" x z` (immediate) |
-| `player_skill` (Vehicle Rotation) | `useskill "Name" x z` → `click(dirTile)` → `click(dirTile)` |
+| Recorded Action                          | Replay Command Sequence                                                       |
+|------------------------------------------|-------------------------------------------------------------------------------|
+| `player_move`                            | `hover(tile)` → `click(tile)` → `click(tile)`                                 |
+| `player_embark`                          | `hover(vehicleTile)` → `click(vehicleTile)` → `click(vehicleTile)`            |
+| `player_disembark`                       | `hover(targetTile)` → `click(targetTile)` → `click(targetTile)`               |
+| `player_skill` (Deploy, Get Up)          | `useskill "Name" x z` (immediate)                                             |
+| `player_skill` (Vehicle Rotation)        | `useskill "Name" x z` → `click(dirTile)` → `click(dirTile)`                   |
 | `player_skill` (Shoot, Suppressive Fire) | `useskill "Name" x z` → `boam_click targetX targetZ` × 1 (single click fires) |
-| `player_endturn` | `endturn` |
+| `player_endturn`                         | `endturn`                                                                     |
 
 Where `hover(tile)` = `HandleMouseMoveOnTile(tile, activeActor)` and `click(tile)` = `HandleLeftClickOnTile(tile, activeActor)`.
 

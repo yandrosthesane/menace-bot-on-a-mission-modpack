@@ -123,7 +123,7 @@ let renderCombined
     (iconBaseDir: string)
     (outputDir: string)
     (label: string)
-    (actorId: int)
+    (actor: string)
     (visionRange: int)
     : string * string option =
 
@@ -195,7 +195,7 @@ let renderAll
     (iconBaseDir: string)
     (outputDir: string)
     (label: string)
-    (actorId: int)
+    (actor: string)
     (visionRange: int)
     : (string * string) list =
 
@@ -209,6 +209,6 @@ let renderAll
 
     Directory.CreateDirectory(outputDir) |> ignore
 
-    let combined, _ = renderCombined bgPath mapInfo tiles actorPos units currentFaction iconBaseDir outputDir label actorId visionRange
+    let combined, _ = renderCombined bgPath mapInfo tiles actorPos units currentFaction iconBaseDir outputDir label actor visionRange
 
     [ "combined", combined ]

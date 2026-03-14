@@ -48,7 +48,7 @@ let buildUnitLabels (units: UnitInfo list) =
         let label = if dn = "" then sprintf "%s_%d" prefix idx else sprintf "%s_%s_%d" prefix dn idx
         u, label)
 
-/// Build heatmap filename label from actor name, id, and round.
-let makeHeatmapLabel (actorName: string) (actorId: int) (round: int) =
-    let sn = shortName actorName
-    sprintf "%s_%d_r%02d" sn actorId round
+/// Build heatmap filename label from stable UUID and round.
+/// "player.carda" → "player_carda_r01"
+let makeHeatmapLabel (actor: string) (round: int) =
+    sprintf "%s_r%02d" (actor.Replace(".", "_")) round

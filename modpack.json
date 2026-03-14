@@ -9,7 +9,9 @@
   "assets": {},
   "code": {
     "sources": [
-      "src/BoamBridge.cs"
+      "src/BoamBridge.cs",
+      "src/BoamCommandServer.cs",
+      "src/BoamCommandExecutor.cs"
     ],
     "references": [
       "MelonLoader",

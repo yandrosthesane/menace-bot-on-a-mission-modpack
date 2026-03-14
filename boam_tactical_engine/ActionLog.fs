@@ -29,10 +29,10 @@ let endBattle () =
 let private appendJsonLine (filePath: string) (json: string) =
     File.AppendAllText(filePath, json + "\n")
 
-/// Build the per-actor log filename.
-let private actorLogName (faction: int) (actorId: int) (actorName: string) =
-    let sn = shortName actorName
-    sprintf "actor_%d_%d_%s.jsonl" faction actorId sn
+/// Build the per-actor log filename from stable UUID.
+/// "player.carda" → "actor_player.carda.jsonl"
+let private actorLogName (actor: string) =
+    sprintf "actor_%s.jsonl" (actor.Replace("/", "_"))
 
 /// Serialize an action target to a JSON-compatible object.
 let private targetToJson (target: ActionTarget) =
@@ -57,9 +57,9 @@ let logActionDecision (payload: ActionDecisionPayload) =
                 |> List.map (fun c -> {| x = c.Position.X; z = c.Position.Z; score = c.Score |})
                 |> JsonSerializer.Serialize
         let entry =
-            sprintf """{"round":%d,"faction":%d,"actorId":%d,"actor":"%s","type":"ai_decision","chosen":{"behaviorId":%d,"name":"%s","score":%d},"target":%s,"alternatives":%s,"attackCandidates":%s}"""
-                payload.Round payload.Faction payload.ActorId
-                (payload.ActorName.Replace("\"", "\\\""))
+            sprintf """{"round":%d,"faction":%d,"actor":"%s","type":"ai_decision","chosen":{"behaviorId":%d,"name":"%s","score":%d},"target":%s,"alternatives":%s,"attackCandidates":%s}"""
+                payload.Round payload.Faction
+                (payload.Actor.Replace("\"", "\\\""))
                 payload.Chosen.BehaviorId
                 (payload.Chosen.Name.Replace("\"", "\\\""))
                 payload.Chosen.Score
@@ -67,31 +67,26 @@ let logActionDecision (payload: ActionDecisionPayload) =
                 (JsonSerializer.Serialize(alts))
                 attackCandStr
 
-        let actorFile = Path.Combine(dir, actorLogName payload.Faction payload.ActorId payload.ActorName)
+        let actorFile = Path.Combine(dir, actorLogName payload.Actor)
         appendJsonLine actorFile entry
 
         let sharedFile = Path.Combine(dir, "round_log.jsonl")
         appendJsonLine sharedFile entry
 
-/// Log a player action (move or skill use).
+/// Log a player action (click, useskill, endturn, select).
 let logPlayerAction (payload: PlayerActionPayload) =
     match battleDir with
     | None -> ()
     | Some dir ->
-        let baseJson =
-            sprintf """{"round":%d,"faction":%d,"actorId":%d,"actor":"%s","type":"player_%s","skill":"%s","tile":{"x":%d,"z":%d}"""
-                payload.Round payload.Faction payload.ActorId
-                (payload.ActorName.Replace("\"", "\\\""))
+        let entry =
+            sprintf """{"round":%d,"faction":%d,"actor":"%s","type":"player_%s","skill":"%s","tile":{"x":%d,"z":%d}}"""
+                payload.Round payload.Faction
+                (payload.Actor.Replace("\"", "\\\""))
                 payload.ActionType
                 (payload.SkillName.Replace("\"", "\\\""))
                 payload.Tile.X payload.Tile.Z
-        let entry =
-            if payload.VehicleId > 0 then
-                sprintf """%s,"vehicleId":%d}""" baseJson payload.VehicleId
-            else
-                baseJson + "}"
 
-        let actorFile = Path.Combine(dir, actorLogName payload.Faction payload.ActorId payload.ActorName)
+        let actorFile = Path.Combine(dir, actorLogName payload.Actor)
         appendJsonLine actorFile entry
 
         let sharedFile = Path.Combine(dir, "round_log.jsonl")

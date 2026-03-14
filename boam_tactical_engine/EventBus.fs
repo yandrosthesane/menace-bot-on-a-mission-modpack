@@ -17,8 +17,8 @@ type GameEvent =
     | BattleEnded
     | PlayerAction of round: int * actor: string * actionType: string * tileX: int * tileZ: int * skill: string
     | TurnStart of faction: int * round: int
-    | MovementFinished of faction: int * actorId: int * tileX: int * tileZ: int
-    | ActiveActorChanged of actorId: int * template: string * faction: int * x: int * z: int
+    | MovementFinished of actor: string * tileX: int * tileZ: int
+    | ActiveActorChanged of actor: string * faction: int * round: int * x: int * z: int
 
 /// Format an event for logging.
 let formatEvent (evt: GameEvent) =
@@ -30,8 +30,8 @@ let formatEvent (evt: GameEvent) =
     | BattleEnded -> "BattleEnded"
     | PlayerAction (r, a, t, x, z, s) -> sprintf "PlayerAction(r=%d %s %s (%d,%d) %s)" r a t x z s
     | TurnStart (f, r) -> sprintf "TurnStart(f=%d r=%d)" f r
-    | MovementFinished (f, id, x, z) -> sprintf "MovementFinished(f=%d id=%d (%d,%d))" f id x z
-    | ActiveActorChanged (id, t, f, x, z) -> sprintf "ActiveActorChanged(id=%d %s f=%d (%d,%d))" id t f x z
+    | MovementFinished (a, x, z) -> sprintf "MovementFinished(%s (%d,%d))" a x z
+    | ActiveActorChanged (a, f, r, x, z) -> sprintf "ActiveActorChanged(%s f=%d r=%d (%d,%d))" a f r x z
 
 /// The event bus — single instance shared between hooks and replay.
 type Bus(log: string -> unit) =

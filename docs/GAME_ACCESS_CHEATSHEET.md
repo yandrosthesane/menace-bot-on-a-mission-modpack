@@ -194,7 +194,57 @@ client.UploadString(url, json);      // POST
 // NEVER use HttpClient async under Wine — use WebClient sync
 ```
 
-## 6. DANGER — Things that DON'T work
+## 6. boam_click — simulating tile clicks
+
+`boam_click <x> <z>` simulates a tile click via the current TacticalAction.
+
+**CRITICAL: The Tile parameter in HandleLeftClickOnTile is IGNORED.** The game reads `m_CurrentTile` from TacticalState (set by mouse raycast). To target a specific tile programmatically, write to `m_CurrentTile` before clicking.
+
+**Full sequence for any tile interaction:**
+1. Write `m_CurrentTile` on TacticalState instance → sets the target tile
+2. `HandleLeftClickOnTile(tile, activeActor)` — first click (path preview)
+3. `HandleLeftClickOnTile(tile, activeActor)` — second click (confirm action)
+
+```csharp
+// Write m_CurrentTile
+var prop = ts.GetType().GetProperty("m_CurrentTile", BindingFlags.Public | BindingFlags.Instance);
+prop.SetValue(ts, tileProxy);
+// Then HandleLeftClickOnTile
+handleClick.Invoke(currentAction, new[] { tileProxy, actorProxy });
+```
+
+**Confirmed working (no cursor dependency):** Movement, Embark, Disembark — all via `m_CurrentTile` write + double-click.
+
+**From extracted scripts** (`Menace/States/TacticalState.cs`):
+- `m_CurrentTile` (Tile) — tile the mouse is over (or overridden)
+- `m_TargetTile` (Tile) — target for current action
+- `m_CurrentAction` (TacticalAction) — current input handler
+- `NONE_ACTION`, `COMPUTE_PATH_ACTION`, `TRAVEL_PATH_ACTION`, `TRAVEL_AND_ENTER_ACTION` — static action instances
+- `ComputeActorPath(Actor)` and `ExecuteActorTravel(Actor)` — both take Actor, NOT Tile
+- `HandleMouseMoveOnTile(Vector3, Tile, Tile, Actor)` — 4 params, needs world position
+
+## 7. BOAM Command Server (port 7661)
+
+The BOAM bridge runs its own HttpListener on port 7661, independent of the modkit.
+
+```bash
+# Click a tile (movement, embark, disembark)
+curl -X POST http://127.0.0.1:7661/execute -d '{"action":"click","x":12,"z":2}'
+
+# Activate a skill
+curl -X POST http://127.0.0.1:7661/execute -d '{"action":"useskill","x":8,"z":8,"skill":"Shoot"}'
+
+# End turn
+curl -X POST http://127.0.0.1:7661/execute -d '{"action":"endturn"}'
+
+# Select actor
+curl -X POST http://127.0.0.1:7661/execute -d '{"action":"select","entityId":4}'
+```
+
+Commands are queued and executed on the main thread by `BoamBridge.OnUpdate`.
+Files: `BoamCommandServer.cs` (listener), `BoamCommandExecutor.cs` (execution).
+
+## 8. DANGER — Things that DON'T work
 
 - `Entity` pointers are NOT `UnityEngine.GameObject` — `new GameObject(entity.Pointer)` crashes
 - `skill.Use(tile, null)` does NOT exist on `BaseSkill` — use `TacticalState.TrySelectSkill`
@@ -209,7 +259,7 @@ client.UploadString(url, json);      // POST
 - `GetCurrentAction().HandleLeftClickOnTile()` — `HandleLeftClickOnTile` not found via reflection on the returned base type (`TacticalAction`). Virtual methods not exposed on Il2Cpp base types. Need direct Il2Cpp type cast.
 - Game's native embark flow: `ComputeActorPath(Tile)` + `ExecuteActorTravel()` on TacticalState — confirmed via diagnostic patches. But clicking the vehicle tile through `NoneAction.HandleLeftClickOnTile` is the proper UI-level approach.
 
-## 7. Threading
+## 9. Threading
 
 | Operation | Thread Safety |
 |-----------|--------------|

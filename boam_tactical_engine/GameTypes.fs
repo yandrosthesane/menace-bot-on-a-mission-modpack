@@ -31,8 +31,7 @@ type VisibilityState =
 /// An opponent as seen by an AI faction.
 /// Mirrors Il2CppMenace.Tactical.AI.Opponent.
 type OpponentInfo = {
-    ActorId: int
-    TemplateName: string
+    Actor: string         // Stable UUID (e.g. "wildlife.alien_stinger.1")
     Position: TilePos
     TTL: int              // -2 = never sighted, >0 = recently sighted
     IsKnown: bool         // TTL >= 0
@@ -42,8 +41,7 @@ type OpponentInfo = {
 /// An actor on the tactical map (player or AI unit).
 /// Mirrors Il2CppMenace.Tactical.Actor.
 type ActorInfo = {
-    ActorId: int
-    TemplateName: string
+    Actor: string         // Stable UUID (e.g. "player.carda")
     FactionIndex: FactionId
     Position: TilePos
     IsAlive: bool
@@ -90,8 +88,7 @@ type TileScoreData = {
 type TileScoresPayload = {
     Round: int
     Faction: FactionId
-    ActorId: int
-    ActorName: string
+    Actor: string         // Stable UUID
     ActorPosition: TilePos option
     Tiles: TileScoreData list
     Units: UnitInfo list
@@ -100,7 +97,7 @@ type TileScoresPayload = {
 
 /// Parsed movement-finished hook payload from the C# bridge.
 type MovementFinishedPayload = {
-    ActorId: int
+    Actor: string         // Stable UUID
     Tile: TilePos
 }
 
@@ -126,24 +123,21 @@ type AttackCandidate = {
 type ActionDecisionPayload = {
     Round: int
     Faction: FactionId
-    ActorId: int
-    ActorName: string
+    Actor: string         // Stable UUID
     Chosen: BehaviorChoice
     Target: ActionTarget
     Alternatives: BehaviorChoice list
     AttackCandidates: AttackCandidate list
 }
 
-/// Player action (skill use or movement).
+/// Player action (click, useskill, endturn, select).
 type PlayerActionPayload = {
     Round: int
     Faction: FactionId
-    ActorId: int
-    ActorName: string
-    ActionType: string   // "move", "skill", "endturn", "embark"
-    SkillName: string    // empty for move
+    Actor: string         // Stable UUID
+    ActionType: string    // "click", "useskill", "endturn", "select"
+    SkillName: string     // for useskill actions
     Tile: TilePos
-    VehicleId: int       // vehicle entity ID for embark actions, 0 otherwise
 }
 
 /// Battle session start info.
