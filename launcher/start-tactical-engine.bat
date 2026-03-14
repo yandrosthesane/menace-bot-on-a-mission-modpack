@@ -1,8 +1,9 @@
 @echo off
-setlocal enabledelayedexpansion
 REM Start the BOAM Tactical Engine for Windows.
 REM Place this script in the game's Mods\BOAM\ directory, alongside the tactical_engine\ folder.
 REM Usage: double-click or run from command prompt.
+REM
+REM The engine runs in this window — close it or press Ctrl+C to stop.
 
 set SCRIPT_DIR=%~dp0
 set ENGINE_DIR=%SCRIPT_DIR%tactical_engine
@@ -24,20 +25,5 @@ if not exist "%ENGINE_EXE%" (
     exit /b 1
 )
 
-echo Starting BOAM Tactical Engine on port %PORT%...
-start "" "%ENGINE_EXE%"
-
-REM Wait for startup
-for /l %%i in (1,1,5) do (
-    timeout /t 1 /nobreak > nul
-    curl -s --max-time 1 "http://127.0.0.1:%PORT%/status" > nul 2>&1
-    if !errorlevel! equ 0 (
-        echo BOAM Tactical Engine is ready.
-        exit /b 0
-    )
-)
-
-echo Warning: Tactical engine started but not responding on port %PORT% after 5s.
-echo Check the engine window for errors.
-pause
-exit /b 1
+REM Run in foreground — keeps this window open with live output
+"%ENGINE_EXE%"

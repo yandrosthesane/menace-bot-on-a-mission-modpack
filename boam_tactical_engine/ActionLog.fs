@@ -78,13 +78,18 @@ let logPlayerAction (payload: PlayerActionPayload) =
     match battleDir with
     | None -> ()
     | Some dir ->
-        let entry =
-            sprintf """{"round":%d,"faction":%d,"actorId":%d,"actor":"%s","type":"player_%s","skill":"%s","tile":{"x":%d,"z":%d}}"""
+        let baseJson =
+            sprintf """{"round":%d,"faction":%d,"actorId":%d,"actor":"%s","type":"player_%s","skill":"%s","tile":{"x":%d,"z":%d}"""
                 payload.Round payload.Faction payload.ActorId
                 (payload.ActorName.Replace("\"", "\\\""))
                 payload.ActionType
                 (payload.SkillName.Replace("\"", "\\\""))
                 payload.Tile.X payload.Tile.Z
+        let entry =
+            if payload.VehicleId > 0 then
+                sprintf """%s,"vehicleId":%d}""" baseJson payload.VehicleId
+            else
+                baseJson + "}"
 
         let actorFile = Path.Combine(dir, actorLogName payload.Faction payload.ActorId payload.ActorName)
         appendJsonLine actorFile entry

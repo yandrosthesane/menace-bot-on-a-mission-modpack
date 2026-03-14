@@ -1,5 +1,6 @@
 using System;
 using System.Net.Http;
+using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
@@ -30,8 +31,6 @@ public class BoamBridge : IModpackPlugin
     private bool _inTactical;
     private int _initDelay;
     private bool _ready;
-    private int _round;
-    private int _lastFaction = -1;
 
     // Synchronous HTTP — avoids async deadlocks under Wine CLR
     internal static string EngineGet(string path)
@@ -63,6 +62,68 @@ public class BoamBridge : IModpackPlugin
 
         // Apply patches immediately on init thread (canonical pattern)
         _harmony.PatchAll(typeof(BoamBridge).Assembly);
+
+        // Manual patch: TacticalState.EndTurn — same lookup as TacticalController.EndTurn()
+        try
+        {
+            var tsType = GameType.Find("Menace.States.TacticalState")?.ManagedType;
+            if (tsType != null)
+            {
+                var endTurnMethod = tsType.GetMethod("EndTurn", BindingFlags.Public | BindingFlags.Instance);
+                if (endTurnMethod != null)
+                {
+                    var prefix = new HarmonyMethod(typeof(Patch_EndTurn), nameof(Patch_EndTurn.Prefix));
+                    _harmony.Patch(endTurnMethod, prefix: prefix);
+                    Log.Msg("[BOAM] Patched TacticalState.EndTurn for player endturn logging");
+                }
+                else
+                    Log.Warning("[BOAM] TacticalState.EndTurn method not found");
+            }
+            else
+                Log.Warning("[BOAM] TacticalState type not found — endturn logging disabled");
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"[BOAM] Failed to patch TacticalState.EndTurn: {ex.Message}");
+        }
+
+        // Manual patch: TacticalState.OnActiveActorChanged — fires when active actor changes
+        try
+        {
+            var tsType2 = GameType.Find("Menace.States.TacticalState")?.ManagedType;
+            if (tsType2 != null)
+            {
+                var onActorChanged = tsType2.GetMethod("OnActiveActorChanged", BindingFlags.Public | BindingFlags.Instance);
+                if (onActorChanged != null)
+                {
+                    harmony.Patch(onActorChanged,
+                        postfix: new HarmonyMethod(typeof(Patch_ActiveActorChanged), nameof(Patch_ActiveActorChanged.Postfix)));
+                    Log.Msg("[BOAM] Patched TacticalState.OnActiveActorChanged");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"[BOAM] Failed to patch OnActiveActorChanged: {ex.Message}");
+        }
+
+        // Manual patch: MissionPrepUIScreen.OnPreviewReady — fires when mission preview map is loaded
+        try
+        {
+            var prepType = typeof(Il2CppMenace.UI.Strategy.MissionPrepUIScreen);
+            var onPreviewReady = prepType.GetMethod("OnPreviewReady");
+            if (onPreviewReady != null)
+            {
+                harmony.Patch(onPreviewReady,
+                    postfix: new HarmonyMethod(typeof(Patch_PreviewReady), nameof(Patch_PreviewReady.Postfix)));
+                Log.Msg("[BOAM] Patched MissionPrepUIScreen.OnPreviewReady");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"[BOAM] Failed to patch OnPreviewReady: {ex.Message}");
+        }
+
         Log.Msg("[BOAM] Bridge plugin initialized, patches registered");
     }
 
@@ -70,7 +131,6 @@ public class BoamBridge : IModpackPlugin
     {
         if (!_engineAvailable)
         {
-            // Check tactical engine on background thread (non-blocking)
             var thread = new Thread(CheckEngine)
             {
                 Name = "BOAM-Check",
@@ -79,14 +139,18 @@ public class BoamBridge : IModpackPlugin
             thread.Start();
         }
 
+        // Notify tactical engine of every scene change
+        if (_engineAvailable && !string.IsNullOrEmpty(sceneName))
+        {
+            var scenePayload = JsonSerializer.Serialize(new { scene = sceneName });
+            ThreadPool.QueueUserWorkItem(_ => EnginePost("/hook/scene-change", scenePayload));
+        }
+
         if (sceneName == "Tactical")
         {
             _inTactical = true;
             _initDelay = 60;
             _ready = false;
-            _round = 1;
-            _lastFaction = -1;
-
             // Start a new battle session in the tactical engine
             var ts = DateTime.Now.ToString("yyyyMMdd_HHmmss");
             var startPayload = JsonSerializer.Serialize(new { timestamp = ts });
@@ -111,6 +175,63 @@ public class BoamBridge : IModpackPlugin
         if (_initDelay > 0) { _initDelay--; return; }
         _ready = true;
         Log.Msg("[BOAM] Tactical ready, engine hooks active");
+        if (_engineAvailable)
+        {
+            // Collect roster on main thread (safe — no concurrent access)
+            var roster = BuildRoster();
+            var payload = JsonSerializer.Serialize(new { roster });
+            ThreadPool.QueueUserWorkItem(_ => EnginePost("/hook/tactical-ready", payload));
+        }
+    }
+
+    /// Build the full actor roster on the main thread.
+    private static System.Collections.Generic.List<object> BuildRoster()
+    {
+        var result = new System.Collections.Generic.List<object>();
+        try
+        {
+            var allActors = EntitySpawner.ListEntities(-1);
+            if (allActors == null) return result;
+            foreach (var actor in allActors)
+            {
+                var info = EntitySpawner.GetEntityInfo(actor);
+                if (info == null) continue;
+                var pos = EntityMovement.GetPosition(actor);
+                var go = new GameObj(actor.Pointer);
+                var tplObj = go.ReadObj("m_Template");
+                var templateName = tplObj.IsNull ? "" : (tplObj.GetName() ?? "");
+
+                var leaderName = "";
+                try
+                {
+                    var unitActor = new Il2CppMenace.Tactical.UnitActor(actor.Pointer);
+                    var leader = unitActor.GetLeader();
+                    if (leader != null)
+                    {
+                        var nickname = leader.GetNickname();
+                        if (nickname != null)
+                            leaderName = nickname.GetTranslated() ?? "";
+                    }
+                }
+                catch { }
+
+                result.Add(new
+                {
+                    entityId = info.EntityId,
+                    template = templateName,
+                    faction = info.FactionIndex,
+                    leader = leaderName.ToLowerInvariant(),
+                    x = pos?.x ?? 0,
+                    z = pos?.y ?? 0,
+                    isAlive = info.IsAlive
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"[BOAM] BuildRoster error: {ex.Message}");
+        }
+        return result;
     }
 
     private void CheckEngine()
@@ -144,14 +265,7 @@ public class BoamBridge : IModpackPlugin
     }
 
     public bool IsReady => _ready && _engineAvailable;
-    public int Round => _round;
-
-    public void TrackRound(int factionIdx)
-    {
-        if (factionIdx <= _lastFaction)
-            _round++;
-        _lastFaction = factionIdx;
-    }
+    public int Round => Menace.SDK.TacticalController.GetCurrentRound();
 
     /// Extract common actor info: GameObj, factionId, entityId, templateName.
     internal static (GameObj gameObj, int factionId, int entityId, string templateName)?
@@ -199,7 +313,6 @@ static class Patch_OnTurnStart
             if (bridge == null || !bridge.IsReady) return;
 
             int factionIdx = __instance.GetIndex();
-            bridge.TrackRound(factionIdx);
 
             var opponents = __instance.m_Opponents;
             int opponentCount = opponents?.Count ?? 0;
@@ -421,21 +534,30 @@ static class Patch_MovementFinished
             BoamBridge.EnginePost("/hook/movement-finished", payload);
 
             // Also log as player action if this is a player faction unit
+            // Skip if this movement was a disembark (already logged by Patch_Movement)
             if (factionId == 1 || factionId == 2)
             {
-                var (_, _, _, templateName) = actorInfo.Value;
-                var playerPayload = JsonSerializer.Serialize(new
+                if (Patch_Movement._lastDisembarkActorId == actorId)
                 {
-                    hook = "player-action",
-                    round = BoamBridge.Instance?.Round ?? 0,
-                    faction = factionId,
-                    actorId,
-                    actorName = templateName,
-                    actionType = "move",
-                    skillName = "",
-                    tile = new { x = tileX, z = tileZ }
-                });
-                BoamBridge.EnginePost("/hook/player-action", playerPayload);
+                    Patch_Movement._lastDisembarkActorId = -1;
+                    // Skip — disembark already logged
+                }
+                else
+                {
+                    var (_, _, _, templateName) = actorInfo.Value;
+                    var playerPayload = JsonSerializer.Serialize(new
+                    {
+                        hook = "player-action",
+                        round = BoamBridge.Instance?.Round ?? 0,
+                        faction = factionId,
+                        actorId,
+                        actorName = templateName,
+                        actionType = "move",
+                        skillName = "",
+                        tile = new { x = tileX, z = tileZ }
+                    });
+                    BoamBridge.EnginePost("/hook/player-action", playerPayload);
+                }
             }
         }
         catch (Exception ex)
@@ -600,6 +722,69 @@ static class Patch_AgentExecute
 }
 
 /// <summary>
+/// Harmony patch: intercepts TacticalState.EndTurn to log player endturn actions.
+/// Registered manually in OnInitialize (type found via GameType.Find, same as TacticalController).
+/// Uses Prefix so the active actor is still set when we read it.
+/// </summary>
+static class Patch_EndTurn
+{
+    // Guard: track last actor+round to prevent duplicate logging
+    // (game calls EndTurn twice for the last player unit in a faction phase)
+    private static int _lastActorId = -1;
+    private static int _lastRound = -1;
+
+    public static void Prefix()
+    {
+        try
+        {
+            var bridge = BoamBridge.Instance;
+            if (bridge == null || !bridge.IsReady) return;
+
+            // Only log during player faction turns
+            int factionId = TacticalController.GetCurrentFaction();
+            if (factionId != (int)Menace.SDK.FactionType.Player
+                && factionId != (int)Menace.SDK.FactionType.PlayerAI) return;
+
+            // Get the active actor before EndTurn clears it
+            var activeGameObj = TacticalController.GetActiveActor();
+            if (activeGameObj.IsNull) return;
+
+            var actor = new Actor(activeGameObj.Pointer);
+            var actorInfo = BoamBridge.GetActorInfo(actor);
+            if (actorInfo == null) return;
+            var (gameObj, _, actorId, templateName) = actorInfo.Value;
+
+            // Skip duplicate: same actor+round means EndTurn fired twice
+            int round = bridge.Round;
+            if (actorId == _lastActorId && round == _lastRound) return;
+            _lastActorId = actorId;
+            _lastRound = round;
+
+            var (tileX, tileZ) = BoamBridge.GetPos(gameObj);
+
+            var payload = JsonSerializer.Serialize(new
+            {
+                hook = "player-action",
+                round,
+                faction = factionId,
+                actorId,
+                actorName = templateName,
+                actionType = "endturn",
+                skillName = "",
+                tile = new { x = tileX, z = tileZ }
+            });
+
+            BoamBridge.Log.Msg($"[BOAM] player-action f{factionId} {templateName}: endturn at ({tileX},{tileZ})");
+            BoamBridge.EnginePost("/hook/player-action", payload);
+        }
+        catch (Exception ex)
+        {
+            BoamBridge.Log.Error($"[BOAM] endturn patch error: {ex.Message}");
+        }
+    }
+}
+
+/// <summary>
 /// Harmony patch: intercepts TacticalManager.InvokeOnSkillUse to capture player skill usage.
 /// Fires for both AI and player — we filter to player factions only.
 /// </summary>
@@ -650,5 +835,162 @@ static class Patch_OnSkillUse
         {
             BoamBridge.Log.Error($"[BOAM] player-action error: {ex.Message}");
         }
+    }
+}
+
+/// <summary>
+/// Harmony patch: intercepts TacticalManager.InvokeOnMovement to capture embark/disembark events.
+/// MovementAction.Enter (1) = entering a container, MovementAction.Leave (2) = leaving a container.
+/// Sets _lastDisembarkActorId so Patch_MovementFinished can skip the duplicate player_move log.
+/// </summary>
+[HarmonyPatch(typeof(Il2CppMenace.Tactical.TacticalManager), "InvokeOnMovement")]
+static class Patch_Movement
+{
+    internal static int _lastDisembarkActorId = -1;
+
+    static void Postfix(object __instance, Actor _actor, Il2CppMenace.Tactical.Tile _from,
+        Il2CppMenace.Tactical.Tile _to, Il2CppMenace.Tactical.MovementAction _action,
+        Il2CppMenace.Tactical.Entity _container)
+    {
+        try
+        {
+            bool isEnter = (_action & Il2CppMenace.Tactical.MovementAction.Enter) != 0;
+            bool isLeave = (_action & Il2CppMenace.Tactical.MovementAction.Leave) != 0;
+            if (!isEnter && !isLeave) return;
+
+            var bridge = BoamBridge.Instance;
+            if (bridge == null || !bridge.IsReady) return;
+            if (_actor == null) return;
+
+            var actorInfo = BoamBridge.GetActorInfo(_actor);
+            if (actorInfo == null) return;
+            var (_, factionId, actorId, templateName) = actorInfo.Value;
+
+            // Only log for player factions
+            if (factionId != 1 && factionId != 2) return;
+
+            if (isEnter && _container != null)
+            {
+                // Embark: actor entering a container
+                var containerObj = new GameObj(_container.Pointer);
+                var containerInfo = EntitySpawner.GetEntityInfo(containerObj);
+                int containerId = containerInfo?.EntityId ?? 0;
+                int containerX = _to != null ? _to.GetX() : 0;
+                int containerZ = _to != null ? _to.GetZ() : 0;
+
+                var payload = JsonSerializer.Serialize(new
+                {
+                    hook = "player-action",
+                    round = bridge.Round,
+                    faction = factionId,
+                    actorId,
+                    actorName = templateName,
+                    actionType = "embark",
+                    skillName = "",
+                    tile = new { x = containerX, z = containerZ },
+                    vehicleId = containerId
+                });
+
+                BoamBridge.Log.Msg($"[BOAM] player-action f{factionId} {templateName}: embark into vehicle {containerId} at ({containerX},{containerZ})");
+                BoamBridge.EnginePost("/hook/player-action", payload);
+            }
+            else if (isLeave)
+            {
+                // Disembark: actor leaving a container — suppress duplicate player_move from MovementFinished
+                _lastDisembarkActorId = actorId;
+                int tileX = _to != null ? _to.GetX() : 0;
+                int tileZ = _to != null ? _to.GetZ() : 0;
+
+                // Get container ID — _container may be null on Leave, try actor's current container
+                int containerId = 0;
+                if (_container != null)
+                {
+                    var containerObj = new GameObj(_container.Pointer);
+                    var containerInfo = EntitySpawner.GetEntityInfo(containerObj);
+                    containerId = containerInfo?.EntityId ?? 0;
+                }
+
+                var payload = JsonSerializer.Serialize(new
+                {
+                    hook = "player-action",
+                    round = bridge.Round,
+                    faction = factionId,
+                    actorId,
+                    actorName = templateName,
+                    actionType = "disembark",
+                    skillName = "",
+                    tile = new { x = tileX, z = tileZ },
+                    vehicleId = containerId
+                });
+
+                BoamBridge.Log.Msg($"[BOAM] player-action f{factionId} {templateName}: disembark to ({tileX},{tileZ})");
+                BoamBridge.EnginePost("/hook/player-action", payload);
+            }
+        }
+        catch (Exception ex)
+        {
+            BoamBridge.Log.Error($"[BOAM] movement enter/leave error: {ex.Message}");
+        }
+    }
+}
+
+/// <summary>
+/// Harmony patch: fires when the mission preview map finishes loading.
+/// Notifies the tactical engine so event-driven navigation knows planmission is ready.
+/// </summary>
+static class Patch_PreviewReady
+{
+    public static void Postfix()
+    {
+        try
+        {
+            var bridge = BoamBridge.Instance;
+            if (bridge == null) return;
+            BoamBridge.Log.Msg("[BOAM] Mission preview ready");
+            if (bridge.IsReady || true) // always send — engine might not be "ready" yet during navigation
+                ThreadPool.QueueUserWorkItem(_ => BoamBridge.EnginePost("/hook/preview-ready", "{}"));
+        }
+        catch { }
+    }
+}
+
+/// <summary>
+/// Harmony patch: fires when the active actor changes.
+/// Sends actor info to the tactical engine for event-driven replay and logging.
+/// </summary>
+static class Patch_ActiveActorChanged
+{
+    public static void Postfix(object __instance, Il2CppMenace.Tactical.Actor _activeActor)
+    {
+        try
+        {
+            var bridge = BoamBridge.Instance;
+            if (bridge == null) return;
+
+            if (_activeActor == null)
+            {
+                ThreadPool.QueueUserWorkItem(_ => BoamBridge.EnginePost("/hook/actor-changed",
+                    JsonSerializer.Serialize(new { actorId = 0, template = "", faction = 0, x = 0, z = 0 })));
+                return;
+            }
+
+            var actorInfo = BoamBridge.GetActorInfo(_activeActor);
+            if (actorInfo == null) return;
+            var (gameObj, factionId, entityId, templateName) = actorInfo.Value;
+            var (px, pz) = BoamBridge.GetPos(gameObj);
+
+            var payload = JsonSerializer.Serialize(new
+            {
+                actorId = entityId,
+                template = templateName,
+                faction = factionId,
+                x = px,
+                z = pz
+            });
+
+            BoamBridge.Log.Msg($"[BOAM] active-actor-changed: {templateName} (ID:{entityId}) at ({px},{pz})");
+            ThreadPool.QueueUserWorkItem(_ => BoamBridge.EnginePost("/hook/actor-changed", payload));
+        }
+        catch { }
     }
 }

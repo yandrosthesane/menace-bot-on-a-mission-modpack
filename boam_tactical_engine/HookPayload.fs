@@ -117,7 +117,8 @@ let parsePlayerAction (root: JsonElement) : PlayerActionPayload =
       ActorName = tryStr root "actorName" (sprintf "actor%d" actorId)
       ActionType = tryStr root "actionType" "unknown"
       SkillName = tryStr root "skillName" ""
-      Tile = root.GetProperty("tile") |> parseTilePos }
+      Tile = root.GetProperty("tile") |> parseTilePos
+      VehicleId = tryInt root "vehicleId" 0 }
 
 let parseBattleStart (root: JsonElement) : BattleStartPayload =
     { Timestamp = tryStr root "timestamp" (System.DateTime.Now.ToString("yyyyMMdd_HHmmss")) }

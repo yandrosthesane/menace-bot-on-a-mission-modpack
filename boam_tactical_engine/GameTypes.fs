@@ -140,9 +140,10 @@ type PlayerActionPayload = {
     Faction: FactionId
     ActorId: int
     ActorName: string
-    ActionType: string   // "move", "skill"
+    ActionType: string   // "move", "skill", "endturn", "embark"
     SkillName: string    // empty for move
     Tile: TilePos
+    VehicleId: int       // vehicle entity ID for embark actions, 0 otherwise
 }
 
 /// Battle session start info.

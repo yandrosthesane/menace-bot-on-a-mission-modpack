@@ -1,28 +1,43 @@
 #!/usr/bin/env bash
-# Deploy BOAM: build ModpackLoader, copy source to staging, compile via MCP, install to game.
+# Deploy BOAM: build bridge + tactical engine + icon generator, install everything to game.
 # Usage: ./deploy.sh
 #
-# Expects:
-#   - Source at /home/yandros/workspace/menace_mods/<ModName>-modpack/
-#   - Staging at /home/yandros/Documents/MenaceModkit/staging/<ModName>/
-#   - MenaceAssetPacker repo at /home/username/workspace/menace_mods/MenaceAssetPacker/
+# Steps:
+#   1. Build ModpackLoader DLL
+#   2. Clean existing mod from game
+#   3. Deploy C# bridge via MCP (compile + install)
+#   4. Publish tactical engine (linux-x64, self-contained)
+#   5. Publish icon generator (linux-x64, single-file)
+#   6. Install engine + icons tool + launcher + config to game
+#   7. Regenerate icons
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
 MOD_NAME="BOAM"
-HOME="/home/yandros"
-SRC_DIR="${HOME}/workspace/menace_mods/${MOD_NAME}-modpack"
-STAGING_DIR="${HOME}/Documents/MenaceModkit/staging/${MOD_NAME}"
-REPO_DIR="${HOME}/workspace/menace_mods/MenaceAssetPacker"
+USER_HOME="/home/yandros"
+SRC_DIR="${SCRIPT_DIR}"
+STAGING_DIR="${USER_HOME}/Documents/MenaceModkit/staging/${MOD_NAME}"
+REPO_DIR="${USER_HOME}/workspace/menace_mods/MenaceAssetPacker"
 MCP_PROJECT="${REPO_DIR}/src/Menace.Modkit.Mcp/Menace.Modkit.Mcp.csproj"
-GAME_MODS_DIR="${HOME}/.steam/steam/steamapps/common/Menace/Mods"
+GAME_DIR="${USER_HOME}/.steam/steam/steamapps/common/Menace"
+GAME_MODS_DIR="${GAME_DIR}/Mods"
+GAME_MOD_DIR="${GAME_MODS_DIR}/${MOD_NAME}"
 LOADER_DLL="${REPO_DIR}/src/Menace.ModpackLoader/bin/Release/net6.0/Menace.ModpackLoader.dll"
 BUNDLED_DIR="${REPO_DIR}/third_party/bundled/ModpackLoader"
-RUNTIME_DIR="${HOME}/Documents/MenaceModkit/runtime"
+RUNTIME_DIR="${USER_HOME}/Documents/MenaceModkit/runtime"
+
+ENGINE_DIR="boam_tactical_engine"
+PIPELINE_DIR="boam_asset_pipeline"
+LAUNCHER_DIR="launcher"
+PUBLISH_ENGINE=".publish-engine"
+PUBLISH_ICONS=".publish-icons"
 
 # Validate source exists
-if [ ! -d "$SRC_DIR" ]; then
-    echo "ERROR: Source directory not found: $SRC_DIR" >&2
+if [ ! -f "$SRC_DIR/modpack.json" ]; then
+    echo "ERROR: modpack.json not found in $SRC_DIR" >&2
     exit 1
 fi
 
@@ -31,13 +46,14 @@ if [ ! -d "$STAGING_DIR" ]; then
     mkdir -p "$STAGING_DIR"
 fi
 
-# Step 1: Build and deploy ModpackLoader (our version with improvements)
+# ─────────────────────────────────────────────
+# Step 1: Build ModpackLoader
+# ─────────────────────────────────────────────
 echo "==> Building ModpackLoader..."
 if dotnet build "${REPO_DIR}/src/Menace.ModpackLoader" -c Release --nologo -v q 2>&1 | tail -3; then
     if [ -f "$LOADER_DLL" ]; then
         cp "$LOADER_DLL" "$BUNDLED_DIR/"
         cp "$LOADER_DLL" "$RUNTIME_DIR/"
-        # Also update MCP bin copies so SeedBundledRuntimeDlls doesn't overwrite with stale DLL
         for d in "${REPO_DIR}"/src/Menace.Modkit.Mcp/bin/*/net*/third_party/bundled/ModpackLoader/; do
             [ -d "$d" ] && cp "$LOADER_DLL" "$d"
         done
@@ -49,15 +65,19 @@ else
     echo "WARNING: ModpackLoader build failed — using existing DLL" >&2
 fi
 
-# Step 2: Clean existing mod from game directory
-if [ -d "${GAME_MODS_DIR}/${MOD_NAME}" ]; then
+# ─────────────────────────────────────────────
+# Step 2: Clean existing mod from game
+# ─────────────────────────────────────────────
+if [ -d "$GAME_MOD_DIR" ]; then
     echo "==> Removing existing ${MOD_NAME} from game mods..."
-    rm -rf "${GAME_MODS_DIR:?}/${MOD_NAME:?}"
+    rm -rf "${GAME_MOD_DIR:?}"
     echo "    Done."
 fi
 
-# Step 3: Copy modpack source to staging (only deployable files)
-echo "==> Copying ${MOD_NAME} to staging..."
+# ─────────────────────────────────────────────
+# Step 3: Deploy C# bridge via MCP (compile + install)
+# ─────────────────────────────────────────────
+echo "==> Copying ${MOD_NAME} source to staging..."
 rm -rf "${STAGING_DIR:?}"/*
 cp "$SRC_DIR/modpack.json" "$STAGING_DIR/"
 cp "$SRC_DIR/README.md" "$STAGING_DIR/" 2>/dev/null || true
@@ -66,7 +86,6 @@ cp -r "$SRC_DIR/configs" "$STAGING_DIR/" 2>/dev/null || true
 cp -r "$SRC_DIR/assets" "$STAGING_DIR/" 2>/dev/null || true
 echo "    Done."
 
-# Step 4: Deploy modpack via MCP JSON-RPC (stdio)
 echo "==> Deploying ${MOD_NAME} via MCP (compile + install)..."
 python3 -c "
 import subprocess, json, time, select, sys
@@ -122,15 +141,61 @@ except json.JSONDecodeError:
     sys.exit(1)
 "
 
-echo "==> ${MOD_NAME} deployed. Restart the game to test."
+echo "==> C# bridge deployed."
 
-# Step 5: Regenerate icons (deploy wipes Mods/BOAM/)
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ICON_SCRIPT="${SCRIPT_DIR}/boam_asset_pipeline/generate-icons.sh"
-if [ -x "$ICON_SCRIPT" ]; then
-    echo "==> Regenerating BOAM icons..."
-    "$ICON_SCRIPT" --force 2>&1 | tail -3
-    echo "    Icons regenerated."
-else
-    echo "WARNING: Icon generation script not found at $ICON_SCRIPT" >&2
-fi
+# ─────────────────────────────────────────────
+# Step 4: Publish tactical engine (linux-x64)
+# ─────────────────────────────────────────────
+echo "==> Publishing tactical engine (linux-x64)..."
+dotnet publish "$ENGINE_DIR/TacticalEngine.fsproj" \
+    -c Release -r linux-x64 --self-contained \
+    -p:PublishSingleFile=false \
+    -o "$PUBLISH_ENGINE" \
+    -v quiet
+
+# ─────────────────────────────────────────────
+# Step 5: Publish icon generator (linux-x64)
+# ─────────────────────────────────────────────
+echo "==> Publishing icon generator (linux-x64)..."
+dotnet publish "$PIPELINE_DIR/BoamAssetPipeline.fsproj" \
+    -c Release -r linux-x64 --self-contained \
+    -p:PublishSingleFile=true \
+    -o "$PUBLISH_ICONS" \
+    -v quiet
+
+# ─────────────────────────────────────────────
+# Step 6: Install engine + tools to game
+# ─────────────────────────────────────────────
+echo "==> Installing tactical engine to ${GAME_MOD_DIR}..."
+mkdir -p "$GAME_MOD_DIR/tactical_engine"
+
+# Tactical engine — full publish output
+cp -r "$PUBLISH_ENGINE/"* "$GAME_MOD_DIR/tactical_engine/"
+chmod +x "$GAME_MOD_DIR/tactical_engine/TacticalEngine"
+
+# Icon generator — single-file binary
+cp "$PUBLISH_ICONS/boam-icons" "$GAME_MOD_DIR/"
+chmod +x "$GAME_MOD_DIR/boam-icons"
+
+# Launcher script
+cp "$LAUNCHER_DIR/start-tactical-engine.sh" "$GAME_MOD_DIR/"
+chmod +x "$GAME_MOD_DIR/start-tactical-engine.sh"
+
+# Icon config — replace 'user' placeholder with actual username
+sed 's|/home/user/|/home/yandros/|g' "$PIPELINE_DIR/icon-config.json" > "$GAME_MOD_DIR/icon-config.json"
+echo "    icon-config.json installed (paths set to /home/yandros/)"
+
+echo "    Done."
+
+# Cleanup publish dirs
+rm -rf "$PUBLISH_ENGINE" "$PUBLISH_ICONS"
+
+# ─────────────────────────────────────────────
+# Step 7: Regenerate icons
+# ─────────────────────────────────────────────
+echo "==> Regenerating icons..."
+"$GAME_MOD_DIR/boam-icons" --force --config "$GAME_MOD_DIR/icon-config.json" 2>&1 | tail -5
+echo "    Icons regenerated."
+
+echo ""
+echo "==> ${MOD_NAME} fully deployed. Restart the game to test."

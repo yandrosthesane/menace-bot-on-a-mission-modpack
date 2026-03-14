@@ -16,6 +16,7 @@ open BOAM.TacticalEngine.HookPayload
 open BOAM.TacticalEngine.Naming
 open BOAM.TacticalEngine.HeatmapRenderer
 open BOAM.TacticalEngine.ActionLog
+open BOAM.TacticalEngine.EventBus
 open BOAM.TacticalEngine.Replay
 
 let private version = "1.0.0"
@@ -120,6 +121,9 @@ let main argv =
     builder.Logging.SetMinimumLevel(LogLevel.Warning) |> ignore
     let app = builder.Build()
 
+    // Shared event bus for synchronizing replay with game events
+    let eventBus = Bus(logEngine)
+
     app.MapGet("/status", Func<IResult>(fun () ->
         logInfo "Status check"
         Results.Ok({|
@@ -136,6 +140,8 @@ let main argv =
 
         logHook (sprintf "on-turn-start  faction=%d  opponents=%d  round=%d"
             factionState.FactionIndex (List.length factionState.Opponents) factionState.Round)
+
+        eventBus.Push(TurnStart(factionState.FactionIndex, factionState.Round))
 
         let result = Walker.run registry store OnTurnStart Prefix factionState logEngine
 
@@ -206,6 +212,7 @@ let main argv =
         let payload = parseMovementFinished root
 
         logHook (sprintf "movement-finished  actor=%d  tile=(%d,%d)" payload.ActorId payload.Tile.X payload.Tile.Z)
+        eventBus.Push(MovementFinished(0, payload.ActorId, payload.Tile.X, payload.Tile.Z))
 
         match heatmapPaths.TryGetValue(payload.ActorId) with
         | true, path when IO.File.Exists(path) ->
@@ -220,17 +227,69 @@ let main argv =
         return Results.Ok({| hook = "movement-finished"; status = "ok"; actorId = payload.ActorId |})
     })) |> ignore
 
+    app.MapPost("/hook/scene-change", Func<HttpRequest, Threading.Tasks.Task<IResult>>(fun req -> task {
+        let! root = readJson req
+        let scene = match root.TryGetProperty("scene") with | true, v -> v.GetString() |> Option.ofObj |> Option.defaultValue "" | _ -> ""
+        logHook (sprintf "scene-change  scene=%s" scene)
+        eventBus.Push(SceneChanged scene)
+        return Results.Ok({| hook = "scene-change"; scene = scene |})
+    })) |> ignore
+
+    app.MapPost("/hook/preview-ready", Func<IResult>(fun () ->
+        logHook "preview-ready"
+        eventBus.Push(PreviewReady)
+        Results.Ok({| hook = "preview-ready" |})
+    )) |> ignore
+
+    app.MapPost("/hook/tactical-ready", Func<HttpRequest, Threading.Tasks.Task<IResult>>(fun req -> task {
+        let! root = readJson req
+        logHook "tactical-ready"
+
+        // Write roster from payload (collected on main thread — no race condition)
+        try
+            match root.TryGetProperty("roster") with
+            | true, roster ->
+                let rosterJson = roster.GetRawText()
+                match ActionLog.currentBattleDir() with
+                | Some dir ->
+                    let rosterPath = IO.Path.Combine(dir, "dramatis_personae.json")
+                    IO.File.WriteAllText(rosterPath, (rosterJson: string))
+                    logEngine (sprintf "  roster written: %d actors" (roster.GetArrayLength()))
+                | None -> logWarn "  no active battle — roster not saved"
+            | _ -> logWarn "  no roster in payload"
+        with ex ->
+            logWarn (sprintf "  failed to save roster: %s" ex.Message)
+
+        eventBus.Push(TacticalReady)
+        return Results.Ok({| hook = "tactical-ready" |})
+    })) |> ignore
+
+    app.MapPost("/hook/actor-changed", Func<HttpRequest, Threading.Tasks.Task<IResult>>(fun req -> task {
+        let! root = readJson req
+        let actorId = match root.TryGetProperty("actorId") with | true, v -> v.GetInt32() | _ -> 0
+        let template = match root.TryGetProperty("template") with | true, v -> v.GetString() |> Option.ofObj |> Option.defaultValue "" | _ -> ""
+        let faction = match root.TryGetProperty("faction") with | true, v -> v.GetInt32() | _ -> 0
+        let x = match root.TryGetProperty("x") with | true, v -> v.GetInt32() | _ -> 0
+        let z = match root.TryGetProperty("z") with | true, v -> v.GetInt32() | _ -> 0
+
+        logHook (sprintf "actor-changed  id=%d %s f=%d (%d,%d)" actorId template faction x z)
+        eventBus.Push(ActiveActorChanged(actorId, template, faction, x, z))
+        return Results.Ok({| hook = "actor-changed"; actorId = actorId; template = template |})
+    })) |> ignore
+
     app.MapPost("/hook/battle-start", Func<HttpRequest, Threading.Tasks.Task<IResult>>(fun req -> task {
         let! root = readJson req
         let payload = parseBattleStart root
         let dir = ActionLog.startBattle boamModDir payload.Timestamp
         logHook (sprintf "battle-start  session=%s" (IO.Path.GetFileName(dir)))
+        eventBus.Push(BattleStarted)
         return Results.Ok({| hook = "battle-start"; status = "ok"; battleDir = dir |})
     })) |> ignore
 
     app.MapPost("/hook/battle-end", Func<IResult>(fun () ->
         ActionLog.endBattle ()
         logHook "battle-end"
+        eventBus.Push(BattleEnded)
         Results.Ok({| hook = "battle-end"; status = "ok" |})
     )) |> ignore
 
@@ -257,6 +316,7 @@ let main argv =
             payload.Round payload.ActorName payload.ActionType payload.Tile.X payload.Tile.Z)
 
         ActionLog.logPlayerAction payload
+        eventBus.Push(PlayerAction(payload.Round, payload.ActorName, payload.ActionType, payload.Tile.X, payload.Tile.Z, payload.SkillName))
 
         return Results.Ok({| hook = "player-action"; status = "ok" |})
     })) |> ignore
@@ -311,11 +371,6 @@ let main argv =
             match root.TryGetProperty("round") with
             | true, v -> Some (v.GetInt32())
             | _ -> None
-        let delayMs =
-            match root.TryGetProperty("delayMs") with
-            | true, v -> v.GetInt32()
-            | _ -> 2000
-
         if String.IsNullOrEmpty(battleName) then
             return Results.BadRequest({| error = "missing 'battle' field" |})
         else
@@ -323,12 +378,12 @@ let main argv =
             if not (IO.File.Exists(logPath)) then
                 return Results.NotFound({| error = sprintf "No round_log.jsonl in %s" battleName |})
             else
-                logInfo (sprintf "Replay started: %s (round=%s, delay=%dms)" battleName (match round with Some r -> string r | None -> "all") delayMs)
+                logInfo (sprintf "Replay started: %s (round=%s)" battleName (match round with Some r -> string r | None -> "all"))
 
                 let! result =
                     match round with
-                    | Some r -> Replay.replayRound replayClient bridgeUrl logPath r delayMs
-                    | None -> Replay.replayAll replayClient bridgeUrl logPath delayMs
+                    | Some r -> Replay.replayRound replayClient bridgeUrl logPath r eventBus logEngine
+                    | None -> Replay.replayAll replayClient bridgeUrl logPath eventBus logEngine
 
                 logInfo (sprintf "Replay done: %d/%d succeeded" result.Succeeded result.Total)
                 for line in result.Log do
@@ -345,6 +400,33 @@ let main argv =
     })) |> ignore
 
     let listenUrl = sprintf "http://127.0.0.1:%d" port
+    // Navigate to tactical: continuesave → planmission → startmission, fully event-driven
+    app.MapPost("/navigate/tactical", Func<Threading.Tasks.Task<IResult>>(fun () -> task {
+        logInfo "Navigate to tactical — event-driven"
+        eventBus.Clear()
+
+        // Step 1: continuesave → wait for MissionPreparation scene
+        let! _ = replayClient.PostAsync(sprintf "%s/cmd" bridgeUrl, new Net.Http.StringContent("continuesave"))
+        logInfo "  sent continuesave, waiting for MissionPreparation scene..."
+        let! _ = eventBus.WaitFor(fun e -> match e with EventBus.SceneChanged s -> s = "MissionPreparation" | _ -> false)
+        logInfo "  MissionPreparation loaded"
+
+        // Step 2: planmission → wait for PreviewReady (map preview loaded)
+        do! Threading.Tasks.Task.Delay(1000)
+        let! _ = replayClient.PostAsync(sprintf "%s/cmd" bridgeUrl, new Net.Http.StringContent("planmission"))
+        logInfo "  sent planmission, waiting for PreviewReady..."
+        let! _ = eventBus.WaitFor(fun e -> match e with EventBus.PreviewReady -> true | _ -> false)
+        logInfo "  preview ready"
+
+        // Step 3: startmission → wait for TacticalReady (game fully loaded and playable)
+        let! _ = replayClient.PostAsync(sprintf "%s/cmd" bridgeUrl, new Net.Http.StringContent("startmission"))
+        logInfo "  sent startmission, waiting for TacticalReady..."
+        let! _ = eventBus.WaitFor(fun e -> match e with EventBus.TacticalReady -> true | _ -> false)
+        logInfo "  in Tactical"
+
+        return Results.Ok({| status = "tactical"; message = "Navigated to tactical via events" |})
+    })) |> ignore
+
     logInfo (sprintf "Listening on %s" (cyan listenUrl))
     logInfo "Waiting for game plugin..."
 

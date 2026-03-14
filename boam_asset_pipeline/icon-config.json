@@ -1,15 +1,15 @@
 {
-  "_doc": "Icon generation config. Run './generate-icons.sh [--force]' to build icons from source assets.",
+  "_doc": "Icon generation config. Run 'boam-icons [--force]' to build icons from source assets. Replace user and sources locations",
 
   "defaults": {
     "size": 64,
-    "output_base": "/home/yandros/.local/share/Steam/steamapps/common/Menace/Mods/BOAM/icons"
+    "output_base": "/home/user/.local/share/Steam/steamapps/common/Menace/Mods/BOAM/icons"
   },
 
   "sources": {
-    "native":       "/home/yandros/.local/share/Steam/steamapps/common/Menace/UserData/CustomPersistentAssets/BOAM",
-    "placeholders": "/home/yandros/.local/share/Steam/steamapps/common/Menace/UserData/CustomPersistentAssets/BOAM",
-    "custom":       "/home/yandros/workspace/menace_mods/BOAM-modpack/sidecar/assets/icons"
+    "native":       "/home/user/.local/share/Steam/steamapps/common/Menace/UserData/CustomPersistentAssets/BOAM",
+    "placeholders": "/home/user/.local/share/Steam/steamapps/common/Menace/UserData/CustomPersistentAssets/BOAM",
+    "custom":       "/home/user/workspace/menace_mods/BOAM-modpack/sidecar/assets/icons"
   },
 
   "factions": [

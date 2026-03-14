@@ -2,6 +2,8 @@
 # Start the BOAM Tactical Engine for Linux.
 # Place this script in the game's Mods/BOAM/ directory, alongside the tactical_engine/ folder.
 # Usage: ./start-tactical-engine.sh
+#
+# The engine runs in the foreground — close this terminal or press Ctrl+C to stop it.
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ENGINE_DIR="$SCRIPT_DIR/tactical_engine"
@@ -21,19 +23,5 @@ if [ ! -f "$ENGINE_BIN" ]; then
     exit 1
 fi
 
-echo "Starting BOAM Tactical Engine on port $PORT..."
-"$ENGINE_BIN" &
-ENGINE_PID=$!
-
-# Wait for startup
-for i in 1 2 3 4 5; do
-    sleep 1
-    if curl -s --max-time 1 "http://127.0.0.1:$PORT/status" > /dev/null 2>&1; then
-        echo "BOAM Tactical Engine is ready (PID: $ENGINE_PID)"
-        exit 0
-    fi
-done
-
-echo "Warning: Tactical engine started but not responding on port $PORT after 5s."
-echo "PID: $ENGINE_PID — check logs for errors."
-exit 1
+# Run in foreground — keeps the terminal open with live output
+exec "$ENGINE_BIN"
