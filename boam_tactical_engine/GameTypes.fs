@@ -63,8 +63,9 @@ type FactionState = {
 type UnitInfo = {
     Faction: FactionId
     Position: TilePos
-    Name: string
-    Leader: string   // character nickname (e.g. "rewa", "exconde") — empty if N/A
+    Actor: string    // stable UUID (e.g. "player.carda", "wildlife.alien_stinger.1")
+    Name: string     // template name — used for icon file lookup
+    Leader: string   // character nickname — empty if N/A
 }
 
 /// Tile score components as evaluated by the AI's ConsiderZones.

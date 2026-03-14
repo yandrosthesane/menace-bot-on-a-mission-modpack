@@ -66,10 +66,10 @@ let private drawUnits
     : string option =
     let iconSize = scaledPpt
     let offset = (scaledPpt - iconSize) / 2
-    let labeled = buildUnitLabels units
     let opts = RichTextOptions(font)
     let mutable actorLabel = None
-    for (unit, label) in labeled do
+    for unit in units do
+        let label = unitLabel unit
         let px, py = tileOrigin mapInfo scaledPpt unit.Position.X unit.Position.Z
         let color = factionColor unit.Faction
         let startX = int px + offset

@@ -62,6 +62,7 @@ let private parseTileScore (el: JsonElement) : TileScoreData =
 let private parseUnit (el: JsonElement) : UnitInfo =
     { Faction = el.GetProperty("faction").GetInt32()
       Position = { X = el.GetProperty("x").GetInt32(); Z = el.GetProperty("z").GetInt32() }
+      Actor = tryStr el "actor" ""
       Name = tryStr el "name" ""
       Leader = tryStr el "leader" "" }
 

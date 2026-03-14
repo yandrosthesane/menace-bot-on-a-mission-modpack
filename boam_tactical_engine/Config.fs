@@ -20,6 +20,8 @@ type RenderingConfig = {
 }
 type TacticalEngineConfig = {
     Port: int
+    BridgePort: int
+    CommandPort: int
     Heatmaps: bool
     Rendering: RenderingConfig
 }
@@ -60,6 +62,8 @@ let private load () : TacticalEngineConfig =
     let borders = r.GetProperty("borders")
 
     { Port = root.GetProperty("port").GetInt32()
+      BridgePort = match root.TryGetProperty("bridge_port") with | true, v -> v.GetInt32() | _ -> 7655
+      CommandPort = match root.TryGetProperty("command_port") with | true, v -> v.GetInt32() | _ -> 7661
       Heatmaps = match root.TryGetProperty("heatmaps") with | true, v -> v.GetBoolean() | _ -> true
       Rendering = {
         MinTilePixels = r.GetProperty("minTilePixels").GetInt32()

@@ -703,6 +703,7 @@ static class Patch_PostProcessTileScores
                             faction = aInfo.FactionIndex,
                             x = aPos.Value.x,
                             z = aPos.Value.y,
+                            actor = BoamBridge.GetUuid(aInfo.EntityId),
                             name = templateName,
                             leader = leaderName
                         });

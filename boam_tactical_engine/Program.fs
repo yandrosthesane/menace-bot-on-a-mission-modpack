@@ -1,5 +1,5 @@
 /// BOAM Tactical Engine — F# graph engine HTTP server.
-/// Listens on http://127.0.0.1:7660 for hook calls from the game plugin.
+/// Listens on the port configured in config.json for hook calls from the game plugin.
 module BOAM.TacticalEngine.Main
 
 open System
@@ -124,7 +124,8 @@ let main argv =
     // Shared event bus for synchronizing replay with game events
     let eventBus = Bus(logEngine)
     let httpClient = new Net.Http.HttpClient()
-    let bridgeUrl = "http://127.0.0.1:7655"  // game bridge for navigation commands
+    let bridgeUrl = sprintf "http://127.0.0.1:%d" Config.Current.BridgePort
+    let commandUrl = sprintf "http://127.0.0.1:%d" Config.Current.CommandPort
 
     app.MapGet("/status", Func<IResult>(fun () ->
         logInfo "Status check"
@@ -407,9 +408,10 @@ let main argv =
                 Replay.startSession actions
                 // Tell the bridge to start pulling
                 try
-                    let! _ = httpClient.PostAsync("http://127.0.0.1:7661/replay/start", new Net.Http.StringContent(""))
+                    let! _ = httpClient.PostAsync(sprintf "%s/replay/start" commandUrl, new Net.Http.StringContent(""))
                     ()
-                with _ -> ()
+                with ex ->
+                    logWarn (sprintf "Failed to notify bridge of replay start: %s" ex.Message)
                 logInfo (sprintf "Replay session started: %s (%d actions)" battleName (List.length actions))
                 return Results.Ok({| status = "started"; battle = battleName; actions = List.length actions |})
     })) |> ignore
@@ -433,9 +435,10 @@ let main argv =
         match Replay.stopSession() with
         | Some session ->
             try
-                let! _ = httpClient.PostAsync("http://127.0.0.1:7661/replay/stop", new Net.Http.StringContent(""))
+                let! _ = httpClient.PostAsync(sprintf "%s/replay/stop" commandUrl, new Net.Http.StringContent(""))
                 ()
-            with _ -> ()
+            with ex ->
+                logWarn (sprintf "Failed to notify bridge of replay stop: %s" ex.Message)
             logInfo (sprintf "Replay stopped: %d/%d actions" session.Index session.Actions.Length)
             return Results.Ok({| status = "stopped"; executed = session.Index; total = session.Actions.Length; log = session.Log |> List.rev |})
         | None ->

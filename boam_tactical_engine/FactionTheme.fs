@@ -24,9 +24,3 @@ let factionIconName (factionIdx: int) =
     | 4 -> "allied" | 5 -> "enemy_local" | 6 -> "pirates" | 7 -> "wildlife"
     | 8 -> "constructs" | 9 -> "rogue_army" | _ -> "neutral"
 
-/// Faction prefix for unit labels.
-let factionPrefix (factionIdx: int) =
-    match factionIdx with
-    | 1 -> "P" | 2 -> "PA" | 3 -> "C" | 4 -> "A"
-    | 5 -> "E" | 6 -> "Pi" | 7 -> "W" | 8 -> "Co" | 9 -> "R"
-    | _ -> "?"

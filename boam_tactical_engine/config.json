@@ -1,5 +1,7 @@
 {
   "port": 7660,
+  "bridge_port": 7655,
+  "command_port": 7661,
   "heatmaps": false,
   "rendering": {
     "minTilePixels": 64,
