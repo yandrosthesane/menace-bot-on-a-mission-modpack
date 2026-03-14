@@ -121,6 +121,10 @@ let rec getNext (activeActor: string) (gameRound: int) : string =
                 // Action matches active actor — serve it
                 session.Index <- session.Index + 1
                 session.Log <- sprintf "  → %s %s (%d,%d) %s" action.Actor action.ActionType action.TileX action.TileZ action.SkillName :: session.Log
+                let delay =
+                    match action.ActionType with
+                    | "click" | "useskill" -> 500
+                    | _ -> 0
                 JsonSerializer.Serialize({|
                     status = "action"
                     action = action.ActionType
@@ -128,5 +132,5 @@ let rec getNext (activeActor: string) (gameRound: int) : string =
                     z = action.TileZ
                     skill = action.SkillName
                     actor = action.Actor
-                    delayMs = 0
+                    delayMs = delay
                 |}, jsonOptions)

@@ -2,110 +2,119 @@
 
 ## Overview
 
-The BOAM replay system records all player actions during a tactical mission into a JSONL battle log, then can replay those actions automatically using DevConsole commands via the game bridge.
+The BOAM replay system records all player actions during a tactical mission as primitive UI interactions (clicks, skill activations, endturns) into a JSONL battle log. It can then replay those actions by having the C# bridge **pull** actions one at a time from the F# tactical engine, executing each only when the game is ready.
 
-## Components
-
-### 1. C# Bridge Plugin (`BOAM-modpack/src/BoamBridge.cs`)
-
-Harmony patches on `TacticalManager` capture player actions:
-
-| Patch | Hook | Captures |
-|-------|------|----------|
-| `Patch_SkillUse` | `InvokeOnSkillUse` | `player_skill` — skill name + target tile |
-| `Patch_MovementFinished` | `InvokeOnMovementFinished` | `player_move` — destination tile |
-| `Patch_Movement` | `InvokeOnMovement` | `player_embark` (MovementAction.Enter) / `player_disembark` (MovementAction.Leave) |
-| `Patch_EndTurn` | (endturn detection) | `player_endturn` — actor position |
-
-**Dedup logic:** `Patch_Movement` sets `_lastDisembarkActorId` when detecting `Leave`, so `Patch_MovementFinished` skips the duplicate `player_move` for the same actor.
-
-### 2. F# Tactical Engine (`boam_tactical_engine/`)
-
-**Action logging** (`ActionLog.fs`): Writes JSONL entries with `type`, `template`, `tile`, `skillName`, `vehicleId`.
-
-**Replay engine** (`Replay.fs`): Reads JSONL, maps actions to DevConsole commands:
-
-| JSONL Action | Console Command |
-|-------------|----------------|
-| `player_move` | `move <x> <z>` |
-| `player_skill` | `useskill "<name>" <x> <z>` |
-| `player_embark` | `embark <vehicleId>` |
-| `player_disembark` | `disembark <x> <z>` |
-| `player_endturn` | `endturn` |
-
-Skill names with spaces are always quoted in the command for safety.
-
-**Endpoints:**
-- `GET /replay/battles` — list recorded battles
-- `POST /replay/run` — replay player actions from a battle log
-
-### 3. DevConsole Commands (`src/Menace.ModpackLoader/SDK/DevConsole.cs`)
-
-All commands run on the main thread via `EnqueueMainThread()`.
-
-| Command | Description |
-|---------|-------------|
-| `who` | Show active actor ID, template, position, contained status |
-| `move <x> <z>` | Move actor one tile (pathfinding). Returns false if blocked or no AP. |
-| `useskill <name> <x> <z>` | Execute skill via `TacticalState.TrySelectSkill()`. Quote names with spaces. |
-| `embark <vehicleId>` | Embark active actor into vehicle via `Entity.ContainEntity()` |
-| `disembark <x> <z>` | Disembark active actor to tile via `Entity.EjectEntity()` |
-| `endturn` | End active actor's turn |
-| `select <id>` | Select actor by entity ID (**unreliable** — doesn't always change game UI) |
-
-## Skill Execution Flow
-
-The `useskill` command uses the game's native execution path:
+## Architecture: Pull-Based Replay
 
 ```
-1. Get active actor → get SkillContainer → iterate GetAllSkills()
-2. Find skill by ID or Title (case-insensitive match)
-3. Cast BaseSkill pointer to Skill type (Il2Cpp pointer constructor)
-4. Get TacticalState singleton via GameType.Find("Menace.States.TacticalState")
-5. Call TacticalState.TrySelectSkill(skill)
-   → Self-targeted skills (Deploy, Get Up) execute immediately
-   → Aimed skills create a SkillAction
-6. If SkillAction exists, call HandleLeftClickOnTile(tile)
+F# Tactical Engine (port 7660)          C# Bridge (in-game, main thread)
+┌─────────────────────────┐             ┌──────────────────────────────┐
+│ Replay.fs               │             │ BoamBridge.OnUpdate()        │
+│  - startSession(actions) │ ◄──────── │  - POST /replay/start        │
+│  - getNext(actor, round) │ ◄──────── │  - GET /replay/next          │
+│  - stopSession()         │             │    (only when gates pass)    │
+│                          │ ────────► │  - Execute action             │
+│ Actions served one at    │  JSON      │  - Wait for gates again      │
+│ a time, in order         │  response  │  - Pull next                 │
+└─────────────────────────┘             └──────────────────────────────┘
 ```
 
-**Critical:** `TacticalState` is in `Menace.States`, NOT `Menace.Tactical`.
+The bridge controls the pace. It only pulls the next action when:
+1. **Active actor matches** — the action's actor UUID matches the game's current active actor
+2. **Not moving** — `Actor.IsMoving()` returns false
+3. **No skill animation** — `Time.time >= SkillAnimationEndTime` (set by `InvokeOnAttackTileStart` duration)
+4. **Player faction** — faction is 1 (Player) or 2 (PlayerAI)
 
-## Tested Action Types
+## Recording: Primitive UI Interactions
 
-All tested on 2026-03-14:
+Harmony patches on concrete `TacticalAction` subclasses capture every player click:
 
-| Action | Console Command | Works | BOAM Logged |
-|--------|----------------|-------|-------------|
-| Move | `move 4 2` | Yes | Yes (`player_move`) |
-| Deploy | `useskill "Deploy" 8 1` | Yes | Yes (`player_skill`) |
-| Get Up | `useskill "Get Up" 8 1` | Yes | Yes (`player_skill`) |
-| Vehicle Rotation | `useskill "Vehicle Rotation" 36 5` | Yes | Yes (`player_skill`) |
-| Embark | `embark 1` | Yes | No (bypasses InvokeOnMovement) |
-| Disembark | `disembark 4 3` | Yes | No (bypasses InvokeOnMovement) |
-| End Turn | `endturn` | Yes | Yes (`player_endturn`) |
+| Patch | Hook | Records |
+|-------|------|---------|
+| `Patch_ClickOnTile` | `NoneAction.HandleLeftClickOnTile` | `player_click` — first click (path preview) |
+| `Patch_ClickOnTile` | `ComputePathAction.HandleLeftClickOnTile` | `player_click` — second click (confirm move) |
+| `Patch_ClickOnTile` | `SkillAction.HandleLeftClickOnTile` | `player_click` — skill confirm click |
+| `Patch_SelectSkill` | `TacticalState.TrySelectSkill` | `player_useskill` — skill activated |
+| `Patch_EndTurn` | `TacticalState.EndTurn` | `player_endturn` — turn ended |
+| `Patch_ActiveActorChanged` | `TacticalState.OnActiveActorChanged` | `player_select` — actor became active |
 
-**Note on embark/disembark logging:** Console commands use `ContainEntity`/`EjectEntity` directly, bypassing the game's movement system. Manual (game UI) embark/disembark IS captured by Harmony patches. For replay, the console commands reproduce the same effect.
+All actions use **stable UUIDs** (e.g. `player.carda`, `wildlife.alien_stinger.2`) — no entity IDs in the F# domain.
 
-## Known Issues
+## JSONL Format
 
-1. **Vehicle Rotation logs twice** — duplicate `player_skill` entries in BOAM log
-2. **`select` unreliable** — `SetActiveActor()` doesn't always change the game's active actor. Use `endturn` to cycle through units.
-3. **`EntityCombat.UseAbility` broken** — still uses `skill.Use()` which doesn't exist on Il2Cpp `BaseSkill`. Only affects the Lua API, not DevConsole.
-
-## Getting to Tactical for Testing
-
+```json
+{"round":1,"faction":1,"actor":"player.carda","type":"player_click","skill":"","tile":{"x":11,"z":4}}
+{"round":1,"faction":1,"actor":"player.carda","type":"player_click","skill":"","tile":{"x":11,"z":4}}
+{"round":1,"faction":1,"actor":"player.carda","type":"player_endturn","skill":"","tile":{"x":11,"z":4}}
+{"round":1,"faction":1,"actor":"player.lim","type":"player_select","skill":"","tile":{"x":5,"z":2}}
+{"round":1,"faction":1,"actor":"player.lim","type":"player_useskill","skill":"Shoot","tile":{"x":0,"z":0}}
+{"round":1,"faction":1,"actor":"player.lim","type":"player_click","skill":"","tile":{"x":8,"z":3}}
 ```
-continuesave → sleep 7s
-planmission   → sleep 14s
-startmission  → sleep 14s
-→ In Tactical
+
+A move = two clicks (NoneAction preview + ComputePathAction confirm). A skill = useskill + click(s). The game's own state machine handles the interpretation.
+
+## Replay Execution
+
+### Command execution via BOAM Command Server (port 7661)
+
+The bridge executes actions through `BoamCommandExecutor`:
+
+| Action | Execution |
+|--------|-----------|
+| `click` | Write `m_CurrentTile` on TacticalState + `HandleLeftClickOnTile` on current action |
+| `useskill` | Find skill by name → `TacticalState.TrySelectSkill(skill)` |
+| `endturn` | `TacticalState.EndTurn()` |
+| `select` | `TacticalController.SetActiveActor()` (resolves UUID → entityId via bridge registry) |
+
+### Gating: SkillAnimationEndTime
+
+`Patch_Diagnostics.OnAttackTileStart` fires when any attack begins and provides the animation duration in seconds. The bridge sets `SkillAnimationEndTime = Time.time + duration + 0.5s` and holds all commands until the animation completes. This prevents `EndTurn` during a shooting animation (which silently fails).
+
+### Orphaned endturn skipping
+
+When the game auto-ends a turn (e.g. all AP consumed), the recorded `player_endturn` becomes orphaned — the actor is no longer active. The engine's `getNext` detects this (action actor ≠ active actor + action is endturn) and skips it automatically.
+
+## API
+
+### `GET /replay/battles`
+List all recorded battles with round/action counts.
+
+### `POST /replay/start`
+Start a pull-based replay session. The bridge begins pulling actions.
+```json
+{"battle": "battle_20260314_233650"}
 ```
 
-Timings from `.claude/skills/timing.json` under `tactical-chain`.
+### `GET /replay/next?actor=<uuid>&round=<round>`
+Bridge pulls the next action. Returns:
+- `{"status": "action", "action": "click", "x": 11, "z": 4, ...}` — execute this
+- `{"status": "waiting", "actor": "player.lim"}` — action is for a different actor, wait
+- `{"status": "done"}` — all actions consumed
 
-## Mission Map Reference (Current Save)
+### `POST /replay/stop`
+Stop the session and get results.
 
-- **ID 1** = Rewa (vehicle at 4,4)
-- **ID 2** = Exconde (vehicle at 36,4)
-- **ID 3** = Lim (infantry at 5,2)
-- **ID 4** = Carda (infantry at 8,1) — usually first active actor
+## Stable Actor UUIDs
+
+All actors are identified by stable UUIDs computed at tactical-ready:
+- Player units with leaders: `player.carda`, `player.rewa`
+- Non-player units: `faction.template_short.N` (e.g. `civilian.worker.1`, `wildlife.alien_stinger.3`)
+- Occurrence index assigned by sorting same-faction+template units by initial position `(x, z)`
+
+The C# bridge computes UUIDs in `BuildDramatisPersonae()` and stores them in `_entityToUuid` / `_uuidToEntity` dictionaries. All hook payloads use UUIDs. The F# domain never sees entity IDs.
+
+## Files
+
+| File | Role |
+|------|------|
+| `src/BoamBridge.cs` | C# bridge: Harmony patches, pull-based replay in OnUpdate, UUID registry |
+| `src/BoamCommandServer.cs` | HTTP listener on port 7661, command queue, replay start/stop |
+| `src/BoamCommandExecutor.cs` | Executes click/useskill/endturn/select on main thread |
+| `boam_tactical_engine/Replay.fs` | Replay session state, action parsing, getNext logic |
+| `boam_tactical_engine/ActionLog.fs` | JSONL writer for battle logs |
+| `boam_tactical_engine/Program.fs` | HTTP endpoints: /replay/start, /replay/next, /replay/stop |
+
+## Getting to Tactical
+
+Fully event-driven via auto-navigate. When the Title scene loads, the engine automatically runs:
+`continuesave` → wait for MissionPreparation → `planmission` → wait for PreviewReady → `startmission` → wait for TacticalReady
