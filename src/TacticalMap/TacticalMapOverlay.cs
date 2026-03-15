@@ -34,7 +34,7 @@ internal class TacticalMapOverlay
     private float _padding = 4f;
     private int _labelFontSize = 9;
     private int _headerFontSize = 11;
-    private int _toastFontSize = 14;
+    private int _toastFontSize = 14; // legacy — toast now in static Toast class
     private float _defaultOpacity = 1f;
     private float _defaultMapBrightness = 1f;
     private bool _enabled = true;
@@ -56,12 +56,7 @@ internal class TacticalMapOverlay
     private string _activeEntityKey;
     private int _activeDisplay;
 
-    // Toast notification
-    private string _notifyText;
-    private float _notifyUntil;
-    private GUIStyle _notifyStyle;
-    private static readonly Color ToastBackgroundColor = new(0.1f, 0.1f, 0.1f, 0.85f);
-    private const float TOAST_Y_OFFSET = 40f;
+    // Toast rendering moved to static Toast class
 
     // Map background
     private GUIStyle _mapBackgroundStyle;
@@ -151,8 +146,7 @@ internal class TacticalMapOverlay
         var sessionDir = TacticalMapState.BattleSessionDir;
         if (!string.IsNullOrEmpty(sessionDir))
         {
-            _notifyText = $"BOAM — {sessionDir}";
-            _notifyUntil = Time.realtimeSinceStartup + 5f;
+            Toast.Show($"BOAM — {sessionDir}", 5f);
         }
     }
 
@@ -174,8 +168,7 @@ internal class TacticalMapOverlay
             _activeEntityKey = ds.EntityStyleKey;
             _activeAnchorKey = ds.AnchorKey;
             _stylesReady = false;
-            _notifyText = $"TacticalMap — {ds.Name}";
-            _notifyUntil = Time.realtimeSinceStartup + 2f;
+            Toast.Show($"TacticalMap — {ds.Name}", 2f);
             if (_ready) UpdateMapBackground();
         }
 
@@ -183,11 +176,9 @@ internal class TacticalMapOverlay
         {
             int idx = Array.IndexOf(_mapKeys, _activeMapKey);
             _activeMapKey = _mapKeys[(idx + 1) % _mapKeys.Length];
-            _notifyText = $"TacticalMap — Loading {_activeMapKey}...";
-            _notifyUntil = Time.realtimeSinceStartup + 30f;
+            Toast.Show($"TacticalMap — Loading {_activeMapKey}...", 30f);
             if (_ready) UpdateMapBackground();
-            _notifyText = $"TacticalMap — Map: {_activeMapKey}";
-            _notifyUntil = Time.realtimeSinceStartup + 2f;
+            Toast.Show($"TacticalMap — Map: {_activeMapKey}", 2f);
         }
 
         if (Input.GetKeyDown(_entityStyleKey))
@@ -203,16 +194,14 @@ internal class TacticalMapOverlay
         if (Input.GetKeyDown(_labelKey))
         {
             _showLabels = !_showLabels;
-            _notifyText = $"TacticalMap — Labels: {(_showLabels ? "ON" : "OFF")}";
-            _notifyUntil = Time.realtimeSinceStartup + 2f;
+            Toast.Show($"TacticalMap — Labels: {(_showLabels ? "ON" : "OFF")}", 2f);
         }
 
         if (Input.GetKeyDown(_anchorKey))
         {
             int idx = Array.IndexOf(_anchorKeys, _activeAnchorKey);
             _activeAnchorKey = _anchorKeys[(idx + 1) % _anchorKeys.Length];
-            _notifyText = $"TacticalMap — Anchor: {_activeAnchorKey}";
-            _notifyUntil = Time.realtimeSinceStartup + 2f;
+            Toast.Show($"TacticalMap — Anchor: {_activeAnchorKey}", 2f);
         }
     }
 
@@ -224,31 +213,6 @@ internal class TacticalMapOverlay
 
     private void OnGUIInner()
     {
-        // Toast notification (any scene)
-        if (_notifyText != null && Time.realtimeSinceStartup < _notifyUntil)
-        {
-            if (_notifyStyle == null)
-            {
-                _notifyStyle = new GUIStyle(GUI.skin.box)
-                {
-                    fontSize = _toastFontSize,
-                    fontStyle = FontStyle.Bold,
-                    alignment = TextAnchor.MiddleCenter
-                };
-                _notifyStyle.normal.textColor = Color.white;
-                _notifyStyle.normal.background = MakeTexture(ToastBackgroundColor);
-                _notifyStyle.padding = new RectOffset(12, 12, 6, 6);
-            }
-            var content = new GUIContent(_notifyText);
-            var toastSize = _notifyStyle.CalcSize(content);
-            float toastX = (Screen.width - toastSize.x) * 0.5f;
-            GUI.Box(new Rect(toastX, TOAST_Y_OFFSET, toastSize.x, toastSize.y), _notifyText, _notifyStyle);
-        }
-        else if (_notifyText != null)
-        {
-            _notifyText = null;
-        }
-
         if (!_inTactical || !_ready || !_overlayVisible || !_enabled) return;
 
         var units = TacticalMapState.GetUnitsSnapshot();

@@ -157,7 +157,7 @@ let rec getNext (activeActor: string) (gameRound: int) : string =
                             if nextIsConfirm then 1000 else 500
                     | "useskill" ->
                         if action.DurationMs > 0 then action.DurationMs + 500  // measured non-attack skill animation
-                        else 2000  // fallback for skills without duration data
+                        else 3000  // fallback for skills without duration data
                     | _ -> 0
                 JsonSerializer.Serialize({|
                     status = "action"

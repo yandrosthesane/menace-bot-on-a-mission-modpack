@@ -255,14 +255,16 @@ let registerRoutes (app: WebApplication) (ctx: RouteContext) =
             if not (IO.File.Exists(logPath)) then
                 return Results.NotFound({| error = sprintf "No round_log.jsonl in %s" battleName |})
             else
+                let camera = match root.TryGetProperty("camera") with | true, v -> v.GetString() |> Option.ofObj |> Option.defaultValue "follow" | _ -> "follow"
                 let actions = Replay.loadActions logPath
                 Replay.startSession actions
+                let optionsJson = sprintf """{"camera":"%s"}""" camera
                 try
-                    let! _ = ctx.HttpClient.PostAsync(sprintf "%s/replay/start" ctx.CommandUrl, new Net.Http.StringContent(""))
+                    let! _ = ctx.HttpClient.PostAsync(sprintf "%s/replay/start" ctx.CommandUrl, new Net.Http.StringContent(optionsJson, Text.Encoding.UTF8, "application/json"))
                     ()
                 with ex -> logWarn (sprintf "Failed to notify bridge of replay start: %s" ex.Message)
-                logInfo (sprintf "Replay session started: %s (%d actions)" battleName (List.length actions))
-                return Results.Ok({| status = "started"; battle = battleName; actions = List.length actions |})
+                logInfo (sprintf "Replay session started: %s (%d actions, camera=%s)" battleName (List.length actions) camera)
+                return Results.Ok({| status = "started"; battle = battleName; actions = List.length actions; camera = camera |})
     })) |> ignore
 
     app.MapGet("/replay/next", Func<HttpRequest, IResult>(fun req ->
@@ -308,7 +310,7 @@ let registerRoutes (app: WebApplication) (ctx: RouteContext) =
         return Results.Ok({| status = "tactical"; message = "Navigated to tactical via events" |})
     })) |> ignore
 
-    app.MapPost("/navigate/replay/{battleName}", Func<string, Threading.Tasks.Task<IResult>>(fun battleName -> task {
+    app.MapPost("/navigate/replay/{battleName}", Func<string, HttpRequest, Threading.Tasks.Task<IResult>>(fun battleName req -> task {
         logInfo (sprintf "Navigate to tactical + replay %s" battleName)
         let logPath = IO.Path.Combine(ctx.BattleReportsDir, battleName, "round_log.jsonl")
         if not (IO.File.Exists(logPath)) then
@@ -331,10 +333,12 @@ let registerRoutes (app: WebApplication) (ctx: RouteContext) =
             let! _ = ctx.EventBus.WaitFor(fun e -> match e with TacticalReady -> true | _ -> false)
             logInfo "  in Tactical — starting replay"
             // Start replay session
+            let camera = match req.Query.TryGetValue("camera") with | true, v -> string v | _ -> "follow"
             let actions = Replay.loadActions logPath
             Replay.startSession actions
+            let optionsJson = sprintf """{"camera":"%s"}""" camera
             try
-                let! _ = ctx.HttpClient.PostAsync(sprintf "%s/replay/start" ctx.CommandUrl, new Net.Http.StringContent(""))
+                let! _ = ctx.HttpClient.PostAsync(sprintf "%s/replay/start" ctx.CommandUrl, new Net.Http.StringContent(optionsJson, Text.Encoding.UTF8, "application/json"))
                 ()
             with ex -> logWarn (sprintf "Failed to notify bridge of replay start: %s" ex.Message)
             logInfo (sprintf "Replay session started: %s (%d actions)" battleName (List.length actions))

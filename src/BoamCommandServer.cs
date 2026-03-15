@@ -98,7 +98,7 @@ public class BoamCommandServer
                     responseBody = path switch
                     {
                         "/execute" => HandleExecute(request),
-                        "/replay/start" => HandleReplayStart(),
+                        "/replay/start" => HandleReplayStart(request),
                         "/replay/stop" => HandleReplayStop(),
                         "/status" => "{\"status\":\"ok\"}",
                         _ => "{\"error\":\"unknown route\"}"
@@ -157,10 +157,25 @@ public class BoamCommandServer
         return JsonSerializer.Serialize(new { status = "queued", action, x, z, skill });
     }
 
-    private string HandleReplayStart()
+    private string HandleReplayStart(HttpListenerRequest request)
     {
+        var camera = "follow";
+        try
+        {
+            using var reader = new StreamReader(request.InputStream);
+            var body = reader.ReadToEnd();
+            if (!string.IsNullOrEmpty(body))
+            {
+                var doc = JsonDocument.Parse(body);
+                camera = doc.RootElement.TryGetProperty("camera", out var cv) ? cv.GetString() ?? "follow" : "follow";
+            }
+        }
+        catch { }
+
         BoamBridge.Instance._replayActive = true;
-        _log.Msg("[BOAM] Replay started (pull mode)");
+        BoamBridge.Instance._replayCameraFollow = camera == "follow";
+        Toast.Show($"Replay started (camera: {camera})");
+        _log.Msg($"[BOAM] Replay started (pull mode, camera={camera})");
         return "{\"status\":\"ok\"}";
     }
 

@@ -17,6 +17,7 @@
       "src/AiObservationPatches.cs",
       "src/PlayerActionPatches.cs",
       "src/DiagnosticPatches.cs",
+      "src/Toast.cs",
       "src/TacticalMap/TacticalMapState.cs",
       "src/TacticalMap/TacticalMapTypes.cs",
       "src/TacticalMap/TacticalMapOverlay.cs",

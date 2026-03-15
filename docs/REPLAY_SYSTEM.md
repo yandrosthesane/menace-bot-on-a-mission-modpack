@@ -82,8 +82,13 @@ List all recorded battles with round/action counts.
 ### `POST /replay/start`
 Start a pull-based replay session. The bridge begins pulling actions.
 ```json
-{"battle": "battle_20260314_233650"}
+{"battle": "battle_20260314_233650", "camera": "follow"}
 ```
+Options:
+- `camera`: `"follow"` (default) — camera centers on actor when switching units. `"free"` — camera stays where the user left it.
+
+### `POST /navigate/replay/{battleName}?camera=follow`
+Auto-navigate to tactical and start replay. Camera option via query param (default `"follow"`).
 
 ### `GET /replay/next?actor=<uuid>&round=<round>`
 Bridge pulls the next action. Returns:

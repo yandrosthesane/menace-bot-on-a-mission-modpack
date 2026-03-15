@@ -36,6 +36,7 @@ public class BoamBridge : IModpackPlugin
     private BoamCommandServer _commandServer;
     private float _nextCommandTime;
     internal bool _replayActive;
+    internal bool _replayCameraFollow = true;
     private TacticalMap.TacticalMapOverlay _tacticalMap;
 
 
@@ -282,7 +283,6 @@ public class BoamBridge : IModpackPlugin
             if (activeGameObj.IsNull) return;
             var activeActor = new Actor(activeGameObj.Pointer);
             if (activeActor.IsMoving()) return;
-            if (UnityEngine.Time.time < Patch_Diagnostics.SkillAnimationEndTime) return;
 
             var activeInfo = ActorRegistry.GetActorInfo(activeActor);
             if (activeInfo == null) return;
@@ -305,7 +305,12 @@ public class BoamBridge : IModpackPlugin
                 var respAction = doc.TryGetProperty("action", out var ract) ? ract.GetString() ?? "" : "";
                 Logger.Msg($"[BOAM] Replay pull: active={activeUuid} faction={activeFaction} gameFaction={gameFaction} → status={status} actor={respActor} action={respAction}");
                 if (status == "done")
+                {
+                    _replayActive = false;
+                    Logger.Msg("[BOAM] Replay complete");
+                    Toast.Show("Replay complete", 5f);
                     return;
+                }
                 if (status == "waiting")
                     return;
 
@@ -323,7 +328,7 @@ public class BoamBridge : IModpackPlugin
                     Action = action, X = x, Z = z, Skill = skill, Actor = cmdActor, DelayMs = delayMs
                 };
 
-                Logger.Msg($"[BOAM] Replay exec: {cmdActor} {action} ({x},{z}) {skill}");
+                Logger.Msg($"[BOAM] Replay exec: {cmdActor} {action} ({x},{z}) {skill} delayMs={delayMs}");
                 BoamCommandExecutor.Execute(cmd, Logger);
                 _nextCommandTime = UnityEngine.Time.time + (delayMs / 1000f);
             }
@@ -473,10 +478,11 @@ public class BoamBridge : IModpackPlugin
 
     public bool IsReady => _ready && _engineAvailable;
     public int Round => Menace.SDK.TacticalController.GetCurrentRound();
+    public void ShowToast(string text, float seconds = 3f) => Toast.Show(text, seconds);
 
 
 
-    public void OnGUI() { _tacticalMap?.OnGUI(); }
+    public void OnGUI() { Toast.OnGUI(); _tacticalMap?.OnGUI(); }
 
     public void OnUnload()
     {
