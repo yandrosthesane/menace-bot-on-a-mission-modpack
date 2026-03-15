@@ -11,6 +11,11 @@
 // DisplayStyles pair a MapStyle + EntityStyle + Anchor into a preset
 // that the user cycles through with the DisplayKey (default L).
 {
+  // ── Config Version ──
+  // Bump when the preset structure changes between releases.
+  // If the user preset version is older than the mod default, the mod default is used.
+  "configVersion": 1,
+
   // ── Anchors ──
   // Screen position. X/Y are floats 0.0–1.0:
   //   X: 0.0 = left edge, 0.5 = center, 1.0 = right edge

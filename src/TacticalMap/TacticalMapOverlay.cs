@@ -103,14 +103,17 @@ internal class TacticalMapOverlay
         if (string.IsNullOrEmpty(persistentDir))
             persistentDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
                 "UserData", "BOAM");
-        var userConfigPath = Path.Combine(persistentDir, "tactical_map.json5");
-        var defaultConfigPath = Path.Combine(modFolder, "configs", "tactical_map.json5");
-        var configPath = File.Exists(userConfigPath) ? userConfigPath : defaultConfigPath;
+        var userConfigDir = Path.Combine(persistentDir, "configs");
+        var defaultConfigDir = Path.Combine(modFolder, "configs");
+
+        var configPath = ResolveConfig(
+            Path.Combine(userConfigDir, "tactical_map.json5"),
+            Path.Combine(defaultConfigDir, "tactical_map.json5"), "config");
         LoadConfig(configPath);
 
-        var userPresetsPath = Path.Combine(persistentDir, "tactical_map_presets.json5");
-        var defaultPresetsPath = Path.Combine(modFolder, "configs", "tactical_map_presets.json5");
-        var presetsPath = File.Exists(userPresetsPath) ? userPresetsPath : defaultPresetsPath;
+        var presetsPath = ResolveConfig(
+            Path.Combine(userConfigDir, "tactical_map_presets.json5"),
+            Path.Combine(defaultConfigDir, "tactical_map_presets.json5"), "presets");
         (_mapStyles, _entityStyles, _displayStyles, _overlayDefs, _anchors) = ConfigLoader.LoadStyles(presetsPath, logger);
         _mapKeys = _mapStyles.Keys.ToArray();
         _entityKeys = _entityStyles.Keys.ToArray();
@@ -696,6 +699,40 @@ internal class TacticalMapOverlay
         style.margin = new RectOffset(0, 0, 0, 0);
         _iconStyleCache[key] = style;
         return style;
+    }
+
+    // --- Config Resolution ---
+
+    /// <summary>
+    /// Pick user config if it exists and has a configVersion >= the mod default.
+    /// Falls back to mod default if user config is missing or has an older version.
+    /// </summary>
+    private string ResolveConfig(string userPath, string defaultPath, string label)
+    {
+        if (!File.Exists(userPath))
+            return defaultPath;
+
+        int userVersion = ReadConfigVersion(userPath);
+        int defaultVersion = File.Exists(defaultPath) ? ReadConfigVersion(defaultPath) : 0;
+
+        if (userVersion >= defaultVersion)
+        {
+            _log.Msg($"[BOAM] TacticalMap — Using user {label} (v{userVersion}): {userPath}");
+            return userPath;
+        }
+
+        _log.Warning($"[BOAM] TacticalMap — User {label} is outdated (v{userVersion} < v{defaultVersion}), using mod default. Update your config at: {userPath}");
+        return defaultPath;
+    }
+
+    private static int ReadConfigVersion(string path)
+    {
+        try
+        {
+            var json = JsonHelper.StripJsonComments(File.ReadAllText(path));
+            return JsonHelper.ReadInt(json, "configVersion", 0);
+        }
+        catch { return 0; }
     }
 
     // --- Config ---

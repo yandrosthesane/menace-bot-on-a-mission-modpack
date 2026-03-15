@@ -1,4 +1,4 @@
-/// Loads config.json at startup. No hot reload.
+/// Loads config.json5 at startup. No hot reload.
 module BOAM.TacticalEngine.Config
 
 open System
@@ -40,22 +40,84 @@ let private parseFactionColors (el: JsonElement) : Map<int, byte array> =
         int prop.Name, parseColorArray prop.Value ]
     |> Map.ofList
 
-let private load () : TacticalEngineConfig =
-    let exeDir = AppContext.BaseDirectory
-    let configPath = Path.Combine(exeDir, "config.json")
-    // Fallback to source dir (for development / dotnet run)
-    let configPath =
-        if File.Exists(configPath) then configPath
+/// Strip // and /* */ comments from JSON5 so System.Text.Json can parse it.
+let private stripComments (input: string) =
+    let sb = System.Text.StringBuilder(input.Length)
+    let mutable i = 0
+    while i < input.Length do
+        if input.[i] = '"' then
+            sb.Append('"') |> ignore
+            i <- i + 1
+            while i < input.Length && input.[i] <> '"' do
+                if input.[i] = '\\' && i + 1 < input.Length then
+                    sb.Append(input.[i]).Append(input.[i + 1]) |> ignore
+                    i <- i + 2
+                else
+                    sb.Append(input.[i]) |> ignore
+                    i <- i + 1
+            if i < input.Length then sb.Append('"') |> ignore; i <- i + 1
+        elif i + 1 < input.Length && input.[i] = '/' && input.[i + 1] = '/' then
+            while i < input.Length && input.[i] <> '\n' do i <- i + 1
+        elif i + 1 < input.Length && input.[i] = '/' && input.[i + 1] = '*' then
+            i <- i + 2
+            while i + 1 < input.Length && not (input.[i] = '*' && input.[i + 1] = '/') do i <- i + 1
+            if i + 1 < input.Length then i <- i + 2
         else
-            let srcDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "config.json") |> Path.GetFullPath
-            if File.Exists(srcDir) then srcDir
-            else
-                // Try CWD
-                let cwd = Path.Combine(Environment.CurrentDirectory, "config.json")
-                if File.Exists(cwd) then cwd
-                else failwithf "config.json not found (checked %s, %s, %s)" (Path.Combine(exeDir, "config.json")) srcDir cwd
+            sb.Append(input.[i]) |> ignore
+            i <- i + 1
+    sb.ToString()
 
-    let json = File.ReadAllText(configPath)
+/// Read configVersion from a JSON5 file (0 if missing or unreadable).
+let private readVersion (path: string) =
+    try
+        let doc = JsonDocument.Parse(stripComments (File.ReadAllText(path)))
+        match doc.RootElement.TryGetProperty("configVersion") with
+        | true, v -> v.GetInt32()
+        | _ -> 0
+    with _ -> 0
+
+/// Resolve config path: user persistent config → mod default → source dev fallback.
+let private resolveConfigPath () =
+    let exeDir = AppContext.BaseDirectory
+    let gameDir =
+        Environment.GetEnvironmentVariable("MENACE_GAME_DIR")
+        |> Option.ofObj
+        |> Option.defaultValue (Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            ".steam/steam/steamapps/common/Menace"))
+
+    // User persistent config (survives deploys)
+    let persistentDir =
+        Environment.GetEnvironmentVariable("BOAM_PERSISTENT_ASSETS")
+        |> Option.ofObj
+        |> Option.defaultValue (Path.Combine(gameDir, "UserData", "BOAM"))
+    let userPath = Path.Combine(persistentDir, "configs", "config.json5")
+
+    // Mod default (in configs/ subdir of engine dir)
+    let defaultPath = Path.Combine(exeDir, "configs", "config.json5")
+
+    // Dev fallback (dotnet run from source)
+    let srcPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "configs", "config.json5") |> Path.GetFullPath
+    let cwdPath = Path.Combine(Environment.CurrentDirectory, "configs", "config.json5")
+
+    // Pick the best config: user (if version ok) → default → src → cwd
+    if File.Exists(userPath) then
+        let userVer = readVersion userPath
+        let defaultVer = if File.Exists(defaultPath) then readVersion defaultPath else 0
+        if userVer >= defaultVer then
+            eprintfn "[Config] Using user config (v%d): %s" userVer userPath
+            userPath
+        else
+            eprintfn "[Config] User config outdated (v%d < v%d), using default: %s" userVer defaultVer defaultPath
+            defaultPath
+    elif File.Exists(defaultPath) then defaultPath
+    elif File.Exists(srcPath) then srcPath
+    elif File.Exists(cwdPath) then cwdPath
+    else failwithf "config.json5 not found (checked %s, %s, %s, %s)" userPath defaultPath srcPath cwdPath
+
+let private load () : TacticalEngineConfig =
+    let configPath = resolveConfigPath ()
+
+    let json = stripComments (File.ReadAllText(configPath))
     let doc = JsonDocument.Parse(json)
     let root = doc.RootElement
     let r = root.GetProperty("rendering")

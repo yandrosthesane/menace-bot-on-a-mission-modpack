@@ -19,12 +19,26 @@ BOAM uses a two-tier config system. User configs in `UserData/BOAM/` take preced
 
 ### Load order (checked first → fallback)
 
-| File | User location (persistent) | Mod default (reset on deploy) |
-|------|---------------------------|-------------------------------|
-| Minimap config | `UserData/BOAM/tactical_map.json5` | `Mods/BOAM/configs/tactical_map.json5` |
-| Display presets | `UserData/BOAM/tactical_map_presets.json5` | `Mods/BOAM/configs/tactical_map_presets.json5` |
+| File | User (persistent) | Mod default (reset on deploy) |
+|------|-------------------|-------------------------------|
+| All configs | `UserData/BOAM/configs/` | `Mods/BOAM/configs/` |
 | Source art (badges, factions) | `UserData/BOAM/badges/`, `UserData/BOAM/factions/` | — |
 | Generated icons | `Mods/BOAM/icons/factions/`, `Mods/BOAM/icons/templates/` | — |
+
+### Config versions
+
+Each versioned config has a `configVersion` field. When the mod default version is higher than the user config version, the mod default is used and a warning is logged. Update your user config to match the new structure when this happens.
+
+| Config file | Current version | Description |
+|-------------|:-:|---|
+| `tactical_map.json5` | 1 | Minimap keybindings, visual defaults, layout |
+| `tactical_map_presets.json5` | 1 | Display presets, map styles, entity styles, anchors |
+| `config.json` | 1 | Tactical engine ports, rendering, heatmap settings |
+| `icon-config.json` | 1 | Icon generation sources and mappings |
+
+All configs live under `configs/` in both locations:
+- **User**: `UserData/BOAM/configs/` (persistent, checked first)
+- **Mod default**: `Mods/BOAM/configs/` (reset on deploy, fallback)
 
 ### Why two tiers?
 

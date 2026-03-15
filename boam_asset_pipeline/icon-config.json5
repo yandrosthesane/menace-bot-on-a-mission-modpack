@@ -1,5 +1,12 @@
+// BOAM Icon Pipeline — icon generation configuration
+//
+// Run 'boam-icons [--force]' to build icons from source assets.
+// Replace /home/user/ with your actual home directory.
+//
+// This is the mod default. To customise, copy to:
+//   <game_dir>/UserData/BOAM/configs/icon-config.json5
 {
-  "_doc": "Icon generation config. Run 'boam-icons [--force]' to build icons from source assets. Replace user and sources locations",
+  "configVersion": 1,
 
   "defaults": {
     "size": 64,

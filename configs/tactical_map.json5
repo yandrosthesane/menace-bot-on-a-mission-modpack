@@ -10,6 +10,12 @@
 //   Mouse0 (left), Mouse1 (right), Mouse2 (middle).
 // Set to "None" to disable a keybinding.
 {
+  // ── Config Version ──
+  // Bump when the config structure changes between releases.
+  // If the user config version is older than the mod default, the mod default is used
+  // and a warning is logged. Update your user config to match the new structure.
+  "configVersion": 1,
+
   // ── Feature Toggle ──
   "Enabled": true,             // false = disable the minimap overlay entirely
 

@@ -1,6 +1,6 @@
-/// BOAM Icon Generator — reads icon-config.json and resizes source PNGs to output icons.
+/// BOAM Icon Generator — reads icon-config.json5 and resizes source PNGs to output icons.
 /// Cross-platform: works on both Linux (native) and Windows.
-/// Usage: boam-icons [--force] [--config path/to/icon-config.json]
+/// Usage: boam-icons [--force] [--config path/to/icon-config.json5]
 module BOAM.AssetPipeline.Main
 
 open System
@@ -26,8 +26,35 @@ type Config = {
     Entries: Entry list
 }
 
+/// Strip // and /* */ comments from JSON5 so System.Text.Json can parse it.
+let private stripComments (input: string) =
+    let sb = Text.StringBuilder(input.Length)
+    let mutable i = 0
+    while i < input.Length do
+        if input.[i] = '"' then
+            sb.Append('"') |> ignore
+            i <- i + 1
+            while i < input.Length && input.[i] <> '"' do
+                if input.[i] = '\\' && i + 1 < input.Length then
+                    sb.Append(input.[i]).Append(input.[i + 1]) |> ignore
+                    i <- i + 2
+                else
+                    sb.Append(input.[i]) |> ignore
+                    i <- i + 1
+            if i < input.Length then sb.Append('"') |> ignore; i <- i + 1
+        elif i + 1 < input.Length && input.[i] = '/' && input.[i + 1] = '/' then
+            while i < input.Length && input.[i] <> '\n' do i <- i + 1
+        elif i + 1 < input.Length && input.[i] = '/' && input.[i + 1] = '*' then
+            i <- i + 2
+            while i + 1 < input.Length && not (input.[i] = '*' && input.[i + 1] = '/') do i <- i + 1
+            if i + 1 < input.Length then i <- i + 2
+        else
+            sb.Append(input.[i]) |> ignore
+            i <- i + 1
+    sb.ToString()
+
 let private parseConfig (configPath: string) =
-    let json = File.ReadAllText(configPath)
+    let json = stripComments (File.ReadAllText(configPath))
     let doc = JsonDocument.Parse(json)
     let root = doc.RootElement
 
@@ -75,14 +102,14 @@ let main argv =
         | "--config" when i + 1 < argv.Length ->
             configPath <- argv.[i + 1]
             i <- i + 1
-        | arg when arg.EndsWith(".json") -> configPath <- arg
+        | arg when arg.EndsWith(".json") || arg.EndsWith(".json5") -> configPath <- arg
         | "--help" | "-h" ->
             printfn "BOAM Icon Generator v%s" version
-            printfn "Usage: boam-icons [--force] [--config icon-config.json]"
+            printfn "Usage: boam-icons [--force] [--config icon-config.json5]"
             printfn ""
             printfn "Options:"
             printfn "  --force     Overwrite existing output files"
-            printfn "  --config    Path to icon-config.json (default: ./icon-config.json)"
+            printfn "  --config    Path to icon-config.json5 (default: ./icon-config.json5)"
             exit 0
         | other ->
             eprintfn "Unknown argument: %s" other
@@ -92,13 +119,13 @@ let main argv =
     // Default config: same directory as executable
     if configPath = "" then
         let exeDir = AppContext.BaseDirectory
-        let candidate = Path.Combine(exeDir, "icon-config.json")
+        let candidate = Path.Combine(exeDir, "icon-config.json5")
         if File.Exists(candidate) then configPath <- candidate
         else
-            let cwdCandidate = Path.Combine(Environment.CurrentDirectory, "icon-config.json")
+            let cwdCandidate = Path.Combine(Environment.CurrentDirectory, "icon-config.json5")
             if File.Exists(cwdCandidate) then configPath <- cwdCandidate
             else
-                eprintfn "ERROR: icon-config.json not found. Use --config to specify path."
+                eprintfn "ERROR: icon-config.json5 not found. Use --config to specify path."
                 exit 1
 
     if not (File.Exists(configPath)) then

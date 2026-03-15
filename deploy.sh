@@ -181,9 +181,10 @@ chmod +x "$GAME_MOD_DIR/boam-icons"
 cp "$LAUNCHER_DIR/start-tactical-engine.sh" "$GAME_MOD_DIR/"
 chmod +x "$GAME_MOD_DIR/start-tactical-engine.sh"
 
-# Icon config — replace 'user' placeholder with actual username
-sed 's|/home/user/|/home/yandros/|g' "$PIPELINE_DIR/icon-config.json" > "$GAME_MOD_DIR/icon-config.json"
-echo "    icon-config.json installed (paths set to /home/yandros/)"
+# Icon config — mod default (replace 'user' placeholder with actual username)
+mkdir -p "$GAME_MOD_DIR/configs"
+sed 's|/home/user/|/home/yandros/|g' "$PIPELINE_DIR/icon-config.json5" > "$GAME_MOD_DIR/configs/icon-config.json5"
+echo "    icon-config.json5 installed in configs/ (paths set to /home/yandros/)"
 
 echo "    Done."
 
@@ -194,7 +195,16 @@ rm -rf "$PUBLISH_ENGINE" "$PUBLISH_ICONS"
 # Step 7: Regenerate icons
 # ─────────────────────────────────────────────
 echo "==> Regenerating icons..."
-"$GAME_MOD_DIR/boam-icons" --force --config "$GAME_MOD_DIR/icon-config.json" 2>&1 | tail -5
+# Use user icon-config from UserData/BOAM/configs if it exists
+USER_ICON_CONFIG="$GAME_DIR/UserData/BOAM/configs/icon-config.json5"
+DEFAULT_ICON_CONFIG="$GAME_MOD_DIR/configs/icon-config.json5"
+if [ -f "$USER_ICON_CONFIG" ]; then
+    ICON_CONFIG="$USER_ICON_CONFIG"
+    echo "    Using user icon-config: $ICON_CONFIG"
+else
+    ICON_CONFIG="$DEFAULT_ICON_CONFIG"
+fi
+"$GAME_MOD_DIR/boam-icons" --force --config "$ICON_CONFIG" 2>&1 | tail -5
 echo "    Icons regenerated."
 
 echo ""
