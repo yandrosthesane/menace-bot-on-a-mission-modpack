@@ -33,7 +33,7 @@ rm -rf "$STAGE_MOD"
 mkdir -p "$STAGE_MOD"
 
 cp modpack.json "$STAGE_MOD/"
-cp README.md "$STAGE_MOD/"
+cp README*.md "$STAGE_MOD/"
 cp -r src "$STAGE_MOD/"
 [[ -d docs ]] && cp -r docs "$STAGE_MOD/"
 
@@ -87,6 +87,11 @@ build_engine_archive() {
 
     # Icon config template
     cp "$PIPELINE_DIR/icon-config.json" "$STAGE/"
+
+    # User-facing docs
+    cp README.md README_REPLAY.md README_HEATMAPS.md README_TACTICAL_ENGINE.md \
+       README_MINIMAP.md README_CONFIG.md README_ICON_GENERATOR.md README_INSTALL.md \
+       "$STAGE/" 2>/dev/null || true
 
     # Create archive
     local ARCHIVE_NAME="${MOD_NAME}-tactical-engine-v${VERSION}-${RID}"

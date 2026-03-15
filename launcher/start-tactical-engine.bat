@@ -1,7 +1,13 @@
 @echo off
 REM Start the BOAM Tactical Engine for Windows.
 REM Place this script in the game's Mods\BOAM\ directory, alongside the tactical_engine\ folder.
-REM Usage: double-click or run from command prompt.
+REM
+REM Usage:
+REM   start-tactical-engine.bat                                              passive start
+REM   start-tactical-engine.bat --on-title /navigate/tactical                auto-navigate to tactical
+REM   start-tactical-engine.bat --on-title /navigate/replay/battle_name      auto-navigate + replay
+REM   start-tactical-engine.bat --on-title "/navigate/replay/battle?camera=free"  replay with free camera
+REM   start-tactical-engine.bat --render battle_name                         render heatmaps and exit
 REM
 REM The engine runs in this window — close it or press Ctrl+C to stop.
 
@@ -26,4 +32,4 @@ if not exist "%ENGINE_EXE%" (
 )
 
 REM Run in foreground — keeps this window open with live output
-"%ENGINE_EXE%"
+"%ENGINE_EXE%" %*

@@ -1,7 +1,14 @@
 #!/bin/bash
 # Start the BOAM Tactical Engine for Linux.
 # Place this script in the game's Mods/BOAM/ directory, alongside the tactical_engine/ folder.
-# Usage: ./start-tactical-engine.sh
+#
+# Usage:
+#   ./start-tactical-engine.sh                                              # passive start
+#   ./start-tactical-engine.sh --on-title /navigate/tactical                # auto-navigate to tactical
+#   ./start-tactical-engine.sh --on-title /navigate/replay/battle_name      # auto-navigate + replay
+#   ./start-tactical-engine.sh --on-title "/navigate/replay/battle?camera=free"  # replay with free camera
+#   ./start-tactical-engine.sh --render battle_name                         # render heatmaps and exit
+#   ./start-tactical-engine.sh --render battle_name --pattern "r01_*"       # render with pattern filter
 #
 # The engine runs in the foreground — close this terminal or press Ctrl+C to stop it.
 
@@ -24,4 +31,4 @@ if [ ! -f "$ENGINE_BIN" ]; then
 fi
 
 # Run in foreground — keeps the terminal open with live output
-exec "$ENGINE_BIN"
+exec "$ENGINE_BIN" "$@"
