@@ -23,11 +23,13 @@
     <Compile Include="Registry.fs" />
     <Compile Include="Walker.fs" />
     <Compile Include="Rendering.fs" />
+    <Compile Include="Logging.fs" />
     <Compile Include="ActionLog.fs" />
     <Compile Include="HookPayload.fs" />
     <Compile Include="HeatmapRenderer.fs" />
     <Compile Include="EventBus.fs" />
     <Compile Include="Replay.fs" />
+    <Compile Include="Routes.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 
