@@ -74,8 +74,11 @@ cd /path/to/Menace/Mods/BOAM/
 # Auto-navigate to tactical when game connects
 ./start-tactical-engine.sh --on-title /navigate/tactical
 
-# Auto-navigate + start a replay when game connects
+# Auto-navigate + start a replay when game connects (camera follows actor)
 ./start-tactical-engine.sh --on-title /navigate/replay/battle_2026_03_15_15_14
+
+# Same but with free camera (no auto-follow on actor switch)
+./start-tactical-engine.sh --on-title "/navigate/replay/battle_2026_03_15_15_14?camera=free"
 ```
 
 Then launch the game normally through Steam.
@@ -95,14 +98,14 @@ After playing a round, render job data is flushed to disk. Render heatmaps on de
 
 ```bash
 # CLI — render and exit (no server needed)
-./TacticalEngine --render battle_2026_03_15_15_14
-./TacticalEngine --render battle_2026_03_15_15_14 --pattern "r01_*_stinger_*"
-./TacticalEngine --render battle_2026_03_15_15_14 --pattern "*_wildlife_*"
+./TacticalEngine --render battle_2026_03_15_15_14                              # all
+./TacticalEngine --render battle_2026_03_15_15_14 --pattern "r01_*"            # round 1 only
+./TacticalEngine --render battle_2026_03_15_15_14 --pattern "*_alien_stinger*" # one unit, all rounds
 
 # HTTP — while engine is running
 curl -s -X POST http://127.0.0.1:7660/render/battle/battle_2026_03_15_15_14 -d '{}'
 curl -s -X POST http://127.0.0.1:7660/render/battle/battle_2026_03_15_15_14 \
-  -d '{"pattern": "r01_wildlife*"}'
+  -d '{"pattern": "r01_*"}'
 ```
 
 See [Heatmap Renderer](README_HEATMAPS.md).
@@ -117,7 +120,7 @@ See [Heatmap Renderer](README_HEATMAPS.md).
 # HTTP — manual control while engine is running
 curl -s http://127.0.0.1:7660/replay/battles
 curl -s -X POST http://127.0.0.1:7660/replay/start \
-  -d '{"battle":"battle_2026_03_15_15_14"}'
+  -d '{"battle":"battle_2026_03_15_15_14", "camera":"follow"}'
 ```
 
 See [Replay Manual](README_REPLAY.md).

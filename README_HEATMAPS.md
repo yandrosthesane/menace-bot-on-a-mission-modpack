@@ -1,89 +1,10 @@
 # Heatmap Renderer
 
-Renders heatmap PNG images from deferred render jobs. During gameplay, tile-score data is accumulated in memory and flushed to self-contained JSON files at round boundaries. Rendering happens on demand via an HTTP API — no running game needed.
+Renders heatmap PNG images showing AI evaluation scores overlaid on the captured map background. Each heatmap visualizes one actor's turn: tile scores, unit positions, vision range, chosen behavior, and move destination.
 
-## How Data Gets Collected
-
-The `heatmaps` setting in `config.json5` controls whether render job data is collected.
-
-During gameplay:
-1. **tile-scores hook** — AI evaluation scores for each tile, plus all unit positions
-2. **movement-finished hook** — where the unit actually moved
-3. **action-decision hook** — which behavior the AI chose and what alternatives it considered
-
-Data accumulates per actor per round. When the next round starts (`on-turn-start`), the previous round's data is flushed to disk. At `battle-end`, any remaining data is flushed.
-
-## Render Job Files
-
-One JSON file per actor per round in `battle_reports/<session>/render_jobs/`:
-
-```
-render_jobs/
-  r01_civilian_worker_1.json
-  r01_wildlife_alien_stinger_1.json
-  r02_wildlife_alien_stinger_1.json
-  ...
-```
-
-Each file is self-contained — everything needed to produce a heatmap without a running game:
-
-| Field | Description |
-|-------|-------------|
-| `actor` | Stable UUID (e.g., `wildlife.alien_stinger.1`) |
-| `round`, `faction` | Round number and faction index |
-| `actorPosition` | Actor's tile position `{x, z}` |
-| `tiles` | List of `{x, z, combined}` — AI score per tile |
-| `units` | All unit positions for the overlay |
-| `visionRange` | Actor's vision range in tiles |
-| `moveDestination` | Where the actor actually moved (null if didn't move) |
-| `decision` | AI decision: chosen behavior, alternatives, attack candidates |
-| `mapBgPath` | Path to the captured map background PNG |
-| `mapInfoPath` | Path to the map info file (tile dimensions) |
-| `iconBaseDir` | Path to the icon directory |
-
-## Render API
-
-```
-POST /render/battle/{battleName}
-Content-Type: application/json
-
-{ "pattern": "*" }
-```
-
-### Pattern Matching
-
-The `pattern` field matches against render job filenames (without `.json`):
-
-| Pattern | Matches |
-|---------|---------|
-| `"*"` (or omitted) | All jobs in the session |
-| `"r01_*"` | Round 1 only |
-| `"r02_*"` | Round 2 only |
-| `"*_alien_stinger_*"` | All stinger units across rounds |
-| `"r01_wildlife*"` | Round 1 wildlife units |
-| `"*_player*"` | All player units (if AI-controlled) |
-
-### Response
-
-```json
-{
-  "battle": "battle_2026_03_15_15_14",
-  "pattern": "r01_wildlife_alien_stinger*",
-  "rendered": 4,
-  "errors": 0,
-  "outputDir": ".../battle_2026_03_15_15_14/heatmaps",
-  "results": [
-    { "file": "r01_wildlife_alien_stinger_1.json", "status": "ok", "output": "r01_wildlife_alien_stinger_1.png" },
-    { "file": "r01_wildlife_alien_stinger_2.json", "status": "ok", "output": "r01_wildlife_alien_stinger_2.png" }
-  ]
-}
-```
-
-Output PNGs go to `battle_reports/<session>/heatmaps/`.
+For technical details (data collection hooks, render job JSON structure, accumulation internals), see [docs/README_HEATMAPS.md](docs/README_HEATMAPS.md).
 
 ## What the Heatmap Shows
-
-Each PNG renders onto the captured map background:
 
 | Element | Visual | Description |
 |---------|--------|-------------|
@@ -95,11 +16,9 @@ Each PNG renders onto the captured map background:
 | Best tile | Green border | Highest-scored tile |
 | Move destination | Blue border | Where the actor actually moved |
 
-## Commands
+## CLI (renders and exits -- no server needed)
 
 All examples assume `cd /path/to/Menace/Mods/BOAM/`.
-
-### CLI (renders and exits — no server needed)
 
 ```bash
 # Render all jobs from a battle
@@ -115,7 +34,7 @@ All examples assume `cd /path/to/Menace/Mods/BOAM/`.
 ./TacticalEngine --render battle_2026_03_15_15_14 --pattern "*_alien_big_blaster*"
 ```
 
-### HTTP (while engine is running)
+## HTTP (while engine is running)
 
 ```bash
 # Render all jobs
@@ -126,9 +45,24 @@ curl -s -X POST http://127.0.0.1:7660/render/battle/battle_2026_03_15_15_14 \
   -d '{"pattern": "r01_wildlife*"}'
 ```
 
+## Pattern Matching
+
+The `pattern` field matches against render job filenames (without `.json`):
+
+| Pattern | Matches |
+|---------|---------|
+| `"*"` (or omitted) | All jobs in the session |
+| `"r01_*"` | Round 1 only |
+| `"r02_*"` | Round 2 only |
+| `"*_alien_stinger_*"` | All stinger units across rounds |
+| `"r01_wildlife*"` | Round 1 wildlife units |
+| `"*_player*"` | All player units (if AI-controlled) |
+
+Output PNGs go to `battle_reports/<session>/heatmaps/`.
+
 ## Rendering Settings
 
-The `rendering` section of `config.json5` controls heatmap appearance:
+The `rendering` section of `config.json5` controls heatmap appearance. The `heatmaps` toggle controls whether render job data is collected during gameplay.
 
 | Setting | Default | Description |
 |---------|---------|-------------|
@@ -142,3 +76,5 @@ The `rendering` section of `config.json5` controls heatmap appearance:
 | `borders.moveDest` | Blue | Border style for the move destination |
 | `borders.vision` | Yellow | Vision range border color |
 | `factionColors` | Per-faction | Unit icon/label colors keyed by faction index |
+
+See [Configuration](README_CONFIG.md) for the full config reference.

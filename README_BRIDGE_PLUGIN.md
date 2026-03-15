@@ -1,68 +1,21 @@
-# C# Bridge Plugin (`src/`)
+# C# Bridge Plugin
 
-Thin MelonLoader plugin that runs inside the game under Wine/Proton. Hooks into the AI evaluation loop and player actions via Harmony patches, captures the tactical map for heatmaps, and provides an in-game minimap overlay.
+The bridge plugin runs inside the game via MelonLoader. It observes AI decisions, player actions, and map state, then forwards everything to the tactical engine over HTTP. It also hosts the in-game minimap overlay.
 
-## Harmony Hooks
+## How It Works
 
-| Patch Target | What It Captures |
-|-------------|-----------------|
-| `AIFaction.OnTurnStart` | Faction state (opponents, round) → engine + render job collection |
-| `Agent.PostProcessTileScores` | Per-tile AI scores + all unit positions (fire-and-forget) |
-| `Agent.Execute` | AI behavior decisions (chosen action, alternatives, attack candidates) |
-| `TacticalManager.InvokeOnMovementFinished` | Move destinations |
-| `MissionPrepUIScreen.OnPreviewReady` | Map capture (`mapbg.png`, `mapbg.info`, `mapdata.bin`) + battle session dir creation |
-| `TacticalState.OnActiveActorChanged` | Active actor tracking → minimap update |
-| `TacticalState.EndTurn` | Player end-turn actions |
-| `HandleLeftClickOnTile` (multiple) | Player click actions |
-| `TacticalState.TrySelectSkill` | Player skill selection |
-| Diagnostic patches | Turn lifecycle tracing (TurnEnd, AfterSkillUse, AttackTileStart, ActionPointsChanged) |
+The plugin loads automatically when the game starts. No configuration is needed -- it hooks into the game's AI evaluation loop and player input, captures the tactical map at mission prep, and sends all data to the tactical engine on port 7660.
 
-## TacticalMap Integration
+The bridge also runs a command server (port 7661) that accepts replay actions from the engine.
 
-The bridge hosts the `TacticalMapOverlay` — an IMGUI minimap overlay that reads from `TacticalMapState`:
+## Port Settings
 
-- **Map capture** at `OnPreviewReady` → saves PNG + tile data directly to the battle session directory
-- **Map reload** from disk at tactical-ready (Unity textures don't survive scene transitions)
-- **Initial unit population** from `EntitySpawner` at tactical-ready
-- **Live updates** from tile-scores, movement-finished, and actor-changed hooks
-- **Icon resolution** from disk (same leader → template → faction chain as heatmaps)
+See [Configuration](README_CONFIG.md) for port settings (`port`, `bridge_port`, `command_port` in `config.json5`).
 
-See [Tactical Minimap](README_MINIMAP.md) for user-facing details.
+## Minimap
 
-## Data Flow
+The bridge hosts an in-game minimap overlay. See [Tactical Minimap](README_MINIMAP.md) for controls and display presets.
 
-```
-Game (Wine/Proton)                    Tactical Engine (native Linux/.NET 10)
-┌──────────────────┐                  ┌──────────────────────┐
-│  BoamBridge.cs   │  HTTP POST       │  Routes.fs           │
-│  Harmony patches ├─────────────────►│  /hook/on-turn-start │
-│  TacticalMap     │  port 7660       │  /hook/tile-scores   │
-│  overlay         │  (fire & forget) │  /hook/action-decision│
-│                  │                  │  /hook/player-action │
-│                  │                  │  /hook/battle-start  │
-└──────────────────┘                  └──────────────────────┘
-```
+## Technical Details
 
-The tile-scores POST uses `ThreadPool.QueueUserWorkItem` — the AI evaluation thread is never blocked.
-
-## Action Logging
-
-All player actions are sent to `/hook/player-action` with:
-- `round`, `faction`, `actor` (stable UUID)
-- `actionType`: `click`, `useskill`, `endturn`, `select`
-- `tile`: `{x, z}`
-- `skillName`: skill name (for `useskill`)
-
-## Key Files
-
-| File | Role |
-|------|------|
-| `src/BoamBridge.cs` | Plugin lifecycle, engine check, overlay wiring, replay pull |
-| `src/AiObservationPatches.cs` | AI hooks (tile-scores, on-turn-start, movement, decisions) |
-| `src/PlayerActionPatches.cs` | Player hooks, map capture, actor-changed |
-| `src/DiagnosticPatches.cs` | Turn/skill lifecycle tracing |
-| `src/EngineClient.cs` | Synchronous HTTP client (WebClient for Wine compatibility) |
-| `src/ActorRegistry.cs` | Stable UUID assignment, dramatis personae |
-| `src/BoamCommandServer.cs` | HTTP command server (port 7661) |
-| `src/BoamCommandExecutor.cs` | Execute game commands (move, skill, endturn) |
-| `src/TacticalMap/` | Minimap overlay, map capture, config, types |
+See [docs/README_BRIDGE_PLUGIN.md](docs/README_BRIDGE_PLUGIN.md) for Harmony hooks, data flow diagrams, and file descriptions.
