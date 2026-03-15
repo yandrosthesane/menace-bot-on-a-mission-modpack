@@ -260,10 +260,6 @@ static class Patch_ActiveActorChanged
             TacticalMap.TacticalMapState.ActiveActor = actorUuid;
             TacticalMap.TacticalMapState.UpdateUnitPosition(actorUuid, px, pz);
 
-            // Clear skill animation gate when a player actor becomes active
-            // (prevents AI attack animations from blocking the replay pull loop)
-            if (factionId == 1 || factionId == 2)
-                Patch_Diagnostics.SkillAnimationEndTime = 0f;
 
             BoamBridge.Logger.Msg($"[BOAM] active-actor-changed: {actorUuid} r={round} at ({px},{pz})");
             ThreadPool.QueueUserWorkItem(_ => EngineClient.Post("/hook/actor-changed", payload));
@@ -380,6 +376,11 @@ static class Patch_SelectSkill
                 skillName,
                 tile = new { x = 0, z = 0 }
             });
+
+            // Start tracking this skill for duration measurement.
+            // AttackTileStart will override for attack skills; for non-attack skills
+            // (Deploy, Get Up, etc.) this is the only timer start.
+            Patch_Diagnostics.StartPlayerSkillTimer(actorUuid, skillName);
 
             BoamBridge.Logger.Msg($"[BOAM] player-action {actorUuid}: useskill {skillName}");
             EngineClient.Post("/hook/player-action", payload);

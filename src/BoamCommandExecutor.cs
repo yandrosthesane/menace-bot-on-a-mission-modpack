@@ -210,6 +210,8 @@ public static class BoamCommandExecutor
         log.Msg("[endturn] done");
     }
 
+    private static MethodInfo _noneChangeActiveActor;
+
     private static void ExecuteSelect(string actor, MelonLogger.Instance log)
     {
         if (string.IsNullOrEmpty(actor)) { log.Warning("[select] No actor specified"); return; }
@@ -226,7 +228,61 @@ public static class BoamCommandExecutor
         }
         if (found.IsNull) { log.Warning($"[select] Entity not found for {actor} (id={entityId})"); return; }
 
+        // Use NoneAction.ChangeActiveActor(old, new) — the game's internal method
+        // for switching units during a player turn. This properly updates all game state
+        // (action state, UI, turn bar) without ending the current actor's turn.
+        try
+        {
+            var ts = GetTacticalState();
+            if (ts != null)
+            {
+                _tsGetCurrentAction ??= _tsType.GetMethod("GetCurrentAction", BindingFlags.Public | BindingFlags.Instance);
+                var currentAction = _tsGetCurrentAction?.Invoke(ts, null);
+                if (currentAction != null)
+                {
+                    // ChangeActiveActor is on NoneAction. Use the Il2Cpp type directly.
+                    var noneActionType = typeof(Il2CppMenace.States.NoneAction);
+                    // Il2CppInterop may generate the method as public or with different flags
+                    _noneChangeActiveActor ??= noneActionType.GetMethod("ChangeActiveActor",
+                        BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                    if (_noneChangeActiveActor == null)
+                    {
+                        // Try all methods and find by name
+                        foreach (var m in noneActionType.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly))
+                        {
+                            if (m.Name == "ChangeActiveActor") { _noneChangeActiveActor = m; break; }
+                        }
+                    }
+                    if (_noneChangeActiveActor != null)
+                    {
+                        // Cast the TacticalAction to NoneAction via Il2Cpp pointer
+                        var il2cppObj = currentAction as Il2CppSystem.Object;
+                        var noneAction = new Il2CppMenace.States.NoneAction(il2cppObj.Pointer);
+                        {
+                        var activeGameObj = TacticalController.GetActiveActor();
+                        var oldActor = _actorType.GetConstructor(new[] { typeof(IntPtr) }).Invoke(new object[] { activeGameObj.Pointer });
+                        var newActor = _actorType.GetConstructor(new[] { typeof(IntPtr) }).Invoke(new object[] { found.Pointer });
+                        var result = _noneChangeActiveActor.Invoke(noneAction, new[] { oldActor, newActor });
+                        log.Msg($"[select] Selected {actor} (NoneAction.ChangeActiveActor → {result})");
+                        return;
+                        }
+                    }
+                    else
+                    {
+                        var allMethods = noneActionType.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.DeclaredOnly);
+                        var methodNames = string.Join(", ", allMethods.Select(m => m.Name));
+                        log.Warning($"[select] ChangeActiveActor not found. NoneAction methods: {methodNames}");
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            log.Warning($"[select] NoneAction path failed: {ex.Message}");
+        }
+
+        // Fallback to SDK
         var ok = TacticalController.SetActiveActor(found);
-        log.Msg(ok ? $"[select] Selected {actor}" : $"[select] Failed {actor}");
+        log.Msg(ok ? $"[select] Selected {actor} (SDK fallback)" : $"[select] Failed {actor}");
     }
 }

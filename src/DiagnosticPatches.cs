@@ -18,6 +18,20 @@ namespace BOAM;
 static class Patch_Diagnostics
 {
     internal static float SkillAnimationEndTime;
+    private static string _pendingPlayerSkill;
+    private static string _pendingPlayerActor;
+    private static float _pendingSkillStartTime;
+
+    /// Start tracking a player skill for duration measurement.
+    /// Called from Patch_SelectSkill for all skills, and overridden by AttackTileStart for attacks.
+    internal static void StartPlayerSkillTimer(string actor, string skillName)
+    {
+        _pendingPlayerSkill = skillName;
+        _pendingPlayerActor = actor;
+        _pendingSkillStartTime = UnityEngine.Time.time;
+        // Block replay until AfterSkillUse fires
+        SkillAnimationEndTime = float.MaxValue;
+    }
 
     public static void OnTurnEnd(Actor _actor)
     {
@@ -36,6 +50,25 @@ static class Patch_Diagnostics
         {
             var name = _skill?.GetTitle() ?? "null";
             BoamBridge.Logger.Msg($"[BOAM] DIAG AfterSkillUse: {name}");
+            // When a player skill finishes, amend the last log entry with the real duration
+            // and release the replay gate
+            if (_pendingPlayerSkill != null && name == _pendingPlayerSkill)
+            {
+                float actual = UnityEngine.Time.time - _pendingSkillStartTime;
+                int actualMs = (int)(actual * 1000);
+                SkillAnimationEndTime = UnityEngine.Time.time + 0.5f;
+                BoamBridge.Logger.Msg($"[BOAM] DIAG PlayerSkillComplete: {name} (actual={actualMs}ms)");
+
+                // Tell the engine to amend the last player action with the measured duration
+                var payload = System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    actor = _pendingPlayerActor,
+                    skill = name,
+                    durationMs = actualMs
+                });
+                _pendingPlayerSkill = null;
+                System.Threading.ThreadPool.QueueUserWorkItem(_ => EngineClient.Post("/hook/skill-complete", payload));
+            }
         }
         catch { }
     }
@@ -50,6 +83,12 @@ static class Patch_Diagnostics
             var skillName = _skill?.GetTitle() ?? "null";
             int tx = _targetTile?.GetX() ?? 0;
             int tz = _targetTile?.GetZ() ?? 0;
+            // Track player skill animations for the replay gate
+            // For player attack skills: refine the start time (more accurate than useskill)
+            if (info.HasValue && (info.Value.factionId == 1 || info.Value.factionId == 2))
+            {
+                _pendingSkillStartTime = UnityEngine.Time.time;
+            }
             BoamBridge.Logger.Msg($"[BOAM] DIAG AttackStart: {uuid} {skillName} → ({tx},{tz}) duration={_attackDurationInSec}s");
         }
         catch { }

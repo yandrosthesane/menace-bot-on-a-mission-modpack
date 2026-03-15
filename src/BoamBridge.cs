@@ -289,8 +289,10 @@ public class BoamBridge : IModpackPlugin
             var activeUuid = ActorRegistry.GetUuid(activeInfo.Value.entityId);
             var activeFaction = activeInfo.Value.factionId;
 
-            // Only pull during player turns
+            // Only pull during player turns — check both active actor AND current game faction
             if (activeFaction != 1 && activeFaction != 2) return;
+            int gameFaction = TacticalController.GetCurrentFaction();
+            if (gameFaction != 1 && gameFaction != 2) return;
 
             try
             {
@@ -299,24 +301,13 @@ public class BoamBridge : IModpackPlugin
                 var doc = JsonSerializer.Deserialize<JsonElement>(json);
 
                 var status = doc.GetProperty("status").GetString();
+                var respActor = doc.TryGetProperty("actor", out var ra) ? ra.GetString() ?? "" : "";
+                var respAction = doc.TryGetProperty("action", out var ract) ? ract.GetString() ?? "" : "";
+                Logger.Msg($"[BOAM] Replay pull: active={activeUuid} faction={activeFaction} gameFaction={gameFaction} → status={status} actor={respActor} action={respAction}");
                 if (status == "done")
                     return;
                 if (status == "waiting")
-                {
-                    // The replay's next action is for a different actor — select it
-                    var expectedActor = doc.TryGetProperty("actor", out var av) ? av.GetString() ?? "" : "";
-                    if (!string.IsNullOrEmpty(expectedActor) && expectedActor != activeUuid)
-                    {
-                        Logger.Msg($"[BOAM] Replay: switching to {expectedActor} (game has {activeUuid})");
-                        var selectCmd = new BoamCommandServer.ActionCommand
-                        {
-                            Action = "select", X = 0, Z = 0, Skill = "", Actor = expectedActor, DelayMs = 500
-                        };
-                        BoamCommandExecutor.Execute(selectCmd, Logger);
-                        _nextCommandTime = UnityEngine.Time.time + 0.5f;
-                    }
                     return;
-                }
 
                 var action = doc.GetProperty("action").GetString() ?? "";
                 var x = doc.TryGetProperty("x", out var xv) ? xv.GetInt32() : 0;
@@ -324,12 +315,15 @@ public class BoamBridge : IModpackPlugin
                 var skill = doc.TryGetProperty("skill", out var sv) ? sv.GetString() ?? "" : "";
                 var delayMs = doc.TryGetProperty("delay_ms", out var dv) ? dv.GetInt32() : 0;
 
+                // Use the actor from the response, not the active actor — the engine may
+                // serve select actions for a different actor (player switching units).
+                var cmdActor = !string.IsNullOrEmpty(respActor) ? respActor : activeUuid;
                 var cmd = new BoamCommandServer.ActionCommand
                 {
-                    Action = action, X = x, Z = z, Skill = skill, Actor = activeUuid, DelayMs = delayMs
+                    Action = action, X = x, Z = z, Skill = skill, Actor = cmdActor, DelayMs = delayMs
                 };
 
-                Logger.Msg($"[BOAM] Replay exec: {activeUuid} {action} ({x},{z}) {skill}");
+                Logger.Msg($"[BOAM] Replay exec: {cmdActor} {action} ({x},{z}) {skill}");
                 BoamCommandExecutor.Execute(cmd, Logger);
                 _nextCommandTime = UnityEngine.Time.time + (delayMs / 1000f);
             }

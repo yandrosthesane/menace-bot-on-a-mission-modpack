@@ -40,10 +40,47 @@ let private appendJsonLine (filePath: string) (json: string) =
 let private actorLogName (actor: string) =
     sprintf "actor_%s.jsonl" (actor.Replace("/", "_"))
 
+/// Track the last player action entry for duration amendment.
+let mutable private lastPlayerActor: string = ""
+let mutable private lastPlayerDir: string option = None
+
 /// Write an entry to both per-actor and shared log.
 let private writeEntry (dir: string) (actor: string) (json: string) =
     appendJsonLine (Path.Combine(dir, actorLogName actor)) json
     appendJsonLine (Path.Combine(dir, "round_log.jsonl")) json
+
+/// Replace the last line of a file with a new line.
+let private replaceLastLine (filePath: string) (newLine: string) =
+    if File.Exists(filePath) then
+        let lines = File.ReadAllLines(filePath)
+        if lines.Length > 0 then
+            lines.[lines.Length - 1] <- newLine
+            File.WriteAllLines(filePath, lines)
+
+/// Amend the last click/useskill entry for a specific actor with a duration_ms field.
+/// Scans backwards to find the right entry — skips endturns and selects.
+let amendLastPlayerActionDuration (actor: string) (durationMs: int) =
+    match lastPlayerDir with
+    | None -> ()
+    | Some dir ->
+        try
+            let amendFile (path: string) =
+                if File.Exists(path) then
+                    let lines = File.ReadAllLines(path)
+                    // Scan backwards for the last click or useskill by this actor
+                    let mutable found = false
+                    for i = lines.Length - 1 downto 0 do
+                        if not found then
+                            let line = lines.[i]
+                            if line.Contains(sprintf "\"actor\":\"%s\"" actor)
+                               && (line.Contains("\"type\":\"player_click\"") || line.Contains("\"type\":\"player_useskill\""))
+                               && not (line.Contains("\"duration_ms\"")) then
+                                lines.[i] <- line.TrimEnd().TrimEnd('}') + sprintf ",\"duration_ms\":%d}" durationMs
+                                found <- true
+                    if found then File.WriteAllLines(path, lines)
+            amendFile (Path.Combine(dir, "round_log.jsonl"))
+            amendFile (Path.Combine(dir, actorLogName actor))
+        with _ -> ()
 
 /// Log an AI action decision.
 let logActionDecision (payload: ActionDecisionPayload) =
@@ -86,3 +123,5 @@ let logPlayerAction (payload: PlayerActionPayload) =
             tile = {| x = payload.Tile.X; z = payload.Tile.Z |}
         |}, jsonOptions)
         writeEntry dir payload.Actor entry
+        lastPlayerActor <- payload.Actor
+        lastPlayerDir <- Some dir

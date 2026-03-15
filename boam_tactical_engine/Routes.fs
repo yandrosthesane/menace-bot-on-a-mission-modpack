@@ -209,6 +209,16 @@ let registerRoutes (app: WebApplication) (ctx: RouteContext) =
         return Results.Ok({| hook = "player-action"; status = "ok" |})
     })) |> ignore
 
+    app.MapPost("/hook/skill-complete", Func<HttpRequest, Threading.Tasks.Task<IResult>>(fun req -> task {
+        let! root = readJson req
+        let durationMs = HookPayload.tryInt root "durationMs" 0
+        let skill = HookPayload.tryStr root "skill" ""
+        let actor = HookPayload.tryStr root "actor" ""
+        logHook (sprintf "skill-complete  actor=%s  skill=%s  duration=%dms" actor skill durationMs)
+        ActionLog.amendLastPlayerActionDuration actor durationMs
+        return Results.Ok({| hook = "skill-complete"; status = "ok" |})
+    })) |> ignore
+
     // --- Replay ---
 
     app.MapGet("/replay/battles", Func<IResult>(fun () ->
