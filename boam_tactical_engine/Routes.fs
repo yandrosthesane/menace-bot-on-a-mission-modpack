@@ -10,8 +10,8 @@ open BOAM.TacticalEngine.GameTypes
 open BOAM.TacticalEngine.Node
 open BOAM.TacticalEngine.Walker
 open BOAM.TacticalEngine.HookPayload
-open BOAM.TacticalEngine.HeatmapRenderer
 open BOAM.TacticalEngine.ActionLog
+open BOAM.TacticalEngine.RenderJobCollector
 open BOAM.TacticalEngine.EventBus
 open BOAM.TacticalEngine.Replay
 open BOAM.TacticalEngine.Logging
@@ -34,10 +34,11 @@ type RouteContext = {
     BridgeUrl: string
     CommandUrl: string
     BoamModDir: string
-    TacticalMapFolder: string
     IconBaseDir: string
-    HeatmapPaths: Collections.Concurrent.ConcurrentDictionary<string, string>
 }
+
+/// Track current round for attaching movement data to render jobs.
+let mutable private currentRound = 0
 
 let registerRoutes (app: WebApplication) (ctx: RouteContext) =
 
@@ -67,6 +68,9 @@ let registerRoutes (app: WebApplication) (ctx: RouteContext) =
         let factionState = parseOnTurnStart root
         logHook (sprintf "on-turn-start  faction=%d  opponents=%d  round=%d"
             factionState.FactionIndex (List.length factionState.Opponents) factionState.Round)
+        // Flush previous round's render jobs before processing
+        RenderJobCollector.onRoundChange factionState.Round ctx.BoamModDir ctx.IconBaseDir
+        currentRound <- factionState.Round
         ctx.EventBus.Push(TurnStart(factionState.FactionIndex, factionState.Round))
         let result = Walker.run ctx.Registry ctx.Store OnTurnStart Prefix factionState logEngine
         logHook (sprintf "  walk: %d ran, %d skipped, %.1fms" result.NodesRun result.NodesSkipped result.ElapsedMs)
@@ -78,25 +82,12 @@ let registerRoutes (app: WebApplication) (ctx: RouteContext) =
         let payload = parseTileScores root
         logHook (sprintf "tile-scores  round=%d  faction=%d  actor=%s  tiles=%d  units=%d  vision=%d"
             payload.Round payload.Faction payload.Actor (List.length payload.Tiles) (List.length payload.Units) payload.VisionRange)
-        if not Config.Current.Heatmaps || List.isEmpty payload.Tiles then
-            return Results.Ok({| hook = "tile-scores"; status = "ok"; images = 0; message = if not Config.Current.Heatmaps then "heatmaps disabled" else "no tile data" |})
+        if List.isEmpty payload.Tiles then
+            return Results.Ok({| hook = "tile-scores"; status = "ok"; message = "no tile data" |})
         else
-            let outputDir =
-                match currentBattleDir () with
-                | Some dir -> dir
-                | None ->
-                    let fallback = IO.Path.Combine(ctx.BoamModDir, "heatmaps")
-                    IO.Directory.CreateDirectory(fallback) |> ignore
-                    fallback
-            try
-                let label = payload.Actor.Replace(".", "_")
-                let images = HeatmapRenderer.renderAll ctx.TacticalMapFolder payload.Tiles payload.ActorPosition payload.Units payload.Faction ctx.IconBaseDir outputDir label payload.Actor payload.VisionRange
-                for (_, path) in images do ctx.HeatmapPaths.[payload.Actor] <- path
-                for (name, path) in images do logEngine (sprintf "  %s -> %s" name (IO.Path.GetFileName(path)))
-                return Results.Ok({| hook = "tile-scores"; status = "ok"; images = List.length images; outputDir = outputDir |})
-            with ex ->
-                logWarn (sprintf "Heatmap render failed: %s" ex.Message)
-                return Results.Ok({| hook = "tile-scores"; status = "error"; images = 0; message = ex.Message |})
+            // Accumulate for deferred render job output
+            RenderJobCollector.accumulate payload
+            return Results.Ok({| hook = "tile-scores"; status = "ok"; message = "accumulated" |})
     })) |> ignore
 
     app.MapPost("/hook/movement-finished", Func<HttpRequest, Threading.Tasks.Task<IResult>>(fun req -> task {
@@ -104,12 +95,8 @@ let registerRoutes (app: WebApplication) (ctx: RouteContext) =
         let payload = parseMovementFinished root
         logHook (sprintf "movement-finished  actor=%s  tile=(%d,%d)" payload.Actor payload.Tile.X payload.Tile.Z)
         ctx.EventBus.Push(MovementFinished(payload.Actor, payload.Tile.X, payload.Tile.Z))
-        match ctx.HeatmapPaths.TryGetValue(payload.Actor) with
-        | true, path when IO.File.Exists(path) ->
-            try HeatmapRenderer.stampMoveDestination ctx.TacticalMapFolder path payload.Tile
-                logEngine (sprintf "  stamped move-dest on %s" (IO.Path.GetFileName(path)))
-            with ex -> logWarn (sprintf "  stamp failed: %s" ex.Message)
-        | _ -> logHook (sprintf "  no heatmap for actor %s (not rendered yet)" payload.Actor)
+        // Attach move destination to accumulated render job data
+        RenderJobCollector.attachMoveDestination payload.Actor currentRound payload.Tile
         return Results.Ok({| hook = "movement-finished"; status = "ok"; actor = payload.Actor |})
     })) |> ignore
 
@@ -180,13 +167,16 @@ let registerRoutes (app: WebApplication) (ctx: RouteContext) =
     app.MapPost("/hook/battle-start", Func<HttpRequest, Threading.Tasks.Task<IResult>>(fun req -> task {
         let! root = readJson req
         let payload = parseBattleStart root
-        let dir = ActionLog.startBattle ctx.BoamModDir payload.Timestamp
+        let dir = ActionLog.startBattle ctx.BoamModDir payload.SessionDir
         logHook (sprintf "battle-start  session=%s" (IO.Path.GetFileName(dir)))
         ctx.EventBus.Push(BattleStarted)
         return Results.Ok({| hook = "battle-start"; status = "ok"; battleDir = dir |})
     })) |> ignore
 
     app.MapPost("/hook/battle-end", Func<IResult>(fun () ->
+        // Flush any remaining render jobs for the last round
+        RenderJobCollector.flushAll ctx.BoamModDir ctx.IconBaseDir
+        currentRound <- 0
         ActionLog.endBattle ()
         logHook "battle-end"
         ctx.EventBus.Push(BattleEnded)
@@ -200,6 +190,7 @@ let registerRoutes (app: WebApplication) (ctx: RouteContext) =
             payload.Round payload.Faction payload.Actor payload.Chosen.Name payload.Chosen.Score
             (List.length payload.Alternatives) (List.length payload.AttackCandidates))
         ActionLog.logActionDecision payload
+        RenderJobCollector.attachDecision payload
         return Results.Ok({| hook = "action-decision"; status = "ok" |})
     })) |> ignore
 

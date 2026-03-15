@@ -21,6 +21,6 @@ The game's Steam launch options must already include `WINEDLLOVERRIDES="version=
 
 **Steam App ID:** 2432860
 
-### Step 2: Wait for bridge
+### Step 2: Done
 
-Use the `/wait-for-bridge` skill to poll until the game is ready. Do NOT ask the user — detect readiness yourself.
+The tactical engine handles auto-navigation to tactical via the event-driven scene-change hook. No polling needed — just report "Game launched" and proceed.

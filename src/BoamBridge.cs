@@ -36,6 +36,7 @@ public class BoamBridge : IModpackPlugin
     private BoamCommandServer _commandServer;
     private float _nextCommandTime;
     internal bool _replayActive;
+    private TacticalMap.TacticalMapOverlay _tacticalMap;
 
 
 
@@ -196,6 +197,11 @@ public class BoamBridge : IModpackPlugin
         _commandServer = new BoamCommandServer(Logger);
         _commandServer.Start();
 
+        // Initialize tactical map overlay
+        _tacticalMap = new TacticalMap.TacticalMapOverlay();
+        var modFolder = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Mods", "BOAM");
+        _tacticalMap.Initialize(Logger, modFolder);
+
         Logger.Msg("[BOAM] Bridge plugin initialized, patches registered");
     }
 
@@ -218,14 +224,16 @@ public class BoamBridge : IModpackPlugin
             ThreadPool.QueueUserWorkItem(_ => EngineClient.Post("/hook/scene-change", scenePayload));
         }
 
+        _tacticalMap?.OnSceneLoaded(sceneName);
+
         if (sceneName == "Tactical")
         {
             _inTactical = true;
             _initDelay = 60;
             _ready = false;
-            // Start a new battle session in the tactical engine
-            var ts = DateTime.Now.ToString("yyyyMMdd_HHmmss");
-            var startPayload = JsonSerializer.Serialize(new { timestamp = ts });
+            // Tell the tactical engine about the battle session (dir already created at OnPreviewReady)
+            var sessionDir = TacticalMap.TacticalMapState.BattleSessionDir ?? "";
+            var startPayload = JsonSerializer.Serialize(new { sessionDir });
             ThreadPool.QueueUserWorkItem(_ => EngineClient.Post("/hook/battle-start", startPayload));
         }
         else
@@ -234,6 +242,7 @@ public class BoamBridge : IModpackPlugin
             {
                 // End battle session when leaving tactical
                 ThreadPool.QueueUserWorkItem(_ => EngineClient.Post("/hook/battle-end", "{}"));
+                TacticalMap.TacticalMapState.Reset();
             }
             _inTactical = false;
             _ready = false;
@@ -244,15 +253,21 @@ public class BoamBridge : IModpackPlugin
 
     public void OnUpdate()
     {
+        _tacticalMap?.OnUpdate();
+
         // Tactical init delay
         if (_inTactical && !_ready)
         {
             if (_initDelay > 0) { _initDelay--; return; }
             _ready = true;
             Logger.Msg("[BOAM] Tactical ready, engine hooks active");
+            // BuildDramatisPersonae must run first — it registers actor UUIDs
+            var dp = ActorRegistry.BuildDramatisPersonae(Logger);
+            PopulateInitialUnits();
+            ReloadMapFromDisk();
+            _tacticalMap?.OnTacticalReady();
             if (_engineAvailable)
             {
-                var dp = ActorRegistry.BuildDramatisPersonae(Logger);
                 var payload = JsonSerializer.Serialize(new { dramatis_personae = dp });
                 ThreadPool.QueueUserWorkItem(_ => EngineClient.Post("/hook/tactical-ready", payload));
             }
@@ -351,12 +366,107 @@ public class BoamBridge : IModpackPlugin
         Logger.Warning("[BOAM] Tactical engine not available — AI hooks will be no-ops");
     }
 
+    private void ReloadMapFromDisk()
+    {
+        try
+        {
+            var sessionDir = TacticalMap.TacticalMapState.BattleSessionDir;
+            if (string.IsNullOrEmpty(sessionDir))
+            {
+                Logger.Warning("[BOAM] TacticalMap — No battle session dir, cannot reload map");
+                return;
+            }
+            var bgPath = System.IO.Path.Combine(sessionDir, "mapbg.png");
+            var infoPath = System.IO.Path.Combine(sessionDir, "mapbg.info");
+            var dataPath = System.IO.Path.Combine(sessionDir, "mapdata.bin");
+
+            var data = TacticalMap.MapDataLoader.Load(bgPath, infoPath, dataPath, Logger);
+            if (data.BackgroundTexture != null)
+            {
+                TacticalMap.TacticalMapState.MapTexture = data.BackgroundTexture;
+                TacticalMap.TacticalMapState.TilesX = data.TotalX;
+                TacticalMap.TacticalMapState.TilesZ = data.TotalZ;
+                TacticalMap.TacticalMapState.TileDataArray = data.Tiles;
+                TacticalMap.TacticalMapState.HeightMin = data.HeightMin;
+                TacticalMap.TacticalMapState.HeightMax = data.HeightMax;
+                Logger.Msg($"[BOAM] TacticalMap — Reloaded map from disk: {data.TotalX}x{data.TotalZ}");
+            }
+            else
+            {
+                Logger.Warning("[BOAM] TacticalMap — No map background on disk to reload");
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"[BOAM] ReloadMapFromDisk error: {ex.Message}");
+        }
+    }
+
+    private void PopulateInitialUnits()
+    {
+        try
+        {
+            var units = new System.Collections.Generic.List<TacticalMap.OverlayUnit>();
+            var allActors = Menace.SDK.EntitySpawner.ListEntities(-1);
+            if (allActors == null) return;
+            foreach (var a in allActors)
+            {
+                var info = Menace.SDK.EntitySpawner.GetEntityInfo(a);
+                if (info == null || !info.IsAlive) continue;
+                var pos = Menace.SDK.EntityMovement.GetPosition(a);
+                if (pos == null) continue;
+
+                int vis = Menace.SDK.LineOfSight.GetVisibilityState(a);
+                bool playerSide = info.FactionIndex == 1 || info.FactionIndex == 2 || info.FactionIndex == 4;
+                bool known = playerSide || vis == 1 || vis == 3;
+
+                // Get template name for icon lookup
+                var go = new Menace.SDK.GameObj(a.Pointer);
+                var tplObj = go.ReadObj("m_Template");
+                var templateName = tplObj.IsNull ? "" : (tplObj.GetName() ?? "");
+
+                var leaderName = "";
+                try
+                {
+                    var unitActor = new Il2CppMenace.Tactical.UnitActor(a.Pointer);
+                    var leader = unitActor.GetLeader();
+                    if (leader != null)
+                    {
+                        var nn = leader.GetNickname();
+                        if (nn != null) leaderName = nn.GetTranslated() ?? "";
+                    }
+                }
+                catch { }
+
+                var uuid = ActorRegistry.GetUuid(info.EntityId);
+                units.Add(new TacticalMap.OverlayUnit
+                {
+                    Actor = uuid,
+                    Label = uuid, // same as heatmap: stable UUID
+                    FactionIndex = info.FactionIndex,
+                    X = pos.Value.x,
+                    Y = pos.Value.y,
+                    KnownToPlayer = known,
+                    Template = templateName,
+                    Leader = leaderName
+                });
+            }
+            TacticalMap.TacticalMapState.SetUnits(units);
+            TacticalMap.TacticalMapState.CurrentRound = Round;
+            Logger.Msg($"[BOAM] TacticalMap — Initial population: {units.Count} units");
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"[BOAM] PopulateInitialUnits error: {ex.Message}");
+        }
+    }
+
     public bool IsReady => _ready && _engineAvailable;
     public int Round => Menace.SDK.TacticalController.GetCurrentRound();
 
 
 
-    public void OnGUI() { }
+    public void OnGUI() { _tacticalMap?.OnGUI(); }
 
     public void OnUnload()
     {

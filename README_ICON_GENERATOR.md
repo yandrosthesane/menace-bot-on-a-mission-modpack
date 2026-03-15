@@ -1,6 +1,6 @@
 # Icon Asset Pipeline (`boam_asset_pipeline/`)
 
-Generates properly sized icon assets from game badge art for use in heatmap unit overlays.
+Generates properly sized icon assets from game badge art for use in heatmap unit overlays and the tactical minimap.
 
 ## Overview
 
@@ -11,7 +11,36 @@ Game assets are **not shipped** with BOAM. You need to extract or locate the sou
 <ExtractedDataPath>/Assets/Resources/ui/sprites/factions/
 ```
 
-Copy the PNGs you want into a directory, point `icon-config.json` sources at it, and run the generator. You can also use your own custom art — any PNG works.
+Copy the PNGs you want into `UserData/BOAM/`, point `icon-config.json` sources at it, and run the generator.
+
+## File Locations & Load Order
+
+BOAM uses a two-tier config system. User configs in `UserData/BOAM/` take precedence over mod defaults in `Mods/BOAM/configs/`. This lets you version your personal settings separately from the mod.
+
+### Load order (checked first → fallback)
+
+| File | User location (persistent) | Mod default (reset on deploy) |
+|------|---------------------------|-------------------------------|
+| Minimap config | `UserData/BOAM/tactical_map.json5` | `Mods/BOAM/configs/tactical_map.json5` |
+| Display presets | `UserData/BOAM/tactical_map_presets.json5` | `Mods/BOAM/configs/tactical_map_presets.json5` |
+| Source art (badges, factions) | `UserData/BOAM/badges/`, `UserData/BOAM/factions/` | — |
+| Generated icons | `Mods/BOAM/icons/factions/`, `Mods/BOAM/icons/templates/` | — |
+
+### Why two tiers?
+
+- `Mods/BOAM/` is **wiped on every deploy** — config files there are mod defaults, not user settings
+- `UserData/BOAM/` **survives deploys** — put your customised configs here
+- If no user config exists, the mod default is used (first-install experience)
+
+### Override path
+
+Set the `BOAM_PERSISTENT_ASSETS` environment variable to override the `UserData/BOAM/` path entirely. Useful for non-standard Steam installs or development:
+
+```bash
+export BOAM_PERSISTENT_ASSETS=/path/to/my/boam/assets
+```
+
+If unset, defaults to `<game_dir>/UserData/BOAM/` where `<game_dir>` is the Menace install directory.
 
 ## Running the Generator
 
@@ -48,7 +77,7 @@ By default, existing icons are preserved — only missing icons are generated. U
 
 ## Fallback Chain
 
-When rendering a unit on the heatmap, the engine resolves its icon in this order:
+When rendering a unit on the heatmap or minimap overlay, the icon is resolved in this order:
 
 1. **Leader** — `icons/templates/{leader_name}.png` (e.g., `rewa.png`, `exconde.png`)
 2. **Template** — `icons/templates/{template_name}.png` (e.g., `alien_stinger.png`)
@@ -73,7 +102,7 @@ Replace `user` with your system username in all paths below.
     "output_base": "/home/user/.steam/steam/steamapps/common/Menace/Mods/BOAM/icons"
   },
   "sources": {
-    "native": "/home/user/.steam/steam/steamapps/common/Menace/UserData/CustomPersistentAssets/BOAM",
+    "native": "/home/user/.steam/steam/steamapps/common/Menace/UserData/BOAM",
     "custom": "/home/user/my-boam-icons"
   },
   "factions": [ ... ],
@@ -90,7 +119,7 @@ Replace `user` with your system username in all paths below.
     "output_base": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Menace\\Mods\\BOAM\\icons"
   },
   "sources": {
-    "native": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Menace\\UserData\\CustomPersistentAssets\\BOAM",
+    "native": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Menace\\UserData\\BOAM",
     "custom": "C:\\Users\\user\\my-boam-icons"
   },
   "factions": [ ... ],
@@ -168,4 +197,4 @@ Mods/BOAM/icons/
     └── darby.png
 ```
 
-The engine loads icons by filename — drop a PNG with the right name and restart the game.
+The engine and minimap overlay load icons by filename — drop a PNG with the right name and restart the game.

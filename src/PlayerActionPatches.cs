@@ -79,21 +79,142 @@ static class Patch_EndTurn
 
 /// <summary>
 /// Harmony patch: fires when the mission preview map finishes loading.
-/// Notifies the tactical engine so event-driven navigation knows planmission is ready.
+/// Captures the map texture + tile data for the tactical minimap and heatmap rendering,
+/// and notifies the tactical engine so event-driven navigation knows planmission is ready.
 /// </summary>
 static class Patch_PreviewReady
 {
-    public static void Postfix()
+    public static void Postfix(
+        Il2CppMenace.UI.Strategy.MissionPrepUIScreen __instance,
+        Il2CppMenace.Strategy.MissionPreviewResult _result)
     {
         try
         {
-            var bridge = BoamBridge.Instance;
-            if (bridge == null) return;
-            BoamBridge.Logger.Msg("[BOAM] Mission preview ready");
-            if (bridge.IsReady || true) // always send — engine might not be "ready" yet during navigation
-                ThreadPool.QueueUserWorkItem(_ => EngineClient.Post("/hook/preview-ready", "{}"));
+            BoamBridge.Logger.Msg("[BOAM] Mission preview ready — capturing map data");
+
+            // Always notify engine (even before IsReady — needed for navigation)
+            ThreadPool.QueueUserWorkItem(_ => EngineClient.Post("/hook/preview-ready", "{}"));
+
+            // Capture map texture and tile data
+            CaptureMapData(__instance, _result);
         }
-        catch { }
+        catch (Exception ex)
+        {
+            BoamBridge.Logger.Error($"[BOAM] preview-ready error: {ex.Message}");
+        }
+    }
+
+    private static void CaptureMapData(
+        Il2CppMenace.UI.Strategy.MissionPrepUIScreen instance,
+        Il2CppMenace.Strategy.MissionPreviewResult result)
+    {
+        var mapTexture = instance.m_MapTexture;
+        if (mapTexture == null || mapTexture.width == 0)
+        {
+            BoamBridge.Logger.Msg("[BOAM] m_MapTexture is null or empty — skipping capture");
+            return;
+        }
+
+        int sizeX = result?.SizeX ?? 0;
+        int sizeZ = result?.SizeZ ?? 0;
+        if (sizeX == 0 || sizeZ == 0) return;
+
+        var modDir = System.IO.Path.Combine(
+            AppDomain.CurrentDomain.BaseDirectory, "Mods", "BOAM");
+
+        // Create battle session directory now — map files go directly here
+        var ts = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+        var sessionDir = System.IO.Path.Combine(modDir, "battle_reports", $"battle_{ts}");
+        System.IO.Directory.CreateDirectory(sessionDir);
+        TacticalMap.TacticalMapState.BattleSessionDir = sessionDir;
+
+        var bgPath = System.IO.Path.Combine(sessionDir, "mapbg.png");
+        var infoPath = System.IO.Path.Combine(sessionDir, "mapbg.info");
+        var dataPath = System.IO.Path.Combine(sessionDir, "mapdata.bin");
+
+        // Save captured PNG
+        var pngBytes = UnityEngine.ImageConversion.EncodeToPNG(mapTexture);
+        if (pngBytes != null && pngBytes.Length > 0)
+        {
+            System.IO.File.WriteAllBytes(bgPath, pngBytes);
+            System.IO.File.WriteAllText(infoPath, $"{mapTexture.width},{mapTexture.height},{sizeX},{sizeZ}");
+        }
+
+        // Update TacticalMapState for the IMGUI overlay
+        TacticalMap.TacticalMapState.MapTexture = mapTexture;
+        TacticalMap.TacticalMapState.TilesX = sizeX;
+        TacticalMap.TacticalMapState.TilesZ = sizeZ;
+
+        // Save raw tile data for palette-based map generation
+        try
+        {
+            float heightMin = float.MaxValue, heightMax = float.MinValue;
+            using (var writer = new System.IO.BinaryWriter(System.IO.File.Create(dataPath)))
+            {
+                writer.Write(sizeX);
+                writer.Write(sizeZ);
+                long minMaxPosition = writer.BaseStream.Position;
+                writer.Write(0f);
+                writer.Write(0f);
+
+                for (int tileZ = 0; tileZ < sizeZ; tileZ++)
+                {
+                    for (int tileX = 0; tileX < sizeX; tileX++)
+                    {
+                        float elevation = 0f;
+                        byte flags = 0;
+                        if (result.HasRoad(tileX, tileZ)) flags |= 1;
+                        if (result.IsBlocked(tileX, tileZ)) flags |= 2;
+                        try
+                        {
+                            var tile = result.Tiles.GetTile(tileX, tileZ);
+                            if (tile != null)
+                            {
+                                elevation = tile.GetElevation();
+                                int cover = (int)tile.GetInherentCover();
+                                if (cover == 1) flags |= 4;
+                                if (cover >= 2) flags |= 8;
+                                if (!tile.IsEmpty() && !tile.HasActor())
+                                    flags |= 8;
+                            }
+                        }
+                        catch { }
+
+                        if (elevation < heightMin) heightMin = elevation;
+                        if (elevation > heightMax) heightMax = elevation;
+
+                        writer.Write(elevation);
+                        writer.Write(flags);
+                    }
+                }
+                writer.BaseStream.Seek(minMaxPosition, System.IO.SeekOrigin.Begin);
+                writer.Write(heightMin);
+                writer.Write(heightMax);
+            }
+
+            TacticalMap.TacticalMapState.HeightMin = heightMin;
+            TacticalMap.TacticalMapState.HeightMax = heightMax;
+
+            // Load tile data into state for map generation
+            var tileDataArray = new TacticalMap.TileData[sizeX * sizeZ];
+            using (var reader = new System.IO.BinaryReader(System.IO.File.OpenRead(dataPath)))
+            {
+                reader.ReadInt32(); reader.ReadInt32(); // skip sizeX, sizeZ
+                reader.ReadSingle(); reader.ReadSingle(); // skip min, max
+                for (int i = 0; i < tileDataArray.Length; i++)
+                {
+                    tileDataArray[i].Height = reader.ReadSingle();
+                    tileDataArray[i].Flags = reader.ReadByte();
+                }
+            }
+            TacticalMap.TacticalMapState.TileDataArray = tileDataArray;
+
+            BoamBridge.Logger.Msg($"[BOAM] Map captured: {mapTexture.width}x{mapTexture.height} px, {sizeX}x{sizeZ} tiles, height [{heightMin:F1}..{heightMax:F1}] → {sessionDir}");
+        }
+        catch (Exception ex)
+        {
+            BoamBridge.Logger.Warning($"[BOAM] Failed to save tile data: {ex.Message}");
+        }
     }
 }
 
@@ -132,6 +253,10 @@ static class Patch_ActiveActorChanged
                 x = px,
                 z = pz
             });
+
+            // Update minimap overlay
+            TacticalMap.TacticalMapState.ActiveActor = actorUuid;
+            TacticalMap.TacticalMapState.UpdateUnitPosition(actorUuid, px, pz);
 
             BoamBridge.Logger.Msg($"[BOAM] active-actor-changed: {actorUuid} r={round} at ({px},{pz})");
             ThreadPool.QueueUserWorkItem(_ => EngineClient.Post("/hook/actor-changed", payload));

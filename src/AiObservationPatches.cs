@@ -188,6 +188,62 @@ static class Patch_PostProcessTileScores
 
             int round = BoamBridge.Instance?.Round ?? 0;
 
+            // Update TacticalMapState with current unit positions for the minimap overlay
+            var overlayUnits = new System.Collections.Generic.List<TacticalMap.OverlayUnit>();
+            try
+            {
+                var allActors2 = EntitySpawner.ListEntities(-1);
+                if (allActors2 != null)
+                {
+                    foreach (var a in allActors2)
+                    {
+                        var aInfo2 = EntitySpawner.GetEntityInfo(a);
+                        if (aInfo2 == null || !aInfo2.IsAlive) continue;
+                        var aPos2 = EntityMovement.GetPosition(a);
+                        if (aPos2 == null) continue;
+
+                        int visibility = Menace.SDK.LineOfSight.GetVisibilityState(a);
+                        bool isPlayerSide = aInfo2.FactionIndex == 1 || aInfo2.FactionIndex == 2 || aInfo2.FactionIndex == 4;
+                        bool knownToPlayer = isPlayerSide || visibility == 1 || visibility == 3;
+
+                        var aGo2 = new GameObj(a.Pointer);
+                        var aTpl2 = aGo2.ReadObj("m_Template");
+                        var templateName2 = aTpl2.IsNull ? "" : (aTpl2.GetName() ?? "");
+
+                        var leaderName2 = "";
+                        try
+                        {
+                            var unitActor2 = new UnitActor(a.Pointer);
+                            var leader2 = unitActor2.GetLeader();
+                            if (leader2 != null)
+                            {
+                                var nn = leader2.GetNickname();
+                                if (nn != null) leaderName2 = nn.GetTranslated() ?? "";
+                            }
+                        }
+                        catch { }
+
+                        var actorUuid2 = ActorRegistry.GetUuid(aInfo2.EntityId);
+
+                        overlayUnits.Add(new TacticalMap.OverlayUnit
+                        {
+                            Actor = actorUuid2,
+                            Label = actorUuid2,
+                            FactionIndex = aInfo2.FactionIndex,
+                            X = aPos2.Value.x,
+                            Y = aPos2.Value.y,
+                            KnownToPlayer = knownToPlayer,
+                            Template = templateName2,
+                            Leader = leaderName2
+                        });
+                    }
+                }
+            }
+            catch { }
+            TacticalMap.TacticalMapState.SetUnits(overlayUnits);
+            TacticalMap.TacticalMapState.CurrentRound = round;
+            TacticalMap.TacticalMapState.CurrentFaction = factionId;
+
             var payload = JsonSerializer.Serialize(new
             {
                 hook = "tile-scores",
@@ -200,11 +256,14 @@ static class Patch_PostProcessTileScores
                 visionRange
             });
 
-            var response = EngineClient.Post("/hook/tile-scores", payload);
-            if (response != null)
+            // Fire-and-forget: don't block AI evaluation thread
+            var json = payload;
+            ThreadPool.QueueUserWorkItem(_ =>
             {
-                BoamBridge.Logger.Msg($"[BOAM] tile-scores f{factionId} {actorUuid}: {tileList.Count} tiles");
-            }
+                var response = EngineClient.Post("/hook/tile-scores", json);
+                if (response != null)
+                    BoamBridge.Logger.Msg($"[BOAM] tile-scores f{factionId} {actorUuid}: {tileList.Count} tiles");
+            });
         }
         catch (Exception ex)
         {
@@ -243,6 +302,9 @@ static class Patch_MovementFinished
                 actor = actorUuid,
                 tile = new { x = tileX, z = tileZ }
             });
+
+            // Update minimap overlay with new position
+            TacticalMap.TacticalMapState.UpdateUnitPosition(actorUuid, tileX, tileZ);
 
             BoamBridge.Logger.Msg($"[BOAM] movement-finished {actorUuid} tile=({tileX},{tileZ})");
             EngineClient.Post("/hook/movement-finished", payload);

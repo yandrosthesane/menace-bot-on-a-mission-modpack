@@ -14,11 +14,17 @@ let mutable private battleDir: string option = None
 /// Get the current battle directory, or None if no battle is active.
 let currentBattleDir () = battleDir
 
-/// Start a new battle session. Creates the directory and returns its path.
-let startBattle (baseDir: string) (timestamp: string) =
-    let folder = sprintf "battle_%s" timestamp
-    let dir = Path.Combine(baseDir, "battle_reports", folder)
-    Directory.CreateDirectory(dir) |> ignore
+/// Start a new battle session. Uses an existing directory if provided,
+/// otherwise creates one from timestamp.
+let startBattle (baseDir: string) (existingDir: string option) =
+    let dir =
+        match existingDir with
+        | Some d when d <> "" && Directory.Exists(d) -> d
+        | _ ->
+            let folder = sprintf "battle_%s" (System.DateTime.Now.ToString("yyyyMMdd_HHmmss"))
+            let d = Path.Combine(baseDir, "battle_reports", folder)
+            Directory.CreateDirectory(d) |> ignore
+            d
     battleDir <- Some dir
     dir
 

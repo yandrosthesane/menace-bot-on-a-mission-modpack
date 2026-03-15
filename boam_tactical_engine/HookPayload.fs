@@ -114,4 +114,6 @@ let parsePlayerAction (root: JsonElement) : PlayerActionPayload =
       Tile = root.GetProperty("tile") |> parseTilePos }
 
 let parseBattleStart (root: JsonElement) : BattleStartPayload =
-    { Timestamp = tryStr root "timestamp" (System.DateTime.Now.ToString("yyyyMMdd_HHmmss")) }
+    let sd = tryStr root "sessionDir" ""
+    { Timestamp = tryStr root "timestamp" (System.DateTime.Now.ToString("yyyyMMdd_HHmmss"))
+      SessionDir = if sd = "" then None else Some sd }

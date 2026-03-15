@@ -1,0 +1,44 @@
+// BOAM Tactical Map — minimap overlay configuration
+//
+// This is the mod default config. To customise, copy this file to:
+//   <game_dir>/UserData/BOAM/tactical_map.json5
+// The user copy takes precedence and survives mod deploys.
+//
+// Keybindings use UnityEngine.KeyCode names (case-sensitive).
+// Common keys: A-Z, F1-F12, Alpha0-Alpha9, Tab, Space, Return,
+//   LeftShift, RightShift, LeftControl, LeftAlt, BackQuote, Escape,
+//   Mouse0 (left), Mouse1 (right), Mouse2 (middle).
+// Set to "None" to disable a keybinding.
+{
+  // ── Feature Toggle ──
+  "Enabled": true,             // false = disable the minimap overlay entirely
+
+  // ── Keybindings ──
+  // Only ToggleKey and DisplayKey are active by default.
+  // Uncomment others to enable power-user controls.
+  "ToggleKey": "M",            // show/hide minimap overlay
+  "DisplayKey": "L",           // cycle display presets (defined in tactical_map_presets.json5)
+  // "MapStyleKey": "K",       // cycle map background style independently
+  // "EntityStyleKey": "J",    // cycle entity style independently
+  // "AnchorKey": "H",         // cycle screen anchor position
+  // "FogOfWarKey": "N",       // toggle fog of war (hides undetected enemies)
+  // "LabelKey": "I",          // toggle unit name labels on/off
+
+  // ── Defaults ──
+  "FogOfWarDefault": true,     // true = start with FoW on (hide unknown enemies)
+  "LabelsDefault": true,       // true = start with unit labels visible
+
+  // ── Visual Defaults ──
+  // These are global defaults. Display presets in tactical_map_presets.json5
+  // can override Opacity and MapBrightness per-preset.
+  "Opacity": 0.8,              // panel opacity: 0.1 (transparent) to 1.0 (opaque)
+  "MapBrightness": 2.0,        // map background brightness: 0.1 (dark) to 4.0 (overbright)
+
+  // ── Layout ──
+  "Margin": 12,                // margin from screen edges (px)
+  "HeaderHeight": 20,          // header bar height (px)
+  "Padding": 4,                // padding inside panel border (px)
+  "LabelFontSize": 9,          // fallback font size if EntityStyle has no FontSize
+  "HeaderFontSize": 11,        // header text font size (px)
+  "ToastFontSize": 14          // toast notification font size (px)
+}

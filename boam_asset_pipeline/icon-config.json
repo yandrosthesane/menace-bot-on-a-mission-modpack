@@ -7,8 +7,8 @@
   },
 
   "sources": {
-    "native":       "/home/user/.local/share/Steam/steamapps/common/Menace/UserData/CustomPersistentAssets/BOAM",
-    "placeholders": "/home/user/.local/share/Steam/steamapps/common/Menace/UserData/CustomPersistentAssets/BOAM",
+    "native":       "/home/user/.local/share/Steam/steamapps/common/Menace/UserData/BOAM",
+    "placeholders": "/home/user/.local/share/Steam/steamapps/common/Menace/UserData/BOAM",
     "custom":       "/home/user/workspace/menace_mods/BOAM-modpack/sidecar/assets/icons"
   },
 

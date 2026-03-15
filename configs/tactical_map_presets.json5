@@ -1,0 +1,123 @@
+// BOAM Tactical Map — display presets
+//
+// This is the mod default. To customise, copy to:
+//   <game_dir>/UserData/BOAM/tactical_map_presets.json5
+//
+// Three style layers combined into DisplayStyles:
+//   Anchors     — screen position
+//   MapStyles   — map background tile size (+ optional generation method)
+//   EntityStyles — icon size, font size, faction colors, panel chrome
+//
+// DisplayStyles pair a MapStyle + EntityStyle + Anchor into a preset
+// that the user cycles through with the DisplayKey (default L).
+{
+  // ── Anchors ──
+  // Screen position. X/Y are floats 0.0–1.0:
+  //   X: 0.0 = left edge, 0.5 = center, 1.0 = right edge
+  //   Y: 0.0 = top edge,  0.5 = center, 1.0 = bottom edge
+  //
+  // Available fields:
+  //   Key  (string, required) — reference name used by DisplayStyles
+  //   X    (float, default 1.0)
+  //   Y    (float, default 0.0)
+  "Anchors": [
+    { "Key": "top-right",    "X": 1.0, "Y": 0.0 },
+    { "Key": "top-left",     "X": 0.0, "Y": 0.0 },
+    { "Key": "bottom-right", "X": 1.0, "Y": 1.0 },
+    { "Key": "bottom-left",  "X": 0.0, "Y": 1.0 },
+    { "Key": "center",       "X": 0.5, "Y": 0.5 }
+  ],
+
+  // ── DisplayStyles ──
+  // Coherent presets combining map + entity + anchor.
+  //
+  // Available fields:
+  //   Name          (string, required) — shown in the overlay header
+  //   MapStyle      (string, required) — Key from MapStyles
+  //   EntityStyle   (string, required) — Key from EntityStyles
+  //   Anchor        (string, default "top-right") — Key from Anchors
+  //   Opacity       (float 0.1–1.0, optional) — override global Opacity for this preset
+  //   MapBrightness (float 0.1–4.0, optional) — override global MapBrightness for this preset
+  "DisplayStyles": [
+    { "Name": "1080 M",  "MapStyle": "captured",      "EntityStyle": "native",      "Anchor": "bottom-right" },
+    { "Name": "1080 L",  "MapStyle": "captured-l",     "EntityStyle": "native-l",    "Anchor": "center" },
+    { "Name": "4K M",    "MapStyle": "captured-4k",    "EntityStyle": "native-4k",   "Anchor": "bottom-right" },
+    { "Name": "4K L",    "MapStyle": "captured-4k-l",  "EntityStyle": "native-4k-l", "Anchor": "center" }
+  ],
+
+  // ── MapStyles ──
+  // Controls the map background and tile size.
+  //
+  // Available fields:
+  //   Key       (string, required) — reference name used by DisplayStyles
+  //   TileSize  (int, default 12) — pixels per tile on screen
+  //   TileFolder (string, optional) — compose from tile PNGs in Mods/BOAM/<folder>/
+  //   MapColors  (object, optional) — generate from flat hex colors:
+  //       MinHeight, MaxHeight    — height gradient (#RRGGBB or #RRGGBBAA)
+  //       BlockedMin, BlockedMax  — blocked terrain gradient
+  //       Roads, Vegetation, Structures — overlay colors (use alpha for blending)
+  //   (neither TileFolder nor MapColors) — use the captured game texture (mapbg.png)
+  "MapStyles": [
+    { "Key": "captured",      "TileSize": 18 },
+    { "Key": "captured-l",    "TileSize": 24 },
+    { "Key": "captured-4k",   "TileSize": 36 },
+    { "Key": "captured-4k-l", "TileSize": 48 }
+  ],
+
+  // ── EntityStyles ──
+  // Controls unit icons, labels, and panel appearance.
+  //
+  // Available fields:
+  //   Key           (string, required) — reference name used by DisplayStyles
+  //   IconSize      (int, default 10) — icon size in pixels
+  //   FontSize      (int, default 9) — unit label font size in pixels
+  //   Background    (string, default "#120803E6") — panel background color (#RRGGBBAA)
+  //   HeaderText    (string, default "#F7AD66") — header text color
+  //   FactionColors (object, required) — per-faction label/dot colors:
+  //       Keys: Player, PlayerAI, Civilian, AlliedLocalForces,
+  //             EnemyLocalForces, Pirates, Wildlife, Constructs,
+  //             RogueArmy, Default
+  //       Values: hex color strings (#RRGGBB or #RRGGBBAA)
+  "EntityStyles": [
+    {
+      "Key": "native", "IconSize": 18, "FontSize": 12,
+      "Background": "#120803E6", "HeaderText": "#F7AD66",
+      "FactionColors": {
+        "Player": "#4DC99E", "PlayerAI": "#4DC99E", "Civilian": "#F7AD40",
+        "AlliedLocalForces": "#4DC99E", "EnemyLocalForces": "#FF4242",
+        "Pirates": "#FF4242", "Wildlife": "#F705FF", "Constructs": "#BA9478",
+        "RogueArmy": "#FF4242", "Default": "#BA9478"
+      }
+    },
+    {
+      "Key": "native-l", "IconSize": 24, "FontSize": 16,
+      "Background": "#120803E6", "HeaderText": "#F7AD66",
+      "FactionColors": {
+        "Player": "#4DC99E", "PlayerAI": "#4DC99E", "Civilian": "#F7AD40",
+        "AlliedLocalForces": "#4DC99E", "EnemyLocalForces": "#FF4242",
+        "Pirates": "#FF4242", "Wildlife": "#F705FF", "Constructs": "#BA9478",
+        "RogueArmy": "#FF4242", "Default": "#BA9478"
+      }
+    },
+    {
+      "Key": "native-4k", "IconSize": 36, "FontSize": 22,
+      "Background": "#120803E6", "HeaderText": "#F7AD66",
+      "FactionColors": {
+        "Player": "#4DC99E", "PlayerAI": "#4DC99E", "Civilian": "#F7AD40",
+        "AlliedLocalForces": "#4DC99E", "EnemyLocalForces": "#FF4242",
+        "Pirates": "#FF4242", "Wildlife": "#F705FF", "Constructs": "#BA9478",
+        "RogueArmy": "#FF4242", "Default": "#BA9478"
+      }
+    },
+    {
+      "Key": "native-4k-l", "IconSize": 48, "FontSize": 28,
+      "Background": "#120803E6", "HeaderText": "#F7AD66",
+      "FactionColors": {
+        "Player": "#4DC99E", "PlayerAI": "#4DC99E", "Civilian": "#F7AD40",
+        "AlliedLocalForces": "#4DC99E", "EnemyLocalForces": "#FF4242",
+        "Pirates": "#FF4242", "Wildlife": "#F705FF", "Constructs": "#BA9478",
+        "RogueArmy": "#FF4242", "Default": "#BA9478"
+      }
+    }
+  ]
+}

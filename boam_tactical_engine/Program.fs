@@ -75,9 +75,7 @@ let main argv =
         BridgeUrl = sprintf "http://127.0.0.1:%d" Config.Current.BridgePort
         CommandUrl = sprintf "http://127.0.0.1:%d" Config.Current.CommandPort
         BoamModDir = boamModDir
-        TacticalMapFolder = IO.Path.Combine(gameDir, "Mods", "TacticalMap")
         IconBaseDir = IO.Path.Combine(boamModDir, "icons")
-        HeatmapPaths = Collections.Concurrent.ConcurrentDictionary<string, string>()
     }
 
     registerRoutes app routeCtx

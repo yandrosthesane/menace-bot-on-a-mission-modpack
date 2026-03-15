@@ -16,7 +16,15 @@
       "src/BoamCommandExecutor.cs",
       "src/AiObservationPatches.cs",
       "src/PlayerActionPatches.cs",
-      "src/DiagnosticPatches.cs"
+      "src/DiagnosticPatches.cs",
+      "src/TacticalMap/TacticalMapState.cs",
+      "src/TacticalMap/TacticalMapTypes.cs",
+      "src/TacticalMap/TacticalMapOverlay.cs",
+      "src/TacticalMap/JsonHelper.cs",
+      "src/TacticalMap/ColorParser.cs",
+      "src/TacticalMap/MapGenerator.cs",
+      "src/TacticalMap/MapDataLoader.cs",
+      "src/TacticalMap/ConfigLoader.cs"
     ],
     "references": [
       "MelonLoader",
@@ -25,7 +33,10 @@
       "Il2Cppmscorlib",
       "Assembly-CSharp",
       "Menace.ModpackLoader",
-      "UnityEngine.CoreModule"
+      "UnityEngine.CoreModule",
+      "UnityEngine.IMGUIModule",
+      "UnityEngine.InputLegacyModule",
+      "UnityEngine.ImageConversionModule"
     ],
     "prebuiltDlls": []
   },

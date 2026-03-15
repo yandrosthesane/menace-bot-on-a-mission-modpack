@@ -144,4 +144,5 @@ type PlayerActionPayload = {
 /// Battle session start info.
 type BattleStartPayload = {
     Timestamp: string
+    SessionDir: string option
 }
