@@ -214,7 +214,7 @@ public static class BoamCommandExecutor
     {
         if (string.IsNullOrEmpty(actor)) { log.Warning("[select] No actor specified"); return; }
 
-        var entityId = BoamBridge.GetEntityId(actor);
+        var entityId = ActorRegistry.GetEntityId(actor);
         if (entityId < 0) { log.Warning($"[select] Unknown actor: {actor}"); return; }
 
         var allEntities = EntitySpawner.ListEntities();

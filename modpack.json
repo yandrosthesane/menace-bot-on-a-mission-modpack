@@ -10,8 +10,13 @@
   "code": {
     "sources": [
       "src/BoamBridge.cs",
+      "src/ActorRegistry.cs",
+      "src/EngineClient.cs",
       "src/BoamCommandServer.cs",
-      "src/BoamCommandExecutor.cs"
+      "src/BoamCommandExecutor.cs",
+      "src/AiObservationPatches.cs",
+      "src/PlayerActionPatches.cs",
+      "src/DiagnosticPatches.cs"
     ],
     "references": [
       "MelonLoader",
