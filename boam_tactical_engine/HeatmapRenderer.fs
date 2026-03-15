@@ -113,6 +113,7 @@ let private bestTile (tiles: TileScoreData list) =
     tiles |> List.maxBy (fun t -> t.Combined)
 
 /// Render the combined score image: single value per tile, with unit overlay.
+/// Move destination is drawn inline if provided.
 let renderCombined
     (bgPath: string)
     (mapInfo: MapInfo)
@@ -125,6 +126,7 @@ let renderCombined
     (label: string)
     (actor: string)
     (visionRange: int)
+    (moveDest: TilePos option)
     : string * string option =
 
     let bg, scaledPpt = prepareBackground bgPath mapInfo
@@ -165,26 +167,48 @@ let renderCombined
     // Actor marker (red border)
     actorPos |> Option.iter (fun pos -> drawTileBorder bg mapInfo scaledPpt pos actorBorder)
 
+    // Best tile marker (green border)
     if not (List.isEmpty tiles) then
         let best = bestTile tiles
         drawTileBorder bg mapInfo scaledPpt { X = best.X; Z = best.Z } bestTileBorder
+
+    // Move destination marker (blue border)
+    moveDest |> Option.iter (fun dest -> drawTileBorder bg mapInfo scaledPpt dest moveDestBorder)
 
     let outPath = Path.Combine(outputDir, sprintf "%s.png" label)
     bg.Save(outPath)
     bg.Dispose()
     outPath, actorLabel
 
-/// Stamp a blue move-destination marker onto an existing heatmap PNG.
-let stampMoveDestination (modFolder: string) (heatmapPath: string) (dest: TilePos) =
-    match loadMapInfo modFolder with
-    | None -> failwithf "Cannot read mapbg.info from %s" modFolder
-    | Some mapInfo ->
-        let scaledPpt = computeScaledPpt mapInfo
-        use img = Image.Load<Rgba32>(heatmapPath)
-        drawTileBorder img mapInfo scaledPpt dest moveDestBorder
-        img.Save(heatmapPath)
+/// Render a heatmap from explicit paths (used by render job processor).
+/// Returns the output PNG path.
+let renderFromPaths
+    (bgPath: string)
+    (mapInfoPath: string)
+    (tiles: TileScoreData list)
+    (actorPos: TilePos option)
+    (units: UnitInfo list)
+    (currentFaction: int)
+    (iconBaseDir: string)
+    (outputDir: string)
+    (label: string)
+    (actor: string)
+    (visionRange: int)
+    (moveDest: TilePos option)
+    : string =
 
-/// Render heatmap with unit overlay.
+    if not (File.Exists(bgPath)) then
+        failwithf "Map background not found: %s" bgPath
+
+    match loadMapInfoFromPath mapInfoPath with
+    | None -> failwithf "Cannot read map info from %s" mapInfoPath
+    | Some mapInfo ->
+
+    Directory.CreateDirectory(outputDir) |> ignore
+    let outPath, _ = renderCombined bgPath mapInfo tiles actorPos units currentFaction iconBaseDir outputDir label actor visionRange moveDest
+    outPath
+
+/// Render heatmap with unit overlay (legacy wrapper).
 /// Returns list of (imageName, filePath).
 let renderAll
     (modFolder: string)
@@ -209,6 +233,6 @@ let renderAll
 
     Directory.CreateDirectory(outputDir) |> ignore
 
-    let combined, _ = renderCombined bgPath mapInfo tiles actorPos units currentFaction iconBaseDir outputDir label actor visionRange
+    let combined, _ = renderCombined bgPath mapInfo tiles actorPos units currentFaction iconBaseDir outputDir label actor visionRange None
 
     [ "combined", combined ]

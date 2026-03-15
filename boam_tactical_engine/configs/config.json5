@@ -11,7 +11,7 @@
   "command_port": 7661,        // command server port (replay actions)
 
   // ── Features ──
-  "heatmaps": false,           // enable heatmap generation (currently uses deferred render jobs)
+  "heatmaps": true,            // collect render job data (tile scores, decisions) for offline heatmap generation
 
   // ── Rendering ──
   // Controls heatmap image rendering (offline render jobs).

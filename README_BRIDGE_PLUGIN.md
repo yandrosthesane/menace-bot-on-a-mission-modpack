@@ -1,48 +1,68 @@
 # C# Bridge Plugin (`src/`)
 
-Thin MelonLoader plugin that runs inside the game under Wine/Proton. Hooks into the AI evaluation loop and player actions via Harmony patches, forwarding data to the tactical engine over HTTP.
+Thin MelonLoader plugin that runs inside the game under Wine/Proton. Hooks into the AI evaluation loop and player actions via Harmony patches, captures the tactical map for heatmaps, and provides an in-game minimap overlay.
 
 ## Harmony Hooks
 
 | Patch Target | What It Captures |
 |-------------|-----------------|
-| `AIFaction.OnTurnStart` | Faction state (opponents, actors, round) |
-| `Agent.PostProcessTileScores` | Per-tile AI scores + all unit positions |
+| `AIFaction.OnTurnStart` | Faction state (opponents, round) → engine + render job collection |
+| `Agent.PostProcessTileScores` | Per-tile AI scores + all unit positions (fire-and-forget) |
 | `Agent.Execute` | AI behavior decisions (chosen action, alternatives, attack candidates) |
-| `TacticalManager.InvokeOnMovementFinished` | Move destinations → `player_move` |
-| `TacticalManager.InvokeOnSkillUse` | Skill usage → `player_skill` |
-| `TacticalManager.InvokeOnMovement` | Embark (`MovementAction.Enter`) / Disembark (`MovementAction.Leave`) |
+| `TacticalManager.InvokeOnMovementFinished` | Move destinations |
+| `MissionPrepUIScreen.OnPreviewReady` | Map capture (`mapbg.png`, `mapbg.info`, `mapdata.bin`) + battle session dir creation |
+| `TacticalState.OnActiveActorChanged` | Active actor tracking → minimap update |
+| `TacticalState.EndTurn` | Player end-turn actions |
+| `HandleLeftClickOnTile` (multiple) | Player click actions |
+| `TacticalState.TrySelectSkill` | Player skill selection |
+| Diagnostic patches | Turn lifecycle tracing (TurnEnd, AfterSkillUse, AttackTileStart, ActionPointsChanged) |
 
-## Game Bridge
+## TacticalMap Integration
 
-The plugin starts an HTTP server on port 7655 that exposes:
-- `GET /status` — scene, version, timestamp
-- `GET /tactical` — round, faction, active actor, player turn status
-- `GET /actors` — all actors with positions
-- `POST /cmd` — execute DevConsole commands (`move`, `useskill`, `endturn`, etc.)
+The bridge hosts the `TacticalMapOverlay` — an IMGUI minimap overlay that reads from `TacticalMapState`:
+
+- **Map capture** at `OnPreviewReady` → saves PNG + tile data directly to the battle session directory
+- **Map reload** from disk at tactical-ready (Unity textures don't survive scene transitions)
+- **Initial unit population** from `EntitySpawner` at tactical-ready
+- **Live updates** from tile-scores, movement-finished, and actor-changed hooks
+- **Icon resolution** from disk (same leader → template → faction chain as heatmaps)
+
+See [Tactical Minimap](README_MINIMAP.md) for user-facing details.
 
 ## Data Flow
 
 ```
 Game (Wine/Proton)                    Tactical Engine (native Linux/.NET 10)
 ┌──────────────────┐                  ┌──────────────────────┐
-│  BoamBridge.cs   │  HTTP POST       │  Program.fs          │
+│  BoamBridge.cs   │  HTTP POST       │  Routes.fs           │
 │  Harmony patches ├─────────────────►│  /hook/on-turn-start │
-│                  │  port 7660       │  /hook/tile-scores   │
-│                  │                  │  /hook/action-decision│
+│  TacticalMap     │  port 7660       │  /hook/tile-scores   │
+│  overlay         │  (fire & forget) │  /hook/action-decision│
 │                  │                  │  /hook/player-action │
+│                  │                  │  /hook/battle-start  │
 └──────────────────┘                  └──────────────────────┘
 ```
 
-## Action Logging Details
+The tile-scores POST uses `ThreadPool.QueueUserWorkItem` — the AI evaluation thread is never blocked.
+
+## Action Logging
 
 All player actions are sent to `/hook/player-action` with:
-- `round`, `faction`, `actorId`, `actor` (template name)
-- `type`: `player_move`, `player_skill`, `player_embark`, `player_disembark`, `player_endturn`
+- `round`, `faction`, `actor` (stable UUID)
+- `actionType`: `click`, `useskill`, `endturn`, `select`
 - `tile`: `{x, z}`
-- `skill`: skill name (for `player_skill`)
-- `vehicleId`: entity ID (for `player_embark`)
+- `skillName`: skill name (for `useskill`)
 
-### Disembark Dedup
+## Key Files
 
-When a unit disembarks, both `InvokeOnMovement` (Leave) and `InvokeOnMovementFinished` fire. The bridge sets `_lastDisembarkActorId` on the Leave event so `Patch_MovementFinished` skips the duplicate `player_move` for that actor.
+| File | Role |
+|------|------|
+| `src/BoamBridge.cs` | Plugin lifecycle, engine check, overlay wiring, replay pull |
+| `src/AiObservationPatches.cs` | AI hooks (tile-scores, on-turn-start, movement, decisions) |
+| `src/PlayerActionPatches.cs` | Player hooks, map capture, actor-changed |
+| `src/DiagnosticPatches.cs` | Turn/skill lifecycle tracing |
+| `src/EngineClient.cs` | Synchronous HTTP client (WebClient for Wine compatibility) |
+| `src/ActorRegistry.cs` | Stable UUID assignment, dramatis personae |
+| `src/BoamCommandServer.cs` | HTTP command server (port 7661) |
+| `src/BoamCommandExecutor.cs` | Execute game commands (move, skill, endturn) |
+| `src/TacticalMap/` | Minimap overlay, map capture, config, types |

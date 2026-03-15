@@ -32,7 +32,7 @@ let parseTilePos (el: JsonElement) : TilePos =
 
 let parseOptionalTilePos (el: JsonElement) (prop: string) : TilePos option =
     match el.TryGetProperty(prop) with
-    | true, p -> Some (parseTilePos p)
+    | true, p when p.ValueKind <> JsonValueKind.Null -> Some (parseTilePos p)
     | _ -> None
 
 // --- Hook-specific parsers ---

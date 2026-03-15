@@ -10,10 +10,10 @@ Launch the BOAM Tactical Engine HTTP server in its own terminal window with colo
 
 ## Instructions
 
-Single command — the script handles stopping any existing instance:
+Single command — the script handles stopping any existing instance. Pass `--on-title /navigate/tactical` to auto-navigate to tactical on game connect:
 
 ```bash
-/home/yandros/workspace/menace_mods/scripts/start-tactical-engine.sh
+/home/yandros/workspace/menace_mods/scripts/start-tactical-engine.sh --on-title /navigate/tactical
 ```
 
 Report "Engine started" and proceed. No sleep or verification needed — the engine starts fast and the game takes much longer to reach Title scene.
@@ -24,7 +24,9 @@ Report "Engine started" and proceed. No sleep or verification needed — the eng
 - **Project**: `/home/yandros/workspace/menace_mods/BOAM-modpack/boam_tactical_engine/`
 - **Target**: net10.0 (native Linux .NET)
 - **Terminal**: Opens in a gnome-terminal window titled "BOAM Tactical Engine"
-- The engine auto-navigates to tactical when the game reaches the Title scene (event-driven via scene-change hook)
+- `--on-title /navigate/tactical`: auto-navigates to tactical when Title scene detected
+- `--render <battle> [--pattern <glob>]`: render heatmaps and exit (no game needed)
+- No args: engine starts and waits passively
 
 ## When to use
 

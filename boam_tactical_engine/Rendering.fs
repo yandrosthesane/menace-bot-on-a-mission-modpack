@@ -31,7 +31,26 @@ let bestTileBorder = toBorder cfg.BestTileBorder
 let moveDestBorder = toBorder cfg.MoveDestBorder
 let visionColor    = Rgba32(cfg.VisionColor.[0], cfg.VisionColor.[1], cfg.VisionColor.[2], cfg.VisionColor.[3])
 
-/// Load mapbg.info from the TacticalMap mod folder.
+/// Load map info from a specific file path.
+let loadMapInfoFromPath (infoPath: string) : MapInfo option =
+    if not (File.Exists(infoPath)) then None
+    else
+        let parts = File.ReadAllText(infoPath).Trim().Split(',')
+        if parts.Length < 4 then None
+        else
+            let texW = int parts.[0]
+            let texH = int parts.[1]
+            let tilesX = int parts.[2]
+            let tilesZ = int parts.[3]
+            Some {
+                TextureWidth = texW
+                TextureHeight = texH
+                TilesX = tilesX
+                TilesZ = tilesZ
+                PixelsPerTile = if tilesX > 0 then texW / tilesX else 8
+            }
+
+/// Load mapbg.info from a mod folder (convenience wrapper).
 let loadMapInfo (modFolder: string) : MapInfo option =
     let infoPath = Path.Combine(modFolder, "mapbg.info")
     if not (File.Exists(infoPath)) then None

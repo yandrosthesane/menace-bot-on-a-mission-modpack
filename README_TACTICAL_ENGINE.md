@@ -1,17 +1,24 @@
 # F# Tactical Engine (`boam_tactical_engine/`)
 
-Native .NET 10 process that receives game hook data, renders heatmap visualizations, logs all actions, and supports mission replay. Runs as an HTTP server on port 7660.
+Native .NET 10 process that receives game hook data, collects deferred render jobs, renders heatmaps on demand, logs all actions, and supports mission replay. Runs as an HTTP server on port 7660.
 
 ## Key Modules
 
 | Module | Purpose |
 |--------|---------|
-| `Program.fs` | HTTP server, hook dispatch, replay endpoints |
-| `HeatmapRenderer.fs` | Composites map background + tile scores + unit icons into PNG overlays |
-| `ActionLog.fs` | Per-actor and shared JSONL action logs in battle session directories |
-| `Replay.fs` | Reads action logs and replays player actions through the game bridge |
+| `Program.fs` | HTTP server startup, route registration |
+| `Routes.fs` | All HTTP endpoints (hooks, render, replay, navigation) |
+| `RenderJobCollector.fs` | Accumulates tile-scores/decisions per actor per round, flushes to disk |
+| `HeatmapRenderer.fs` | Renders PNG heatmaps from tile data + map background + icons |
+| `ActionLog.fs` | Per-actor and shared JSONL action logs |
+| `Replay.fs` | Reads action logs, serves replay actions to the bridge |
+| `Config.fs` | JSON5 config loading with versioned user/default resolution |
+| `Rendering.fs` | Low-level pixel operations, map info parsing, border drawing |
 | `GameTypes.fs` | Shared type definitions (tiles, factions, units, scores) |
-| `Naming.fs` | Template name normalization and icon path resolution |
+| `HookPayload.fs` | JSON parsing for hook payloads |
+| `Naming.fs` | Template name normalization, icon path resolution |
+| `FactionTheme.fs` | Faction colors and icon filename mapping |
+| `EventBus.fs` | Event-driven synchronization for auto-navigation |
 | `Node.fs`, `Walker.fs`, `Registry.fs` | Behavior graph evaluation (WIP) |
 
 ## HTTP Endpoints
@@ -20,63 +27,119 @@ Native .NET 10 process that receives game hook data, renders heatmap visualizati
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/hook/on-turn-start` | POST | AI faction turn started — receives faction state |
-| `/hook/tile-scores` | POST | Per-tile AI scores for one actor |
-| `/hook/action-decision` | POST | AI behavior decision (Move, Attack, Idle, etc.) |
-| `/hook/player-action` | POST | Player move, skill, embark, disembark, endturn |
-| `/hook/battle-start` | POST | Start battle session — creates report directory |
-| `/hook/battle-end` | POST | End battle session |
+| `/hook/on-turn-start` | POST | AI faction turn started — flushes previous round's render jobs |
+| `/hook/tile-scores` | POST | Per-tile AI scores — accumulated for render jobs (if `heatmaps` enabled) |
+| `/hook/action-decision` | POST | AI behavior decision — attached to render job + action log |
+| `/hook/movement-finished` | POST | Move destination — attached to render job |
+| `/hook/player-action` | POST | Player move, skill, endturn |
+| `/hook/battle-start` | POST | Start battle session (uses dir created by C# bridge) |
+| `/hook/battle-end` | POST | End session — flush remaining render jobs |
+| `/hook/scene-change` | POST | Scene transition — triggers auto-navigation |
+| `/hook/preview-ready` | POST | Mission preview loaded |
+| `/hook/tactical-ready` | POST | Tactical scene ready — saves dramatis personae |
+| `/hook/actor-changed` | POST | Active actor changed |
 
-### Query Endpoints
+### Render Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/render/battle/{name}` | POST | Render heatmaps from render jobs (see [Heatmap Renderer](README_HEATMAPS.md)) |
+
+### Replay Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/replay/battles` | GET | List recorded battles |
+| `/replay/actions/{name}` | GET | View actions in a battle |
+| `/replay/start` | POST | Start a replay session |
+| `/replay/next` | GET | Pull next replay action (called by bridge) |
+| `/replay/stop` | POST | Stop active replay |
+
+### System Endpoints
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/status` | GET | Health check — version, build, uptime |
-| `/replay/battles` | GET | List recorded battles with action counts |
-| `/replay/actions/{name}` | GET | View all actions in a battle |
-| `/replay/run` | POST | Run a replay (see [Replay Manual](README_REPLAY.md)) |
 | `/shutdown` | POST | Graceful exit |
+| `/navigate/tactical` | POST | Event-driven navigation to tactical scene |
+| `/navigate/replay/{name}` | POST | Navigate to tactical + start replay of a recorded battle |
 
 ## Battle Reports
 
-All outputs are written to:
+All outputs for a session:
+
 ```
-Mods/BOAM/battle_reports/battle_YYYYMMDD_HHMMSS/
-├── combined_7_alien_stinger_15.png    Heatmap for actor 15 (faction 7)
-├── actor_7_15_alien_stinger.jsonl     Per-actor action log
-├── actor_1_4_player_squad_carda.jsonl Player action log
-└── round_log.jsonl                    Shared chronological log (used by replay)
+battle_reports/battle_YYYYMMDD_HHMMSS/
+├── mapbg.png                     Captured map background
+├── mapbg.info                    Tile dimensions (texW,texH,tilesX,tilesZ)
+├── mapdata.bin                   Binary tile data (heights + flags)
+├── dramatis_personae.json        All actors with stable UUIDs
+├── round_log.jsonl               Chronological action log (used by replay)
+├── actor_*.jsonl                 Per-actor action logs
+├── render_jobs/                  Self-contained render job JSONs
+│   ├── r01_wildlife_alien_stinger_1.json
+│   └── ...
+└── heatmaps/                     Rendered heatmap PNGs (created on demand)
+    ├── r01_wildlife_alien_stinger_1.png
+    └── ...
 ```
 
-## Heatmap Features
+## Auto-Navigation
 
-- **Gamma-corrected background** — tactical map brightened for readability
-- **Tile scores** — compact numerical overlay showing AI evaluation per tile
-- **Unit overlay** — all faction actors shown with badge icons
-- **Leader labels** — player units labeled by character name (Rewa, Exconde, etc.)
-- **Enemy labels** — units from other factions labeled with template short names
-- **Best tile marker** — green border on the highest-scoring tile (intended target)
-- **Actual destination** — blue border on where the unit actually stopped (AP-limited)
-- **Per-actor output** — one heatmap per AI unit showing its specific evaluation
+The engine auto-navigates to tactical when the game reaches the Title scene:
 
-## Starting the Engine
+1. `scene-change(Title)` → send `continuesave` to bridge
+2. Wait for `scene-change(MissionPreparation)`
+3. Send `planmission` → wait for `preview-ready`
+4. Send `startmission` → wait for `tactical-ready`
 
-The engine must be running before the game reaches the title screen.
+## Command-Line Arguments
 
-**Linux:**
+| Argument | Description |
+|----------|-------------|
+| (none) | Start HTTP server, wait passively |
+| `--on-title <route>` | Execute an engine route when Title scene is detected (e.g., `/navigate/tactical`) |
+| `--render <battle>` | Render heatmaps from a battle session and exit (no HTTP server) |
+| `--pattern <glob>` | Filter render jobs (default: `*`). Used with `--render` |
+
+### CLI Examples
+
+All examples assume `cd /path/to/Menace/Mods/BOAM/`.
+
 ```bash
-cd /path/to/Menace/Mods/BOAM/
+# Start server — passive, no auto-action
 ./start-tactical-engine.sh
+
+# Start server + auto-navigate to tactical when game connects
+./start-tactical-engine.sh --on-title /navigate/tactical
+
+# Start server + navigate to tactical + start a replay automatically
+./start-tactical-engine.sh --on-title /navigate/replay/battle_20260315_151451
+
+# Render heatmaps and exit (no server, no game needed)
+./TacticalEngine --render battle_20260315_151451
+./TacticalEngine --render battle_20260315_151451 --pattern "r01_*_stinger_*"
 ```
 
-**Windows:**
-```cmd
-cd C:\path\to\Menace\Mods\BOAM\
-start-tactical-engine.bat
-```
+### HTTP Examples
 
-**Verify:**
 ```bash
+# Health check
 curl -s http://127.0.0.1:7660/status
-# {"engine":"BOAM Tactical Engine v1.0.0","status":"ready",...}
+
+# Render heatmaps
+curl -s -X POST http://127.0.0.1:7660/render/battle/battle_20260315_151451 -d '{}'
+
+# List battles / start replay
+curl -s http://127.0.0.1:7660/replay/battles
+curl -s -X POST http://127.0.0.1:7660/replay/start -d '{"battle":"..."}'
+
+# Navigate to tactical (game must be on Title)
+curl -s -X POST http://127.0.0.1:7660/navigate/tactical
+
+# Navigate + replay
+curl -s -X POST http://127.0.0.1:7660/navigate/replay/battle_20260315_151451
+
+# Shutdown
+curl -s -X POST http://127.0.0.1:7660/shutdown
 ```

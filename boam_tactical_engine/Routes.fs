@@ -6,12 +6,14 @@ open System
 open System.Text.Json
 open Microsoft.AspNetCore.Builder
 open Microsoft.AspNetCore.Http
+open BOAM.TacticalEngine.Config
 open BOAM.TacticalEngine.GameTypes
 open BOAM.TacticalEngine.Node
 open BOAM.TacticalEngine.Walker
 open BOAM.TacticalEngine.HookPayload
 open BOAM.TacticalEngine.ActionLog
 open BOAM.TacticalEngine.RenderJobCollector
+open BOAM.TacticalEngine.HeatmapRenderer
 open BOAM.TacticalEngine.EventBus
 open BOAM.TacticalEngine.Replay
 open BOAM.TacticalEngine.Logging
@@ -35,6 +37,7 @@ type RouteContext = {
     CommandUrl: string
     BoamModDir: string
     IconBaseDir: string
+    OnTitleRoute: string option
 }
 
 /// Track current round for attaching movement data to render jobs.
@@ -69,7 +72,8 @@ let registerRoutes (app: WebApplication) (ctx: RouteContext) =
         logHook (sprintf "on-turn-start  faction=%d  opponents=%d  round=%d"
             factionState.FactionIndex (List.length factionState.Opponents) factionState.Round)
         // Flush previous round's render jobs before processing
-        RenderJobCollector.onRoundChange factionState.Round ctx.BoamModDir ctx.IconBaseDir
+        if Config.Current.Heatmaps then
+            RenderJobCollector.onRoundChange factionState.Round ctx.BoamModDir ctx.IconBaseDir
         currentRound <- factionState.Round
         ctx.EventBus.Push(TurnStart(factionState.FactionIndex, factionState.Round))
         let result = Walker.run ctx.Registry ctx.Store OnTurnStart Prefix factionState logEngine
@@ -84,6 +88,8 @@ let registerRoutes (app: WebApplication) (ctx: RouteContext) =
             payload.Round payload.Faction payload.Actor (List.length payload.Tiles) (List.length payload.Units) payload.VisionRange)
         if List.isEmpty payload.Tiles then
             return Results.Ok({| hook = "tile-scores"; status = "ok"; message = "no tile data" |})
+        elif not Config.Current.Heatmaps then
+            return Results.Ok({| hook = "tile-scores"; status = "ok"; message = "heatmaps disabled" |})
         else
             // Accumulate for deferred render job output
             RenderJobCollector.accumulate payload
@@ -96,7 +102,8 @@ let registerRoutes (app: WebApplication) (ctx: RouteContext) =
         logHook (sprintf "movement-finished  actor=%s  tile=(%d,%d)" payload.Actor payload.Tile.X payload.Tile.Z)
         ctx.EventBus.Push(MovementFinished(payload.Actor, payload.Tile.X, payload.Tile.Z))
         // Attach move destination to accumulated render job data
-        RenderJobCollector.attachMoveDestination payload.Actor currentRound payload.Tile
+        if Config.Current.Heatmaps then
+            RenderJobCollector.attachMoveDestination payload.Actor currentRound payload.Tile
         return Results.Ok({| hook = "movement-finished"; status = "ok"; actor = payload.Actor |})
     })) |> ignore
 
@@ -105,26 +112,18 @@ let registerRoutes (app: WebApplication) (ctx: RouteContext) =
         let scene = match root.TryGetProperty("scene") with | true, v -> v.GetString() |> Option.ofObj |> Option.defaultValue "" | _ -> ""
         logHook (sprintf "scene-change  scene=%s" scene)
         ctx.EventBus.Push(SceneChanged scene)
-        if scene = "Title" then
-            logInfo "Title scene detected — auto-navigating to tactical..."
+        match ctx.OnTitleRoute with
+        | Some route when scene = "Title" ->
+            logInfo (sprintf "Title scene detected — executing on-title route: %s" route)
             task {
                 try
                     do! Threading.Tasks.Task.Delay(3000)
-                    let! _ = ctx.HttpClient.PostAsync(sprintf "%s/cmd" ctx.BridgeUrl, new Net.Http.StringContent("continuesave"))
-                    logInfo "  sent continuesave, waiting for MissionPreparation scene..."
-                    let! _ = ctx.EventBus.WaitFor(fun e -> match e with SceneChanged s -> s = "MissionPreparation" | _ -> false)
-                    logInfo "  MissionPreparation loaded"
-                    do! Threading.Tasks.Task.Delay(1000)
-                    let! _ = ctx.HttpClient.PostAsync(sprintf "%s/cmd" ctx.BridgeUrl, new Net.Http.StringContent("planmission"))
-                    logInfo "  sent planmission, waiting for PreviewReady..."
-                    let! _ = ctx.EventBus.WaitFor(fun e -> match e with PreviewReady -> true | _ -> false)
-                    logInfo "  preview ready"
-                    let! _ = ctx.HttpClient.PostAsync(sprintf "%s/cmd" ctx.BridgeUrl, new Net.Http.StringContent("startmission"))
-                    logInfo "  sent startmission, waiting for TacticalReady..."
-                    let! _ = ctx.EventBus.WaitFor(fun e -> match e with TacticalReady -> true | _ -> false)
-                    logInfo "  in Tactical — auto-navigation complete"
-                with ex -> logWarn (sprintf "  auto-navigate failed: %s" ex.Message)
+                    let url = sprintf "http://127.0.0.1:%d%s" Config.Current.Port route
+                    let! resp = ctx.HttpClient.PostAsync(url, new Net.Http.StringContent(""))
+                    logInfo (sprintf "  on-title route %s → %d" route (int resp.StatusCode))
+                with ex -> logWarn (sprintf "  on-title failed: %s" ex.Message)
             } |> ignore
+        | _ -> ()
         return Results.Ok({| hook = "scene-change"; scene = scene |})
     })) |> ignore
 
@@ -175,7 +174,8 @@ let registerRoutes (app: WebApplication) (ctx: RouteContext) =
 
     app.MapPost("/hook/battle-end", Func<IResult>(fun () ->
         // Flush any remaining render jobs for the last round
-        RenderJobCollector.flushAll ctx.BoamModDir ctx.IconBaseDir
+        if Config.Current.Heatmaps then
+            RenderJobCollector.flushAll ctx.BoamModDir ctx.IconBaseDir
         currentRound <- 0
         ActionLog.endBattle ()
         logHook "battle-end"
@@ -190,7 +190,8 @@ let registerRoutes (app: WebApplication) (ctx: RouteContext) =
             payload.Round payload.Faction payload.Actor payload.Chosen.Name payload.Chosen.Score
             (List.length payload.Alternatives) (List.length payload.AttackCandidates))
         ActionLog.logActionDecision payload
-        RenderJobCollector.attachDecision payload
+        if Config.Current.Heatmaps then
+            RenderJobCollector.attachDecision payload
         return Results.Ok({| hook = "action-decision"; status = "ok" |})
     })) |> ignore
 
@@ -291,4 +292,108 @@ let registerRoutes (app: WebApplication) (ctx: RouteContext) =
         let! _ = ctx.EventBus.WaitFor(fun e -> match e with TacticalReady -> true | _ -> false)
         logInfo "  in Tactical"
         return Results.Ok({| status = "tactical"; message = "Navigated to tactical via events" |})
+    })) |> ignore
+
+    app.MapPost("/navigate/replay/{battleName}", Func<string, Threading.Tasks.Task<IResult>>(fun battleName -> task {
+        logInfo (sprintf "Navigate to tactical + replay %s" battleName)
+        let logPath = IO.Path.Combine(ctx.BoamModDir, "battle_reports", battleName, "round_log.jsonl")
+        if not (IO.File.Exists(logPath)) then
+            return Results.NotFound({| error = sprintf "No round_log.jsonl in %s" battleName |})
+        else
+            // Navigate to tactical first
+            ctx.EventBus.Clear()
+            let! _ = ctx.HttpClient.PostAsync(sprintf "%s/cmd" ctx.BridgeUrl, new Net.Http.StringContent("continuesave"))
+            logInfo "  sent continuesave, waiting for MissionPreparation..."
+            let! _ = ctx.EventBus.WaitFor(fun e -> match e with SceneChanged s -> s = "MissionPreparation" | _ -> false)
+            logInfo "  MissionPreparation loaded"
+            do! Threading.Tasks.Task.Delay(1000)
+            let! _ = ctx.HttpClient.PostAsync(sprintf "%s/cmd" ctx.BridgeUrl, new Net.Http.StringContent("planmission"))
+            logInfo "  sent planmission, waiting for PreviewReady..."
+            let! _ = ctx.EventBus.WaitFor(fun e -> match e with PreviewReady -> true | _ -> false)
+            logInfo "  preview ready"
+            let! _ = ctx.HttpClient.PostAsync(sprintf "%s/cmd" ctx.BridgeUrl, new Net.Http.StringContent("startmission"))
+            logInfo "  sent startmission, waiting for TacticalReady..."
+            let! _ = ctx.EventBus.WaitFor(fun e -> match e with TacticalReady -> true | _ -> false)
+            logInfo "  in Tactical — starting replay"
+            // Start replay session
+            let actions = Replay.loadActions logPath
+            Replay.startSession actions
+            try
+                let! _ = ctx.HttpClient.PostAsync(sprintf "%s/replay/start" ctx.CommandUrl, new Net.Http.StringContent(""))
+                ()
+            with ex -> logWarn (sprintf "Failed to notify bridge of replay start: %s" ex.Message)
+            logInfo (sprintf "Replay session started: %s (%d actions)" battleName (List.length actions))
+            return Results.Ok({| status = "replaying"; battle = battleName; actions = List.length actions |})
+    })) |> ignore
+
+    // --- Render ---
+
+    app.MapPost("/render/battle/{battleName}", Func<string, HttpRequest, Threading.Tasks.Task<IResult>>(fun battleName req -> task {
+        let! root = readJson req
+        let pattern = match root.TryGetProperty("pattern") with | true, v -> v.GetString() |> Option.ofObj |> Option.defaultValue "*" | _ -> "*"
+        let battleDir = IO.Path.Combine(ctx.BoamModDir, "battle_reports", battleName)
+        let jobDir = IO.Path.Combine(battleDir, "render_jobs")
+        if not (IO.Directory.Exists(jobDir)) then
+            return Results.NotFound({| error = sprintf "No render_jobs in %s" battleName |})
+        else
+            let heatmapDir = IO.Path.Combine(battleDir, "heatmaps")
+            IO.Directory.CreateDirectory(heatmapDir) |> ignore
+
+            // Match job files against glob pattern
+            let allFiles = IO.Directory.GetFiles(jobDir, "*.json") |> Array.sort
+            let matchesPattern (fileName: string) =
+                let name = IO.Path.GetFileNameWithoutExtension(fileName)
+                let pat = pattern.Replace("*", "")
+                if pattern = "*" then true
+                elif pattern.StartsWith("*") && pattern.EndsWith("*") then name.Contains(pat)
+                elif pattern.StartsWith("*") then name.EndsWith(pat)
+                elif pattern.EndsWith("*") then name.StartsWith(pat)
+                else name = pattern || name = IO.Path.GetFileNameWithoutExtension(pattern)
+            let matchedFiles = allFiles |> Array.filter (fun f -> matchesPattern (IO.Path.GetFileName(f)))
+
+            logInfo (sprintf "Render: %s pattern='%s' → %d/%d jobs" battleName pattern (Array.length matchedFiles) (Array.length allFiles))
+
+            let mutable rendered = 0
+            let mutable errors = 0
+            let results = System.Collections.Generic.List<{| file: string; status: string; output: string |}>()
+
+            for jobPath in matchedFiles do
+                try
+                    let jobJson = IO.File.ReadAllText(jobPath)
+                    let job = JsonDocument.Parse(jobJson).RootElement
+
+                    let tiles = HookPayload.tryArray job "tiles" (fun el ->
+                        { X = el.GetProperty("x").GetInt32()
+                          Z = el.GetProperty("z").GetInt32()
+                          Combined = el.GetProperty("combined").GetSingle() })
+
+                    let units = HookPayload.tryArray job "units" (fun el ->
+                        { Faction = el.GetProperty("faction").GetInt32()
+                          Position = { X = el.GetProperty("x").GetInt32(); Z = el.GetProperty("z").GetInt32() }
+                          Actor = HookPayload.tryStr el "actor" ""
+                          Name = HookPayload.tryStr el "name" ""
+                          Leader = HookPayload.tryStr el "leader" "" })
+
+                    let actorPos = HookPayload.parseOptionalTilePos job "actorPosition"
+                    let moveDest = HookPayload.parseOptionalTilePos job "moveDestination"
+                    let faction = HookPayload.tryInt job "faction" 0
+                    let visionRange = HookPayload.tryInt job "visionRange" 0
+                    let actor = HookPayload.tryStr job "actor" ""
+                    let bgPath = HookPayload.tryStr job "mapBgPath" ""
+                    let infoPath = HookPayload.tryStr job "mapInfoPath" ""
+                    let iconBase = HookPayload.tryStr job "iconBaseDir" ctx.IconBaseDir
+
+                    let label = IO.Path.GetFileNameWithoutExtension(jobPath)
+                    let outPath = renderFromPaths bgPath infoPath tiles actorPos units faction iconBase heatmapDir label actor visionRange moveDest
+
+                    logEngine (sprintf "  rendered: %s" (IO.Path.GetFileName(outPath)))
+                    rendered <- rendered + 1
+                    results.Add({| file = IO.Path.GetFileName(jobPath); status = "ok"; output = IO.Path.GetFileName(outPath) |})
+                with ex ->
+                    logWarn (sprintf "  render failed: %s — %s" (IO.Path.GetFileName(jobPath)) ex.Message)
+                    errors <- errors + 1
+                    results.Add({| file = IO.Path.GetFileName(jobPath); status = "error"; output = ex.Message |})
+
+            logInfo (sprintf "Render complete: %d rendered, %d errors" rendered errors)
+            return Results.Ok({| battle = battleName; pattern = pattern; rendered = rendered; errors = errors; outputDir = heatmapDir; results = results |})
     })) |> ignore

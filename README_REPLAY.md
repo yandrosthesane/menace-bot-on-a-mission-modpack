@@ -119,16 +119,35 @@ For each round in the battle:
    - It's the player's turn on the next round
    - Timeout: 90 seconds
 
-## How to Replay a Battle (Step by Step)
+## Commands
 
-1. **Play a mission** normally and note the rounds you want to test
-2. **Quit the game** — the tactical engine keeps the battle data in memory
-3. **Relaunch the game** and load the same save
-4. **Get to Tactical** (`continuesave` → `planmission` → `startmission`)
-5. **Check available battles:** `curl -s http://127.0.0.1:7660/replay/battles`
-6. **Start the replay:** `curl -s -X POST http://127.0.0.1:7660/replay/run -d '{"battle": "<name>"}'`
-7. **Watch the game** — units will move, shoot, and act automatically
-8. **Check the result** — the response shows succeeded/failed counts and a detailed log
+All examples assume `cd /path/to/Menace/Mods/BOAM/`.
+
+### CLI (fully automated — navigate + replay in one command)
+
+```bash
+# Start engine with auto-replay, then launch the game
+./start-tactical-engine.sh --on-title /navigate/replay/battle_20260315_151451
+steam -applaunch 2432860
+# Engine will: detect Title → load save → start mission → begin replay
+```
+
+### HTTP (manual control while engine is running)
+
+```bash
+# List recorded battles
+curl -s http://127.0.0.1:7660/replay/battles
+
+# Start a replay (game must be in Tactical)
+curl -s -X POST http://127.0.0.1:7660/replay/start \
+  -d '{"battle":"battle_20260315_151451"}'
+
+# Stop an active replay
+curl -s -X POST http://127.0.0.1:7660/replay/stop
+
+# Navigate to tactical + start replay (game must be on Title)
+curl -s -X POST http://127.0.0.1:7660/navigate/replay/battle_20260315_151451
+```
 
 ## Troubleshooting
 
@@ -142,10 +161,15 @@ For each round in the battle:
 
 Battle reports are stored in the game's mod directory:
 ```
-~/.steam/steam/steamapps/common/Menace/Mods/BOAM/battle_reports/<battle_name>/round_log.jsonl
+Mods/BOAM/battle_reports/<battle_name>/
+├── round_log.jsonl               Action log (used by replay)
+├── dramatis_personae.json        All actors with stable UUIDs
+├── mapbg.png                     Captured map background
+├── render_jobs/                  Heatmap render job data
+└── heatmaps/                     Rendered heatmap PNGs
 ```
 
-Each line is a JSON object with the action data. Reports persist across game restarts but are cleared when BOAM is redeployed (deploy wipes `Mods/BOAM/`).
+Reports persist across game restarts but are cleared when BOAM is redeployed (deploy wipes `Mods/BOAM/`). The battle session directory is created at mission prep (`OnPreviewReady`) — map data is written directly there.
 
 ## Determinism
 

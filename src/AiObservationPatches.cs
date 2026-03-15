@@ -57,9 +57,12 @@ static class Patch_OnTurnStart
                 }
             }
 
+            int round = BoamBridge.Instance?.Round ?? 0;
+
             var payload = JsonSerializer.Serialize(new
             {
                 hook = "on-turn-start",
+                round,
                 faction = factionIdx,
                 opponentCount,
                 opponents = oppList

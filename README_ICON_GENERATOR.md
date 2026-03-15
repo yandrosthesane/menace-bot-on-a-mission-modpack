@@ -11,7 +11,7 @@ Game assets are **not shipped** with BOAM. You need to extract or locate the sou
 <ExtractedDataPath>/Assets/Resources/ui/sprites/factions/
 ```
 
-Copy the PNGs you want into `UserData/BOAM/`, point `icon-config.json` sources at it, and run the generator.
+Copy the PNGs you want into `UserData/BOAM/`, point `icon-config.json5` sources at it, and run the generator.
 
 ## File Locations & Load Order
 
@@ -33,8 +33,8 @@ Each versioned config has a `configVersion` field. When the mod default version 
 |-------------|:-:|---|
 | `tactical_map.json5` | 1 | Minimap keybindings, visual defaults, layout |
 | `tactical_map_presets.json5` | 1 | Display presets, map styles, entity styles, anchors |
-| `config.json` | 1 | Tactical engine ports, rendering, heatmap settings |
-| `icon-config.json` | 1 | Icon generation sources and mappings |
+| `config.json5` | 1 | Tactical engine ports, rendering, heatmap settings |
+| `icon-config.json5` | 1 | Icon generation sources and mappings |
 
 All configs live under `configs/` in both locations:
 - **User**: `UserData/BOAM/configs/` (persistent, checked first)
@@ -58,7 +58,7 @@ If unset, defaults to `<game_dir>/UserData/BOAM/` where `<game_dir>` is the Mena
 
 ## Running the Generator
 
-Run from the BOAM mod folder. It reads `icon-config.json` and resizes every source PNG to the configured output location.
+Run from the BOAM mod folder. It reads `icon-config.json5` and resizes every source PNG to the configured output location.
 
 **Linux:**
 ```bash
@@ -77,7 +77,7 @@ boam-icons.exe
 | Flag | Description |
 |------|-------------|
 | `--force` | Overwrite existing icons (default: skip existing files) |
-| `--config <path>` | Path to config file (default: `icon-config.json` next to the executable) |
+| `--config <path>` | Path to config file (default: `icon-config.json5` next to the executable) |
 | `--help` | Show usage |
 
 By default, existing icons are preserved — only missing icons are generated. Use `--force` after updating source art or changing icon sizes.
@@ -100,7 +100,7 @@ When rendering a unit on the heatmap or minimap overlay, the icon is resolved in
 
 When a leader or template icon is missing, the engine auto-copies the faction icon to the expected path. This seeds placeholder files with the correct filenames — replace them with proper art whenever you want.
 
-## icon-config.json
+## icon-config.json5
 
 The config file declares where source art lives and how each icon maps from source to output.
 
@@ -192,7 +192,7 @@ Each entry in `factions`, `templates`, and `leaders`:
 
 1. **Identify the template name** from tactical engine logs or heatmap filenames. The engine strips the prefix before the last dot — `enemy.alien_bombardier` → `alien_bombardier`.
 2. **Find or create source art** from game data or your own PNGs.
-3. **Add entry to `icon-config.json`** — output filename must match the template identifier.
+3. **Add entry to `icon-config.json5`** — output filename must match the template identifier.
 4. **Regenerate:** `./boam-icons --force`
 5. **Restart the game** (icon cache is in-memory).
 
