@@ -18,7 +18,7 @@ Recording is **automatic**. When you enter a tactical mission with BOAM active a
 2. Each action is sent to the tactical engine's `/hook/player-action` endpoint
 3. The engine writes them to `battle_reports/<battle_name>/round_log.jsonl`
 
-Battle names are auto-generated as `battle_YYYYMMDD_HHmmss`.
+Battle names are auto-generated as `battle_YYYY_MM_DD_HH_MM`.
 
 ### What Gets Recorded
 
@@ -46,7 +46,7 @@ Returns:
 ```json
 {
   "battles": [
-    { "name": "battle_20260314_111300", "rounds": [1, 2, 3], "actionCount": 37 }
+    { "name": "battle_2026_03_14_11_13", "rounds": [1, 2, 3], "actionCount": 37 }
   ],
   "count": 1
 }
@@ -81,21 +81,21 @@ curl -s -X POST http://127.0.0.1:7660/replay/run \
 ```bash
 # Replay all rounds with default 3s delay
 curl -s -X POST http://127.0.0.1:7660/replay/run \
-  -d '{"battle": "battle_20260314_111300"}'
+  -d '{"battle": "battle_2026_03_14_11_13"}'
 
 # Replay only round 1
 curl -s -X POST http://127.0.0.1:7660/replay/run \
-  -d '{"battle": "battle_20260314_111300", "round": 1}'
+  -d '{"battle": "battle_2026_03_14_11_13", "round": 1}'
 
 # Replay with faster animation delay (1.5s)
 curl -s -X POST http://127.0.0.1:7660/replay/run \
-  -d '{"battle": "battle_20260314_111300", "delayMs": 1500}'
+  -d '{"battle": "battle_2026_03_14_11_13", "delayMs": 1500}'
 ```
 
 **Returns:**
 ```json
 {
-  "battle": "battle_20260314_111300",
+  "battle": "battle_2026_03_14_11_13",
   "round": null,
   "total": 37,
   "succeeded": 35,
@@ -127,7 +127,7 @@ All examples assume `cd /path/to/Menace/Mods/BOAM/`.
 
 ```bash
 # Start engine with auto-replay, then launch the game
-./start-tactical-engine.sh --on-title /navigate/replay/battle_20260315_151451
+./start-tactical-engine.sh --on-title /navigate/replay/battle_2026_03_15_15_14
 steam -applaunch 2432860
 # Engine will: detect Title → load save → start mission → begin replay
 ```
@@ -140,13 +140,13 @@ curl -s http://127.0.0.1:7660/replay/battles
 
 # Start a replay (game must be in Tactical)
 curl -s -X POST http://127.0.0.1:7660/replay/start \
-  -d '{"battle":"battle_20260315_151451"}'
+  -d '{"battle":"battle_2026_03_15_15_14"}'
 
 # Stop an active replay
 curl -s -X POST http://127.0.0.1:7660/replay/stop
 
 # Navigate to tactical + start replay (game must be on Title)
-curl -s -X POST http://127.0.0.1:7660/navigate/replay/battle_20260315_151451
+curl -s -X POST http://127.0.0.1:7660/navigate/replay/battle_2026_03_15_15_14
 ```
 
 ## Troubleshooting
@@ -159,9 +159,10 @@ curl -s -X POST http://127.0.0.1:7660/navigate/replay/battle_20260315_151451
 
 ## Battle Report Storage
 
-Battle reports are stored in the game's mod directory:
+Battle reports are stored in the persistent data directory:
 ```
-Mods/BOAM/battle_reports/<battle_name>/
+UserData/BOAM/battle_reports/<battle_name>/
+├── boam_version.json             Engine version that recorded the battle
 ├── round_log.jsonl               Action log (used by replay)
 ├── dramatis_personae.json        All actors with stable UUIDs
 ├── mapbg.png                     Captured map background
@@ -169,11 +170,26 @@ Mods/BOAM/battle_reports/<battle_name>/
 └── heatmaps/                     Rendered heatmap PNGs
 ```
 
-Reports persist across game restarts but are cleared when BOAM is redeployed (deploy wipes `Mods/BOAM/`). The battle session directory is created at mission prep (`OnPreviewReady`) — map data is written directly there.
+Reports are stored in `UserData/BOAM/` and persist across game restarts and mod deploys. The battle session directory is created at mission prep (`OnPreviewReady`) — map data is written directly there.
 
 ## Determinism
 
 Replays are deterministic — given the same save (same seed) and the same actions, the outcome will be identical. The game's combat resolution uses the mission seed for RNG, so hits, misses, and damage are fully reproducible.
 
+## Recent Fixes
+
+### Actor switch during replay (FIXED)
+
+When the player selected a different unit than the one the game auto-selected (e.g., game selected lim but player played rewa first), the replay would deadlock — waiting for the auto-selected actor while the next action was for a different one.
+
+**Fix:** When the replay engine returns `"waiting"` with a different expected actor, the bridge now sends a `select` command to switch to that actor. Cleared the skill animation gate on player actor change to prevent AI attack animations from blocking the pull loop.
+
+### Move confirmation timing (IN PROGRESS)
+
+Click-to-move requires two clicks: first to preview the path, second to confirm. During replay, both clicks fire within ~500ms. The game sometimes doesn't have time to compute the path between clicks, causing the second click to be treated as another preview rather than a confirmation. This causes moves to silently fail.
+
+**Status:** Investigating — need to add delay between path-preview and confirm clicks, or detect when the game transitions from NoneAction to ComputePathAction.
+
 ## Known Limitations
+
 - **Embark/disembark via console:** These use `ContainEntity`/`EjectEntity` directly, which bypasses the game's normal movement animation. The visual result is correct but looks instant rather than animated.

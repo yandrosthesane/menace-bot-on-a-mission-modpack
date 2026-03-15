@@ -37,6 +37,7 @@ type RouteContext = {
     CommandUrl: string
     BoamModDir: string
     IconBaseDir: string
+    BattleReportsDir: string
     OnTitleRoute: string option
 }
 
@@ -166,7 +167,10 @@ let registerRoutes (app: WebApplication) (ctx: RouteContext) =
     app.MapPost("/hook/battle-start", Func<HttpRequest, Threading.Tasks.Task<IResult>>(fun req -> task {
         let! root = readJson req
         let payload = parseBattleStart root
-        let dir = ActionLog.startBattle ctx.BoamModDir payload.SessionDir
+        let dir = ActionLog.startBattle ctx.BattleReportsDir payload.SessionDir
+        // Write BOAM version file
+        let versionJson = sprintf """{"engine":"%s","build":%d,"timestamp":"%s"}""" ctx.Version ctx.Build (DateTime.UtcNow.ToString("o"))
+        IO.File.WriteAllText(IO.Path.Combine(dir, "boam_version.json"), versionJson)
         logHook (sprintf "battle-start  session=%s" (IO.Path.GetFileName(dir)))
         ctx.EventBus.Push(BattleStarted)
         return Results.Ok({| hook = "battle-start"; status = "ok"; battleDir = dir |})
@@ -208,7 +212,7 @@ let registerRoutes (app: WebApplication) (ctx: RouteContext) =
     // --- Replay ---
 
     app.MapGet("/replay/battles", Func<IResult>(fun () ->
-        let reportsDir = IO.Path.Combine(ctx.BoamModDir, "battle_reports")
+        let reportsDir = ctx.BattleReportsDir
         if not (IO.Directory.Exists(reportsDir)) then
             Results.Ok({| battles = [||]; count = 0 |})
         else
@@ -223,7 +227,7 @@ let registerRoutes (app: WebApplication) (ctx: RouteContext) =
     )) |> ignore
 
     app.MapGet("/replay/actions/{battleName}", Func<string, IResult>(fun battleName ->
-        let logPath = IO.Path.Combine(ctx.BoamModDir, "battle_reports", battleName, "round_log.jsonl")
+        let logPath = IO.Path.Combine(ctx.BattleReportsDir, battleName, "round_log.jsonl")
         if not (IO.File.Exists(logPath)) then
             Results.NotFound({| error = sprintf "No round_log.jsonl in %s" battleName |})
         else
@@ -237,7 +241,7 @@ let registerRoutes (app: WebApplication) (ctx: RouteContext) =
         if String.IsNullOrEmpty(battleName) then
             return Results.BadRequest({| error = "missing 'battle' field" |})
         else
-            let logPath = IO.Path.Combine(ctx.BoamModDir, "battle_reports", battleName, "round_log.jsonl")
+            let logPath = IO.Path.Combine(ctx.BattleReportsDir, battleName, "round_log.jsonl")
             if not (IO.File.Exists(logPath)) then
                 return Results.NotFound({| error = sprintf "No round_log.jsonl in %s" battleName |})
             else
@@ -296,12 +300,13 @@ let registerRoutes (app: WebApplication) (ctx: RouteContext) =
 
     app.MapPost("/navigate/replay/{battleName}", Func<string, Threading.Tasks.Task<IResult>>(fun battleName -> task {
         logInfo (sprintf "Navigate to tactical + replay %s" battleName)
-        let logPath = IO.Path.Combine(ctx.BoamModDir, "battle_reports", battleName, "round_log.jsonl")
+        let logPath = IO.Path.Combine(ctx.BattleReportsDir, battleName, "round_log.jsonl")
         if not (IO.File.Exists(logPath)) then
             return Results.NotFound({| error = sprintf "No round_log.jsonl in %s" battleName |})
         else
             // Navigate to tactical first
             ctx.EventBus.Clear()
+            do! Threading.Tasks.Task.Delay(3000)
             let! _ = ctx.HttpClient.PostAsync(sprintf "%s/cmd" ctx.BridgeUrl, new Net.Http.StringContent("continuesave"))
             logInfo "  sent continuesave, waiting for MissionPreparation..."
             let! _ = ctx.EventBus.WaitFor(fun e -> match e with SceneChanged s -> s = "MissionPreparation" | _ -> false)
@@ -331,7 +336,7 @@ let registerRoutes (app: WebApplication) (ctx: RouteContext) =
     app.MapPost("/render/battle/{battleName}", Func<string, HttpRequest, Threading.Tasks.Task<IResult>>(fun battleName req -> task {
         let! root = readJson req
         let pattern = match root.TryGetProperty("pattern") with | true, v -> v.GetString() |> Option.ofObj |> Option.defaultValue "*" | _ -> "*"
-        let battleDir = IO.Path.Combine(ctx.BoamModDir, "battle_reports", battleName)
+        let battleDir = IO.Path.Combine(ctx.BattleReportsDir, battleName)
         let jobDir = IO.Path.Combine(battleDir, "render_jobs")
         if not (IO.Directory.Exists(jobDir)) then
             return Results.NotFound({| error = sprintf "No render_jobs in %s" battleName |})

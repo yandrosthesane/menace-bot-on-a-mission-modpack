@@ -299,8 +299,24 @@ public class BoamBridge : IModpackPlugin
                 var doc = JsonSerializer.Deserialize<JsonElement>(json);
 
                 var status = doc.GetProperty("status").GetString();
-                if (status == "done" || status == "waiting")
+                if (status == "done")
                     return;
+                if (status == "waiting")
+                {
+                    // The replay's next action is for a different actor — select it
+                    var expectedActor = doc.TryGetProperty("actor", out var av) ? av.GetString() ?? "" : "";
+                    if (!string.IsNullOrEmpty(expectedActor) && expectedActor != activeUuid)
+                    {
+                        Logger.Msg($"[BOAM] Replay: switching to {expectedActor} (game has {activeUuid})");
+                        var selectCmd = new BoamCommandServer.ActionCommand
+                        {
+                            Action = "select", X = 0, Z = 0, Skill = "", Actor = expectedActor, DelayMs = 500
+                        };
+                        BoamCommandExecutor.Execute(selectCmd, Logger);
+                        _nextCommandTime = UnityEngine.Time.time + 0.5f;
+                    }
+                    return;
+                }
 
                 var action = doc.GetProperty("action").GetString() ?? "";
                 var x = doc.TryGetProperty("x", out var xv) ? xv.GetInt32() : 0;

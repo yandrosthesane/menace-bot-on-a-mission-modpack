@@ -42,7 +42,7 @@ Menace/
 │   │   ├── factions/
 │   │   └── templates/
 │   └── battle_reports/            Recorded battles (auto-created per session)
-│       └── battle_YYYYMMDD_HHMMSS/
+│       └── battle_YYYY_MM_DD_HH_MM/
 │           ├── mapbg.png          Captured map background
 │           ├── mapbg.info         Tile dimensions
 │           ├── mapdata.bin        Binary tile data
@@ -75,7 +75,7 @@ cd /path/to/Menace/Mods/BOAM/
 ./start-tactical-engine.sh --on-title /navigate/tactical
 
 # Auto-navigate + start a replay when game connects
-./start-tactical-engine.sh --on-title /navigate/replay/battle_20260315_151451
+./start-tactical-engine.sh --on-title /navigate/replay/battle_2026_03_15_15_14
 ```
 
 Then launch the game normally through Steam.
@@ -95,13 +95,13 @@ After playing a round, render job data is flushed to disk. Render heatmaps on de
 
 ```bash
 # CLI — render and exit (no server needed)
-./TacticalEngine --render battle_20260315_151451
-./TacticalEngine --render battle_20260315_151451 --pattern "r01_*_stinger_*"
-./TacticalEngine --render battle_20260315_151451 --pattern "*_wildlife_*"
+./TacticalEngine --render battle_2026_03_15_15_14
+./TacticalEngine --render battle_2026_03_15_15_14 --pattern "r01_*_stinger_*"
+./TacticalEngine --render battle_2026_03_15_15_14 --pattern "*_wildlife_*"
 
 # HTTP — while engine is running
-curl -s -X POST http://127.0.0.1:7660/render/battle/battle_20260315_151451 -d '{}'
-curl -s -X POST http://127.0.0.1:7660/render/battle/battle_20260315_151451 \
+curl -s -X POST http://127.0.0.1:7660/render/battle/battle_2026_03_15_15_14 -d '{}'
+curl -s -X POST http://127.0.0.1:7660/render/battle/battle_2026_03_15_15_14 \
   -d '{"pattern": "r01_wildlife*"}'
 ```
 
@@ -111,13 +111,13 @@ See [Heatmap Renderer](README_HEATMAPS.md).
 
 ```bash
 # CLI — fully automated: navigate to tactical + start replay
-./start-tactical-engine.sh --on-title /navigate/replay/battle_20260315_151451
+./start-tactical-engine.sh --on-title /navigate/replay/battle_2026_03_15_15_14
 # Then launch the game — everything happens automatically
 
 # HTTP — manual control while engine is running
 curl -s http://127.0.0.1:7660/replay/battles
 curl -s -X POST http://127.0.0.1:7660/replay/start \
-  -d '{"battle":"battle_20260315_151451"}'
+  -d '{"battle":"battle_2026_03_15_15_14"}'
 ```
 
 See [Replay Manual](README_REPLAY.md).

@@ -115,5 +115,5 @@ let parsePlayerAction (root: JsonElement) : PlayerActionPayload =
 
 let parseBattleStart (root: JsonElement) : BattleStartPayload =
     let sd = tryStr root "sessionDir" ""
-    { Timestamp = tryStr root "timestamp" (System.DateTime.Now.ToString("yyyyMMdd_HHmmss"))
+    { Timestamp = tryStr root "timestamp" (System.DateTime.Now.ToString("yyyy_MM_dd_HH_mm"))
       SessionDir = if sd = "" then None else Some sd }

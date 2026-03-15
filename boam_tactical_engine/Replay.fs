@@ -121,9 +121,17 @@ let rec getNext (activeActor: string) (gameRound: int) : string =
                 // Action matches active actor — serve it
                 session.Index <- session.Index + 1
                 session.Log <- sprintf "  → %s %s (%d,%d) %s" action.Actor action.ActionType action.TileX action.TileZ action.SkillName :: session.Log
+                // Delay: if this click is followed by another click to the same tile (path preview → confirm),
+                // use a longer delay so the game has time to compute the path and transition to ComputePathAction.
                 let delay =
                     match action.ActionType with
-                    | "click" | "useskill" -> 500
+                    | "click" ->
+                        let nextIsConfirm =
+                            session.Index < session.Actions.Length &&
+                            (let next = session.Actions.[session.Index]
+                             next.Actor = action.Actor && next.ActionType = "click" && next.TileX = action.TileX && next.TileZ = action.TileZ)
+                        if nextIsConfirm then 1000 else 500
+                    | "useskill" -> 500
                     | _ -> 0
                 JsonSerializer.Serialize({|
                     status = "action"

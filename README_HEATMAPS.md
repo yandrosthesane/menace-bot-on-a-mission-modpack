@@ -67,11 +67,11 @@ The `pattern` field matches against render job filenames (without `.json`):
 
 ```json
 {
-  "battle": "battle_20260315_151451",
+  "battle": "battle_2026_03_15_15_14",
   "pattern": "r01_wildlife_alien_stinger*",
   "rendered": 4,
   "errors": 0,
-  "outputDir": ".../battle_20260315_151451/heatmaps",
+  "outputDir": ".../battle_2026_03_15_15_14/heatmaps",
   "results": [
     { "file": "r01_wildlife_alien_stinger_1.json", "status": "ok", "output": "r01_wildlife_alien_stinger_1.png" },
     { "file": "r01_wildlife_alien_stinger_2.json", "status": "ok", "output": "r01_wildlife_alien_stinger_2.png" }
@@ -103,26 +103,26 @@ All examples assume `cd /path/to/Menace/Mods/BOAM/`.
 
 ```bash
 # Render all jobs from a battle
-./TacticalEngine --render battle_20260315_151451
+./TacticalEngine --render battle_2026_03_15_15_14
 
 # Render only stingers from round 1
-./TacticalEngine --render battle_20260315_151451 --pattern "r01_*_stinger_*"
+./TacticalEngine --render battle_2026_03_15_15_14 --pattern "r01_*_stinger_*"
 
 # Render all wildlife across rounds
-./TacticalEngine --render battle_20260315_151451 --pattern "*_wildlife_*"
+./TacticalEngine --render battle_2026_03_15_15_14 --pattern "*_wildlife_*"
 
 # Render a specific unit
-./TacticalEngine --render battle_20260315_151451 --pattern "*_alien_big_blaster*"
+./TacticalEngine --render battle_2026_03_15_15_14 --pattern "*_alien_big_blaster*"
 ```
 
 ### HTTP (while engine is running)
 
 ```bash
 # Render all jobs
-curl -s -X POST http://127.0.0.1:7660/render/battle/battle_20260315_151451 -d '{}'
+curl -s -X POST http://127.0.0.1:7660/render/battle/battle_2026_03_15_15_14 -d '{}'
 
 # Render with pattern
-curl -s -X POST http://127.0.0.1:7660/render/battle/battle_20260315_151451 \
+curl -s -X POST http://127.0.0.1:7660/render/battle/battle_2026_03_15_15_14 \
   -d '{"pattern": "r01_wildlife*"}'
 ```
 

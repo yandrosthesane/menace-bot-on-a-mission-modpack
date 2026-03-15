@@ -39,7 +39,7 @@ The `heatmaps` flag in `config.json5` controls whether render job data is collec
 One JSON file per actor per round in `battle_reports/<session>/render_jobs/`:
 
 ```
-battle_reports/battle_20260315_151451/
+battle_reports/battle_2026_03_15_15_14/
   mapbg.png              ← captured at mission prep
   mapbg.info             ← tile dimensions
   mapdata.bin            ← binary tile data (heights + flags)
@@ -75,8 +75,8 @@ Each file is self-contained — everything needed to produce a heatmap PNG:
     "target": null,
     "attackCandidates": []
   },
-  "mapBgPath": ".../battle_20260315_151451/mapbg.png",
-  "mapInfoPath": ".../battle_20260315_151451/mapbg.info",
+  "mapBgPath": ".../battle_2026_03_15_15_14/mapbg.png",
+  "mapInfoPath": ".../battle_2026_03_15_15_14/mapbg.info",
   "iconBaseDir": ".../Mods/BOAM/icons"
 }
 ```
@@ -113,11 +113,11 @@ The `pattern` field matches against render job filenames (without `.json` extens
 
 ```json
 {
-  "battle": "battle_20260315_151451",
+  "battle": "battle_2026_03_15_15_14",
   "pattern": "r01_wildlife_alien_stinger*",
   "rendered": 4,
   "errors": 0,
-  "outputDir": ".../battle_20260315_151451/heatmaps",
+  "outputDir": ".../battle_2026_03_15_15_14/heatmaps",
   "results": [
     { "file": "r01_wildlife_alien_stinger_1.json", "status": "ok", "output": "r01_wildlife_alien_stinger_1.png" },
     ...

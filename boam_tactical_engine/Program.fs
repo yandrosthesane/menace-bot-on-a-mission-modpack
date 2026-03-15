@@ -82,12 +82,17 @@ let main argv =
             ".steam/steam/steamapps/common/Menace"))
     let boamModDir = IO.Path.Combine(gameDir, "Mods", "BOAM")
     let iconBaseDir = IO.Path.Combine(boamModDir, "icons")
+    let persistentDir =
+        Environment.GetEnvironmentVariable("BOAM_PERSISTENT_ASSETS")
+        |> Option.ofObj
+        |> Option.defaultValue (IO.Path.Combine(gameDir, "UserData", "BOAM"))
+    let battleReportsDir = IO.Path.Combine(persistentDir, "battle_reports")
 
     // --render: render heatmaps and exit (no HTTP server needed)
     match renderBattle with
     | Some battleName ->
         logInfo (sprintf "Render mode: %s pattern='%s'" battleName renderPattern)
-        let battleDir = IO.Path.Combine(boamModDir, "battle_reports", battleName)
+        let battleDir = IO.Path.Combine(battleReportsDir, battleName)
         let jobDir = IO.Path.Combine(battleDir, "render_jobs")
         if not (IO.Directory.Exists(jobDir)) then
             logWarn (sprintf "No render_jobs in %s" battleDir)
@@ -156,6 +161,7 @@ let main argv =
         CommandUrl = sprintf "http://127.0.0.1:%d" Config.Current.CommandPort
         BoamModDir = boamModDir
         IconBaseDir = iconBaseDir
+        BattleReportsDir = battleReportsDir
         OnTitleRoute = onTitleRoute
     }
 

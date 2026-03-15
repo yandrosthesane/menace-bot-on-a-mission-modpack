@@ -69,7 +69,7 @@ Native .NET 10 process that receives game hook data, collects deferred render jo
 All outputs for a session:
 
 ```
-battle_reports/battle_YYYYMMDD_HHMMSS/
+battle_reports/battle_YYYY_MM_DD_HH_MM/
 ├── mapbg.png                     Captured map background
 ├── mapbg.info                    Tile dimensions (texW,texH,tilesX,tilesZ)
 ├── mapdata.bin                   Binary tile data (heights + flags)
@@ -114,11 +114,11 @@ All examples assume `cd /path/to/Menace/Mods/BOAM/`.
 ./start-tactical-engine.sh --on-title /navigate/tactical
 
 # Start server + navigate to tactical + start a replay automatically
-./start-tactical-engine.sh --on-title /navigate/replay/battle_20260315_151451
+./start-tactical-engine.sh --on-title /navigate/replay/battle_2026_03_15_15_14
 
 # Render heatmaps and exit (no server, no game needed)
-./TacticalEngine --render battle_20260315_151451
-./TacticalEngine --render battle_20260315_151451 --pattern "r01_*_stinger_*"
+./TacticalEngine --render battle_2026_03_15_15_14
+./TacticalEngine --render battle_2026_03_15_15_14 --pattern "r01_*_stinger_*"
 ```
 
 ### HTTP Examples
@@ -128,7 +128,7 @@ All examples assume `cd /path/to/Menace/Mods/BOAM/`.
 curl -s http://127.0.0.1:7660/status
 
 # Render heatmaps
-curl -s -X POST http://127.0.0.1:7660/render/battle/battle_20260315_151451 -d '{}'
+curl -s -X POST http://127.0.0.1:7660/render/battle/battle_2026_03_15_15_14 -d '{}'
 
 # List battles / start replay
 curl -s http://127.0.0.1:7660/replay/battles
@@ -138,7 +138,7 @@ curl -s -X POST http://127.0.0.1:7660/replay/start -d '{"battle":"..."}'
 curl -s -X POST http://127.0.0.1:7660/navigate/tactical
 
 # Navigate + replay
-curl -s -X POST http://127.0.0.1:7660/navigate/replay/battle_20260315_151451
+curl -s -X POST http://127.0.0.1:7660/navigate/replay/battle_2026_03_15_15_14
 
 # Shutdown
 curl -s -X POST http://127.0.0.1:7660/shutdown

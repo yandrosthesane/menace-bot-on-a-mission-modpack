@@ -9,3 +9,7 @@ boam_asset_pipeline/obj/
 # Custom icon assets (local only, not redistributable)
 boam_tactical_engine/assets/
 /release/
+
+# Deploy publish artifacts
+.publish-engine/
+.publish-icons/

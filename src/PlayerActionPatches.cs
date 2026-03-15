@@ -119,12 +119,14 @@ static class Patch_PreviewReady
         int sizeZ = result?.SizeZ ?? 0;
         if (sizeX == 0 || sizeZ == 0) return;
 
-        var modDir = System.IO.Path.Combine(
-            AppDomain.CurrentDomain.BaseDirectory, "Mods", "BOAM");
+        // Battle reports go to UserData/BOAM/ (persistent, survives deploys)
+        var persistentDir = Environment.GetEnvironmentVariable("BOAM_PERSISTENT_ASSETS");
+        if (string.IsNullOrEmpty(persistentDir))
+            persistentDir = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
+                "UserData", "BOAM");
 
-        // Create battle session directory now — map files go directly here
-        var ts = DateTime.Now.ToString("yyyyMMdd_HHmmss");
-        var sessionDir = System.IO.Path.Combine(modDir, "battle_reports", $"battle_{ts}");
+        var ts = DateTime.Now.ToString("yyyy_MM_dd_HH_mm");
+        var sessionDir = System.IO.Path.Combine(persistentDir, "battle_reports", $"battle_{ts}");
         System.IO.Directory.CreateDirectory(sessionDir);
         TacticalMap.TacticalMapState.BattleSessionDir = sessionDir;
 
@@ -257,6 +259,11 @@ static class Patch_ActiveActorChanged
             // Update minimap overlay
             TacticalMap.TacticalMapState.ActiveActor = actorUuid;
             TacticalMap.TacticalMapState.UpdateUnitPosition(actorUuid, px, pz);
+
+            // Clear skill animation gate when a player actor becomes active
+            // (prevents AI attack animations from blocking the replay pull loop)
+            if (factionId == 1 || factionId == 2)
+                Patch_Diagnostics.SkillAnimationEndTime = 0f;
 
             BoamBridge.Logger.Msg($"[BOAM] active-actor-changed: {actorUuid} r={round} at ({px},{pz})");
             ThreadPool.QueueUserWorkItem(_ => EngineClient.Post("/hook/actor-changed", payload));
