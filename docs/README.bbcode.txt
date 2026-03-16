@@ -12,18 +12,18 @@ records full battle sessions (player actions + AI decisions) for replay with div
 [size=4][b]Features[/b][/size]
 
 [list]
-[*][b]Tactical Minimap[/b] — In-game IMGUI overlay showing unit positions on the captured map background. Toggle with M key, cycle presets with L. [url=https://github.com/yandrosthesane/menace-boam-modpack/blob/main/README_MINIMAP.md]Details[/url]
-[*][b]Heatmap Renderer[/b] — Offline heatmap generation from deferred render jobs — tile scores, AI decisions, movement destinations. Render via CLI or HTTP API. [url=https://github.com/yandrosthesane/menace-boam-modpack/blob/main/README_HEATMAPS.md]Details[/url]
-[*][b]Replay System[/b] — Record and replay full battles. Player actions replayed exactly, AI decisions compared via determinism watchdog (halt or log on divergence). [url=https://github.com/yandrosthesane/menace-boam-modpack/blob/main/README_REPLAY.md]Details[/url]
-[*][b]Configuration[/b] — Versioned JSON5 configs with user/mod-default two-tier system. User configs survive mod updates. [url=https://github.com/yandrosthesane/menace-boam-modpack/blob/main/README_CONFIG.md]Details[/url]
+[*][b]Tactical Minimap[/b] — In-game IMGUI overlay showing unit positions on the captured map background. Toggle with M key, cycle presets with L. [url=https://github.com/yandrosthesane/menace-bot-on-a-mission-modpack/blob/main/README_MINIMAP.md]Details[/url]
+[*][b]Heatmap Renderer[/b] — Offline heatmap generation from deferred render jobs — tile scores, AI decisions, movement destinations. Render via CLI or HTTP API. [url=https://github.com/yandrosthesane/menace-bot-on-a-mission-modpack/blob/main/README_HEATMAPS.md]Details[/url]
+[*][b]Replay System[/b] — Record and replay full battles. Player actions replayed exactly, AI decisions compared via determinism watchdog (halt or log on divergence). [url=https://github.com/yandrosthesane/menace-bot-on-a-mission-modpack/blob/main/README_REPLAY.md]Details[/url]
+[*][b]Configuration[/b] — Versioned JSON5 configs with user/mod-default two-tier system. User configs survive mod updates. [url=https://github.com/yandrosthesane/menace-bot-on-a-mission-modpack/blob/main/README_CONFIG.md]Details[/url]
 [/list]
 
 [size=4][b]Components[/b][/size]
 
 [list]
-[*][b]C# Bridge Plugin[/b] (in-game, MelonLoader/Wine) — Harmony patches, map capture, minimap overlay, action forwarding. [url=https://github.com/yandrosthesane/menace-boam-modpack/blob/main/README_BRIDGE_PLUGIN.md]Details[/url]
-[*][b]F# Tactical Engine[/b] (native .NET 10, port 7660) — Render jobs, heatmap renderer, action logger, replay engine, determinism watchdog. [url=https://github.com/yandrosthesane/menace-boam-modpack/blob/main/README_TACTICAL_ENGINE.md]Details[/url]
-[*][b]Icon Generator[/b] (CLI tool) — Resizes game badge art into heatmap/minimap icons. [url=https://github.com/yandrosthesane/menace-boam-modpack/blob/main/README_ICON_GENERATOR.md]Details[/url]
+[*][b]C# Bridge Plugin[/b] (in-game, MelonLoader/Wine) — Harmony patches, map capture, minimap overlay, action forwarding. [url=https://github.com/yandrosthesane/menace-bot-on-a-mission-modpack/blob/main/README_BRIDGE_PLUGIN.md]Details[/url]
+[*][b]F# Tactical Engine[/b] (native .NET 10, port 7660) — Render jobs, heatmap renderer, action logger, replay engine, determinism watchdog. [url=https://github.com/yandrosthesane/menace-bot-on-a-mission-modpack/blob/main/README_TACTICAL_ENGINE.md]Details[/url]
+[*][b]Icon Generator[/b] (CLI tool) — Resizes game badge art into heatmap/minimap icons. [url=https://github.com/yandrosthesane/menace-bot-on-a-mission-modpack/blob/main/README_ICON_GENERATOR.md]Details[/url]
 [/list]
 
 [size=4][b]Feature Toggles[/b][/size]
@@ -147,7 +147,7 @@ Initial release: C# bridge plugin, F# tactical engine, tactical minimap, heatmap
 
 [size=4][b]Installation[/b][/size]
 
-Full guide: [url=https://github.com/yandrosthesane/menace-boam-modpack/blob/main/README_INSTALL.md]Installation Guide[/url]
+Full guide: [url=https://github.com/yandrosthesane/menace-bot-on-a-mission-modpack/blob/main/README_INSTALL.md]Installation Guide[/url]
 
 [list=1]
 [*]Install MelonLoader + [url=https://github.com/YandrosTheSane/menace-modpack-loader]Menace ModpackLoader[/url]
@@ -161,14 +161,14 @@ Full guide: [url=https://github.com/yandrosthesane/menace-boam-modpack/blob/main
 [size=4][b]Documentation[/b][/size]
 
 [list]
-[*][url=https://github.com/yandrosthesane/menace-boam-modpack/blob/main/README_INSTALL.md]Installation Guide[/url]
-[*][url=https://github.com/yandrosthesane/menace-boam-modpack/blob/main/README_MINIMAP.md]Tactical Minimap[/url]
-[*][url=https://github.com/yandrosthesane/menace-boam-modpack/blob/main/README_HEATMAPS.md]Heatmap Renderer[/url]
-[*][url=https://github.com/yandrosthesane/menace-boam-modpack/blob/main/README_REPLAY.md]Replay Manual[/url]
-[*][url=https://github.com/yandrosthesane/menace-boam-modpack/blob/main/README_CONFIG.md]Configuration[/url]
-[*][url=https://github.com/yandrosthesane/menace-boam-modpack/blob/main/README_BRIDGE_PLUGIN.md]Bridge Plugin[/url]
-[*][url=https://github.com/yandrosthesane/menace-boam-modpack/blob/main/README_TACTICAL_ENGINE.md]Tactical Engine[/url]
-[*][url=https://github.com/yandrosthesane/menace-boam-modpack/blob/main/README_ICON_GENERATOR.md]Icon Generator[/url]
+[*][url=https://github.com/yandrosthesane/menace-bot-on-a-mission-modpack/blob/main/README_INSTALL.md]Installation Guide[/url]
+[*][url=https://github.com/yandrosthesane/menace-bot-on-a-mission-modpack/blob/main/README_MINIMAP.md]Tactical Minimap[/url]
+[*][url=https://github.com/yandrosthesane/menace-bot-on-a-mission-modpack/blob/main/README_HEATMAPS.md]Heatmap Renderer[/url]
+[*][url=https://github.com/yandrosthesane/menace-bot-on-a-mission-modpack/blob/main/README_REPLAY.md]Replay Manual[/url]
+[*][url=https://github.com/yandrosthesane/menace-bot-on-a-mission-modpack/blob/main/README_CONFIG.md]Configuration[/url]
+[*][url=https://github.com/yandrosthesane/menace-bot-on-a-mission-modpack/blob/main/README_BRIDGE_PLUGIN.md]Bridge Plugin[/url]
+[*][url=https://github.com/yandrosthesane/menace-bot-on-a-mission-modpack/blob/main/README_TACTICAL_ENGINE.md]Tactical Engine[/url]
+[*][url=https://github.com/yandrosthesane/menace-bot-on-a-mission-modpack/blob/main/README_ICON_GENERATOR.md]Icon Generator[/url]
 [/list]
 
 [size=4][b]Requirements[/b][/size]
@@ -179,4 +179,4 @@ Full guide: [url=https://github.com/yandrosthesane/menace-boam-modpack/blob/main
 [*].NET 10 runtime (bundled with tactical engine)
 [/list]
 
-Source code: [url=https://github.com/yandrosthesane/menace-boam-modpack]GitHub[/url]
+Source code: [url=https://github.com/yandrosthesane/menace-bot-on-a-mission-modpack]GitHub[/url]

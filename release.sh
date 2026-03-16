@@ -99,7 +99,7 @@ build_engine_archive() {
     fi
 }
 
-build_engine_archive "linux-x64" "" "tar.gz"
+build_engine_archive "linux-x64" "" "zip"
 build_engine_archive "win-x64" ".exe" "zip"
 
 # ─────────────────────────────────────────────

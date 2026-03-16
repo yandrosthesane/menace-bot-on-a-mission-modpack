@@ -24,10 +24,10 @@ Download the platform-specific tactical engine archive and extract it into `Mods
 
 ```bash
 # Linux
-tar xzf BOAM-tactical-engine-v1.0.0-linux-x64.tar.gz -C /path/to/Menace/Mods/BOAM/
+unzip BOAM-tactical-engine-v1.1.0-linux-x64.zip -d /path/to/Menace/Mods/BOAM/
 
 # Windows
-# Unzip BOAM-tactical-engine-v1.0.0-win-x64.zip into Mods\BOAM\
+# Unzip BOAM-tactical-engine-v1.1.0-win-x64.zip into Mods\BOAM\
 ```
 
 After this step you should have:
