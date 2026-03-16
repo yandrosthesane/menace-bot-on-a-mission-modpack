@@ -41,11 +41,20 @@ Controls the F# tactical engine (ports, rendering, feature toggles).
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `configVersion` | int | 1 | Config structure version |
+| `configVersion` | int | 2 | Config structure version |
 | `port` | int | 7660 | Tactical engine HTTP port |
 | `bridge_port` | int | 7655 | Game bridge port (C# side) |
 | `command_port` | int | 7661 | Command server port (replay actions) |
-| `heatmaps` | bool | true | Collect render job data for offline heatmap generation |
+| `heatmaps` | bool | **false** | Collect render job data for offline heatmap generation |
+| `action_logging` | bool | **false** | Log player actions + AI decisions to `round_log.jsonl`. Required for replay. |
+| `ai_logging` | bool | **false** | Log AI decisions (requires `action_logging`). Enables determinism watchdog during replay. |
+
+**Feature toggle summary:** By default only the minimap is active. Enable features as needed:
+- **Minimap only** (default) — no config changes needed
+- **Replay** — set `action_logging: true`
+- **Replay + determinism watchdog** — set `action_logging: true` and `ai_logging: true`
+- **Heatmaps** — set `heatmaps: true` (and `action_logging: true` for action logs in battle reports)
+- **Everything** — set all three to `true`
 | `rendering.minTilePixels` | int | 64 | Minimum pixels per tile (upscaling) |
 | `rendering.gamma` | float | 0.35 | Map background gamma (< 1.0 brightens shadows) |
 | `rendering.fontFamily` | string | `DejaVu Sans Mono` | Font for score text |
@@ -129,7 +138,7 @@ See [Icon Generator](README_ICON_GENERATOR.md) for full details.
 
 | Config | Version |
 |--------|:-------:|
-| `config.json5` | 1 |
+| `config.json5` | 2 |
 | `tactical_map.json5` | 1 |
 | `tactical_map_presets.json5` | 1 |
 | `icon-config.json5` | 1 |

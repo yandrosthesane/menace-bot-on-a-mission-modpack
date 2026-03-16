@@ -49,9 +49,10 @@
 |----------|--------|-------------|
 | `/replay/battles` | GET | List recorded battles |
 | `/replay/actions/{name}` | GET | View actions in a battle |
-| `/replay/start` | POST | Start a replay session. Body: `{"battle":"...", "camera":"follow|free"}`. Default camera: `follow`. |
-| `/replay/next` | GET | Pull next replay action (called by bridge) |
-| `/replay/stop` | POST | Stop active replay |
+| `/replay/start` | POST | Start a replay session. Body: `{"battle":"...", "camera":"follow|free", "determinism":"off|log|stop"}`. |
+| `/replay/next` | GET | Pull next replay action (called by bridge). Returns `status: "halted"` if determinism watchdog triggered. |
+| `/replay/stop` | POST | Stop active replay. Response includes divergence list if determinism was enabled. |
+| `/replay/divergences` | GET | Query divergences detected so far during an active replay. |
 
 ### System Endpoints
 
