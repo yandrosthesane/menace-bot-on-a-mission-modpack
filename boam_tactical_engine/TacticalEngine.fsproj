@@ -8,7 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Include="configs/config.json5" CopyToOutputDirectory="PreserveNewest" Link="configs/config.json5" />
+    <None Include="../configs/config.json5" CopyToOutputDirectory="PreserveNewest" Link="configs/config.json5" />
   </ItemGroup>
 
   <ItemGroup>

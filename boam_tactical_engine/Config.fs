@@ -92,14 +92,11 @@ let private resolveConfigPath () =
         |> Option.defaultValue (Path.Combine(gameDir, "UserData", "BOAM"))
     let userPath = Path.Combine(persistentDir, "configs", "config.json5")
 
-    // Mod default (in configs/ subdir of engine dir)
-    let defaultPath = Path.Combine(exeDir, "configs", "config.json5")
+    // Mod default (configs/ next to the engine binary's parent — i.e. Mods/BOAM/configs/)
+    let modDir = Path.GetDirectoryName(exeDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
+    let defaultPath = Path.Combine(modDir, "configs", "config.json5")
 
-    // Dev fallback (dotnet run from source)
-    let srcPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "..", "..", "..", "configs", "config.json5") |> Path.GetFullPath
-    let cwdPath = Path.Combine(Environment.CurrentDirectory, "configs", "config.json5")
-
-    // Pick the best config: user (if version ok) → default → src → cwd
+    // Pick the best config: user (if version ok) → default
     if File.Exists(userPath) then
         let userVer = readVersion userPath
         let defaultVer = if File.Exists(defaultPath) then readVersion defaultPath else 0
@@ -110,9 +107,7 @@ let private resolveConfigPath () =
             eprintfn "[Config] User config outdated (v%d < v%d), using default: %s" userVer defaultVer defaultPath
             defaultPath
     elif File.Exists(defaultPath) then defaultPath
-    elif File.Exists(srcPath) then srcPath
-    elif File.Exists(cwdPath) then cwdPath
-    else failwithf "config.json5 not found (checked %s, %s, %s, %s)" userPath defaultPath srcPath cwdPath
+    else failwithf "config.json5 not found (checked %s, %s)" userPath defaultPath
 
 let private load () : TacticalEngineConfig =
     let configPath = resolveConfigPath ()

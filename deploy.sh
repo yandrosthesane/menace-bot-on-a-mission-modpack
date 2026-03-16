@@ -181,10 +181,11 @@ chmod +x "$GAME_MOD_DIR/boam-icons"
 cp "$LAUNCHER_DIR/start-tactical-engine.sh" "$GAME_MOD_DIR/"
 chmod +x "$GAME_MOD_DIR/start-tactical-engine.sh"
 
-# Icon config — mod default (replace 'user' placeholder with actual username)
+# Default configs
 mkdir -p "$GAME_MOD_DIR/configs"
-sed 's|/home/user/|/home/yandros/|g' "$PIPELINE_DIR/icon-config.json5" > "$GAME_MOD_DIR/configs/icon-config.json5"
-echo "    icon-config.json5 installed in configs/ (paths set to /home/yandros/)"
+cp configs/config.json5 configs/tactical_map.json5 configs/tactical_map_presets.json5 "$GAME_MOD_DIR/configs/"
+sed 's|/home/user/|/home/yandros/|g' configs/icon-config.json5 > "$GAME_MOD_DIR/configs/icon-config.json5"
+echo "    All configs installed to configs/"
 
 echo "    Done."
 
