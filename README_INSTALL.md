@@ -33,12 +33,13 @@ tar xzf BOAM-tactical-engine-v1.0.0-linux-x64.tar.gz -C /path/to/Menace/Mods/BOA
 After this step you should have:
 ```
 Menace/Mods/BOAM/
-├── TacticalEngine(.exe)     Engine binary
-├── boam-icons(.exe)         Icon generator
+├── tactical_engine/
+│   └── TacticalEngine(.exe)    Engine binary + runtime
+├── boam-icons(.exe)            Icon generator
 ├── start-tactical-engine.sh (.bat)
 └── configs/
-    ├── config.json5         Engine config
-    └── icon-config.json5    Icon mappings
+    ├── config.json5            Engine config
+    └── icon-config.json5       Icon mappings
 ```
 
 ## Step 3: Extract Game Art
@@ -90,7 +91,31 @@ Icons are used by both the minimap overlay and the heatmap renderer. Resolution 
 
 See [Icon Generator](README_ICON_GENERATOR.md) for config format and adding new units.
 
-## Step 5: Customise Configs (Optional)
+## Step 5: Set Up Shell Shortcuts (Optional)
+
+Add these to your `~/.bashrc` or `~/.zshrc` so you can run BOAM tools from anywhere:
+
+```bash
+# Adjust MENACE_DIR if your Steam library is in a different location
+export MENACE_DIR="$HOME/.local/share/Steam/steamapps/common/Menace"
+export BOAM_DIR="$MENACE_DIR/Mods/BOAM"
+
+# Start the tactical engine (accepts same args as start-tactical-engine.sh)
+alias boam-engine='$BOAM_DIR/start-tactical-engine.sh'
+
+# Regenerate icons
+alias boam-icons='$BOAM_DIR/boam-icons'
+```
+
+Then from any directory:
+```bash
+boam-engine                                          # passive start
+boam-engine --on-title /navigate/tactical            # auto-navigate to tactical
+boam-engine --on-title /navigate/replay/battle_name  # auto-navigate + replay
+boam-icons --force                                   # regenerate icons
+```
+
+## Step 6: Customise Configs (Optional)
 
 To preserve your settings across mod updates, copy the configs you want to customise into the BOAM persistent directory `path/to/Menace/UserData/BOAM/configs/`
 User configs in `UserData/BOAM/configs/` take precedence over mod defaults and survive deploys. Edit the keybindings, display presets, and visual settings to your preference.
@@ -105,5 +130,6 @@ When updating BOAM to a new version:
 2. **Re-extract** the tactical engine (step 2)
 3. **Re-generate** icons (step 4) — deploy wipes `icons/`
 4. **Check config versions** — if the game logs a warning about outdated configs, update your user configs in `UserData/BOAM/configs/` to match the new structure and bump `configVersion`
+5. Shell shortcuts (step 5) only need to be set up once — they survive deploys
 
 Your user configs and source art in `UserData/BOAM/` are never touched by deploys.

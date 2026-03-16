@@ -210,10 +210,11 @@ public static class BoamCommandExecutor
         log.Msg("[endturn] done");
     }
 
-    // Cached reflection for UI-based actor cycling (Tab key equivalent)
+    // Cached reflection for direct slot selection (portrait click equivalent)
     private static MethodInfo _tsGetUI;
     private static MethodInfo _uiGetTurnBar;
-    private static MethodInfo _turnBarSelectNext;
+    private static MethodInfo _turnBarGetSlot;   // GetSlot(Actor) -> UnitsTurnBarSlot
+    private static MethodInfo _slotOnLeftClicked;
 
     private static void ExecuteSelect(string actor, MelonLogger.Instance log)
     {
@@ -229,71 +230,68 @@ public static class BoamCommandExecutor
         if (!activeGameObj.IsNull)
         {
             var activeInfo = EntitySpawner.GetEntityInfo(activeGameObj);
-            var activeUuid = activeInfo != null ? ActorRegistry.GetUuid(activeInfo.EntityId) : "?";
-            log.Msg($"[select] Current active: entityId={activeInfo?.EntityId} uuid={activeUuid} faction={activeInfo?.FactionIndex}");
             if (activeInfo != null && activeInfo.EntityId == entityId)
             {
                 log.Msg($"[select] {actor} already active — no-op");
                 return;
             }
         }
-        else
-        {
-            log.Warning("[select] No active actor (GameObj is null)");
-        }
 
         // Get UnitsTurnBar via TacticalState → GetUI() → GetUnitsTurnBar()
         var ts = GetTacticalState();
-        if (ts == null) { log.Error("[select] TacticalState null — cannot cycle"); return; }
+        if (ts == null) { log.Error("[select] TacticalState null"); return; }
 
         _tsGetUI ??= ts.GetType().GetMethod("GetUI", BindingFlags.Public | BindingFlags.Instance);
         var ui = _tsGetUI?.Invoke(ts, null);
-        if (ui == null) { log.Error("[select] UITactical null — GetUI() returned null"); return; }
-        log.Msg($"[select] UITactical obtained: {ui.GetType().Name}");
+        if (ui == null) { log.Error("[select] UITactical null"); return; }
 
         _uiGetTurnBar ??= ui.GetType().GetMethod("GetUnitsTurnBar", BindingFlags.Public | BindingFlags.Instance);
         var turnBar = _uiGetTurnBar?.Invoke(ui, null);
-        if (turnBar == null) { log.Error("[select] UnitsTurnBar null — GetUnitsTurnBar() returned null"); return; }
-        log.Msg($"[select] UnitsTurnBar obtained: {turnBar.GetType().Name}");
+        if (turnBar == null) { log.Error("[select] UnitsTurnBar null"); return; }
 
-        _turnBarSelectNext ??= turnBar.GetType().GetMethod("SelectNextActor", BindingFlags.Public | BindingFlags.Instance);
-        if (_turnBarSelectNext == null) { log.Error("[select] SelectNextActor method not found on UnitsTurnBar"); return; }
-
-        // Log current game state for debugging
-        var currentAction = _tsGetCurrentAction?.Invoke(ts, null);
-        log.Msg($"[select] Game state: currentAction={currentAction?.GetType().Name ?? "null"} gameFaction={TacticalController.GetCurrentFaction()} round={TacticalController.GetCurrentRound()}");
-
-        // Cycle through turn bar slots until we land on the target actor (max 20 to prevent infinite loop)
-        for (int i = 0; i < 20; i++)
+        // Find target actor proxy by scanning entities
+        object targetActorProxy = null;
+        var allActors = EntitySpawner.ListEntities(-1);
+        if (allActors != null)
         {
-            _turnBarSelectNext.Invoke(turnBar, null);
-
-            activeGameObj = TacticalController.GetActiveActor();
-            if (activeGameObj.IsNull)
+            foreach (var a in allActors)
             {
-                log.Warning($"[select] Cycle {i + 1}: active actor is null after SelectNextActor");
-                continue;
-            }
-
-            var info = EntitySpawner.GetEntityInfo(activeGameObj);
-            if (info == null)
-            {
-                log.Warning($"[select] Cycle {i + 1}: EntityInfo is null for active GameObj");
-                continue;
-            }
-
-            var cycleUuid = ActorRegistry.GetUuid(info.EntityId);
-            log.Msg($"[select] Cycle {i + 1}: landed on entityId={info.EntityId} uuid={cycleUuid} faction={info.FactionIndex}");
-
-            if (info.EntityId == entityId)
-            {
-                // Verify the action state after selection
-                var postAction = _tsGetCurrentAction?.Invoke(ts, null);
-                log.Msg($"[select] SUCCESS: selected {actor} in {i + 1} cycles, postAction={postAction?.GetType().Name ?? "null"}");
-                return;
+                var info = EntitySpawner.GetEntityInfo(a);
+                if (info != null && info.EntityId == entityId)
+                {
+                    targetActorProxy = Il2CppUtils.GetManagedProxy(a, _actorType);
+                    break;
+                }
             }
         }
+        if (targetActorProxy == null) { log.Error($"[select] No actor found for entityId={entityId}"); return; }
 
-        log.Warning($"[select] FAILED: could not reach {actor} (entityId={entityId}) after 20 cycles");
+        // Get slot via GetSlot(Actor) and invoke OnLeftClicked (portrait click)
+        var turnBarType = turnBar.GetType();
+        _turnBarGetSlot ??= turnBarType.GetMethod("GetSlot", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+        if (_turnBarGetSlot == null) { log.Error("[select] GetSlot method not found"); return; }
+
+        var targetSlot = _turnBarGetSlot.Invoke(turnBar, new[] { targetActorProxy });
+        if (targetSlot == null) { log.Warning($"[select] GetSlot returned null for {actor}"); return; }
+
+        _slotOnLeftClicked ??= targetSlot.GetType().GetMethod("OnLeftClicked",
+            BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance);
+        if (_slotOnLeftClicked == null) { log.Error("[select] OnLeftClicked not found on slot"); return; }
+
+        _slotOnLeftClicked.Invoke(targetSlot, new object[] { targetSlot });
+
+        activeGameObj = TacticalController.GetActiveActor();
+        if (!activeGameObj.IsNull)
+        {
+            var resultInfo = EntitySpawner.GetEntityInfo(activeGameObj);
+            if (resultInfo != null && resultInfo.EntityId == entityId)
+            {
+                log.Msg($"[select] OK: {actor} selected");
+                return;
+            }
+            log.Warning($"[select] OnLeftClicked invoked but active actor is {ActorRegistry.GetUuid(resultInfo?.EntityId ?? 0)}");
+        }
+
+        log.Warning($"[select] FAILED to select {actor} (entityId={entityId})");
     }
 }

@@ -13,3 +13,4 @@ boam_tactical_engine/assets/
 # Deploy publish artifacts
 .publish-engine/
 .publish-icons/
+/.claude/

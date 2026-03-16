@@ -10,7 +10,7 @@
 #   ./start-tactical-engine.sh --render battle_name                         # render heatmaps and exit
 #   ./start-tactical-engine.sh --render battle_name --pattern "r01_*"       # render with pattern filter
 #
-# The engine runs in the foreground — close this terminal or press Ctrl+C to stop it.
+# Opens a dedicated terminal window with the engine output.
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ENGINE_DIR="$SCRIPT_DIR/tactical_engine"
@@ -30,5 +30,24 @@ if [ ! -f "$ENGINE_BIN" ]; then
     exit 1
 fi
 
-# Run in foreground — keeps the terminal open with live output
-exec "$ENGINE_BIN" "$@"
+# Log file — lives alongside the engine, overwritten each run
+LOG_DIR="$SCRIPT_DIR/logs"
+mkdir -p "$LOG_DIR"
+LOG_FILE="$LOG_DIR/tactical_engine.log"
+
+# Write args to a temp file to survive shell re-expansion in gnome-terminal
+ARGS_FILE=$(mktemp /tmp/boam-engine-args.XXXXXX)
+printf '%s\n' "$@" > "$ARGS_FILE"
+
+gnome-terminal --title="BOAM Tactical Engine" --geometry=120x30 -- \
+    bash -c '
+        ARGS_FILE="'"$ARGS_FILE"'"
+        ENGINE_BIN="'"$ENGINE_BIN"'"
+        LOG_FILE="'"$LOG_FILE"'"
+        ARGS=()
+        while IFS= read -r line; do ARGS+=("$line"); done < "$ARGS_FILE"
+        rm -f "$ARGS_FILE"
+        "$ENGINE_BIN" "${ARGS[@]}" 2>&1 | tee "$LOG_FILE"
+        echo -e "\n\x1b[31mTactical engine exited. Press Enter to close.\x1b[0m"
+        read
+    '

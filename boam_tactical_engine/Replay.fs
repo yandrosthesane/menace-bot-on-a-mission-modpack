@@ -2,11 +2,15 @@
 ///
 /// The bridge pulls actions via GET /replay/next when it's ready (right actor active,
 /// not moving, no skill animation). No queue, no race conditions.
+///
+/// Determinism watchdog: compares AI decisions during replay against the original
+/// recording. Two modes: "log" (report all divergences) or "stop" (halt on first).
 module BOAM.TacticalEngine.Replay
 
 open System
 open System.IO
 open System.Text.Json
+open BOAM.TacticalEngine.GameTypes
 
 /// A single replayable player action parsed from JSONL.
 type ReplayAction = {
@@ -18,6 +22,30 @@ type ReplayAction = {
     TileX: int
     TileZ: int
     DurationMs: int       // measured animation duration (for skill_complete)
+}
+
+/// An expected AI decision from the original recording.
+type ExpectedAiDecision = {
+    Round: int
+    Faction: int
+    Actor: string
+    ChosenName: string
+    ChosenScore: int
+    TargetX: int
+    TargetZ: int
+}
+
+/// Determinism watchdog mode.
+type DeterminismMode = Off | Log | Stop
+
+/// A divergence between expected and actual AI decision.
+type Divergence = {
+    Index: int
+    Round: int
+    Actor: string
+    Expected: string   // human-readable summary
+    Actual: string
+    LastPlayerAction: string
 }
 
 /// Parse a JSONL line into a ReplayAction, or None if not a player action.
@@ -51,6 +79,33 @@ let private tryParseAction (line: string) : ReplayAction option =
                 }
         with _ -> None
 
+/// Parse a JSONL line into an ExpectedAiDecision, or None if not ai_decision.
+let private tryParseAiDecision (line: string) : ExpectedAiDecision option =
+    if String.IsNullOrWhiteSpace(line) then None
+    else
+        try
+            let doc = JsonDocument.Parse(line)
+            let root = doc.RootElement
+            match root.TryGetProperty("type") with
+            | true, v when v.GetString() = "ai_decision" ->
+                let chosen = root.GetProperty("chosen")
+                let tx, tz =
+                    match root.TryGetProperty("target") with
+                    | true, t when t.ValueKind <> JsonValueKind.Null ->
+                        (t.GetProperty("x").GetInt32(), t.GetProperty("z").GetInt32())
+                    | _ -> (0, 0)
+                Some {
+                    Round = match root.TryGetProperty("round") with | true, rv -> rv.GetInt32() | _ -> 0
+                    Faction = match root.TryGetProperty("faction") with | true, fv -> fv.GetInt32() | _ -> 0
+                    Actor = match root.TryGetProperty("actor") with | true, av -> av.GetString() |> Option.ofObj |> Option.defaultValue "" | _ -> ""
+                    ChosenName = match chosen.TryGetProperty("name") with | true, nv -> nv.GetString() |> Option.ofObj |> Option.defaultValue "" | _ -> ""
+                    ChosenScore = match chosen.TryGetProperty("score") with | true, sv -> sv.GetInt32() | _ -> 0
+                    TargetX = tx
+                    TargetZ = tz
+                }
+            | _ -> None
+        with _ -> None
+
 /// Load all player actions from a round_log.jsonl file.
 let loadActions (logPath: string) : ReplayAction list =
     if not (File.Exists(logPath)) then []
@@ -58,6 +113,13 @@ let loadActions (logPath: string) : ReplayAction list =
         File.ReadAllLines(logPath)
         |> Array.choose tryParseAction
         |> Array.toList
+
+/// Load all expected AI decisions from a round_log.jsonl file.
+let loadExpectedAiDecisions (logPath: string) : ExpectedAiDecision array =
+    if not (File.Exists(logPath)) then [||]
+    else
+        File.ReadAllLines(logPath)
+        |> Array.choose tryParseAiDecision
 
 /// Get all distinct rounds in the log.
 let getRounds (logPath: string) : int list =
@@ -79,19 +141,90 @@ type ReplaySession = {
     Actions: ReplayAction array
     mutable Index: int
     mutable Log: string list
+    // Determinism watchdog
+    ExpectedAi: ExpectedAiDecision array
+    mutable AiIndex: int
+    DeterminismMode: DeterminismMode
+    mutable Divergences: Divergence list
+    mutable Halted: bool
+    mutable LastServedPlayerAction: string
 }
 
 let mutable private activeSession: ReplaySession option = None
 
-/// Start a replay session with the given actions.
-let startSession (actions: ReplayAction list) =
-    activeSession <- Some { Actions = Array.ofList actions; Index = 0; Log = [] }
+/// Is a replay session active?
+let isActive () = activeSession.IsSome
+
+/// Start a replay session with the given actions and determinism mode.
+let startSession (actions: ReplayAction list) (expectedAi: ExpectedAiDecision array) (mode: DeterminismMode) =
+    activeSession <- Some {
+        Actions = Array.ofList actions; Index = 0; Log = []
+        ExpectedAi = expectedAi; AiIndex = 0
+        DeterminismMode = mode; Divergences = []; Halted = false
+        LastServedPlayerAction = ""
+    }
 
 /// Stop the current replay session.
 let stopSession () =
     let result = activeSession
     activeSession <- None
     result
+
+/// Check an incoming AI decision against the expected sequence.
+/// Returns Some divergence if mismatch, None if match or watchdog off.
+let checkAiDecision (payload: ActionDecisionPayload) : Divergence option =
+    match activeSession with
+    | None -> None
+    | Some session ->
+        if session.DeterminismMode = Off || session.Halted then None
+        elif session.AiIndex >= session.ExpectedAi.Length then
+            // More AI decisions than expected — divergence
+            let div = {
+                Index = session.AiIndex
+                Round = payload.Round
+                Actor = payload.Actor
+                Expected = "(no more expected decisions)"
+                Actual = sprintf "%s → %s(%d) @(%d,%d)" payload.Actor payload.Chosen.Name payload.Chosen.Score
+                    (match payload.Target with TileTarget(p,_) -> p.X | _ -> 0)
+                    (match payload.Target with TileTarget(p,_) -> p.Z | _ -> 0)
+                LastPlayerAction = session.LastServedPlayerAction
+            }
+            session.Divergences <- div :: session.Divergences
+            session.AiIndex <- session.AiIndex + 1
+            if session.DeterminismMode = Stop then session.Halted <- true
+            Some div
+        else
+            let expected = session.ExpectedAi.[session.AiIndex]
+            let actualTx, actualTz =
+                match payload.Target with
+                | TileTarget(p, _) -> p.X, p.Z
+                | NoTarget -> 0, 0
+            let matches =
+                expected.Actor = payload.Actor &&
+                expected.ChosenName = payload.Chosen.Name &&
+                expected.TargetX = actualTx &&
+                expected.TargetZ = actualTz
+            session.AiIndex <- session.AiIndex + 1
+            if matches then
+                None
+            else
+                let div = {
+                    Index = session.AiIndex - 1
+                    Round = payload.Round
+                    Actor = payload.Actor
+                    Expected = sprintf "%s → %s(%d) @(%d,%d)" expected.Actor expected.ChosenName expected.ChosenScore expected.TargetX expected.TargetZ
+                    Actual = sprintf "%s → %s(%d) @(%d,%d)" payload.Actor payload.Chosen.Name payload.Chosen.Score actualTx actualTz
+                    LastPlayerAction = session.LastServedPlayerAction
+                }
+                session.Divergences <- div :: session.Divergences
+                if session.DeterminismMode = Stop then session.Halted <- true
+                Some div
+
+/// Get all divergences recorded so far.
+let getDivergences () =
+    match activeSession with
+    | Some session -> List.rev session.Divergences
+    | None -> []
 
 /// Get the next action for the bridge. Returns JSON response.
 /// The bridge passes the current active actor and round so we can:
@@ -103,7 +236,10 @@ let rec getNext (activeActor: string) (gameRound: int) : string =
     | None ->
         JsonSerializer.Serialize({| status = "done" |}, jsonOptions)
     | Some session ->
-        if session.Index >= session.Actions.Length then
+        if session.Halted then
+            let divCount = List.length session.Divergences
+            JsonSerializer.Serialize({| status = "halted"; reason = "determinism_divergence"; divergences = divCount |}, jsonOptions)
+        elif session.Index >= session.Actions.Length then
             JsonSerializer.Serialize({| status = "done" |}, jsonOptions)
         else
             let action = session.Actions.[session.Index]
@@ -115,6 +251,7 @@ let rec getNext (activeActor: string) (gameRound: int) : string =
                 // (the bridge will execute the select, which changes the active actor)
                 if action.ActionType = "select" then
                     session.Index <- session.Index + 1
+                    session.LastServedPlayerAction <- sprintf "%s select (actor switch)" action.Actor
                     Logging.logEngine (sprintf "[Replay] SERVE select for %s (actor switch)" action.Actor)
                     session.Log <- sprintf "  → %s select (%d,%d) (actor switch)" action.Actor action.TileX action.TileZ :: session.Log
                     JsonSerializer.Serialize({|
@@ -140,6 +277,7 @@ let rec getNext (activeActor: string) (gameRound: int) : string =
                 // Action matches active actor — serve it
                 Logging.logEngine (sprintf "[Replay] idx=%d SERVE %s %s (%d,%d)" session.Index action.Actor action.ActionType action.TileX action.TileZ)
                 session.Index <- session.Index + 1
+                session.LastServedPlayerAction <- sprintf "%s %s (%d,%d) %s" action.Actor action.ActionType action.TileX action.TileZ action.SkillName
                 session.Log <- sprintf "  → %s %s (%d,%d) %s" action.Actor action.ActionType action.TileX action.TileZ action.SkillName :: session.Log
                 // Delay: if this click is followed by another click to the same tile (path preview → confirm),
                 // use a longer delay so the game has time to compute the path and transition to ComputePathAction.

@@ -6,24 +6,29 @@ allowed-tools: Bash, Read
 
 # Start BOAM Tactical Engine
 
-Launch the BOAM Tactical Engine HTTP server in its own terminal window with colored output.
+Launch the BOAM Tactical Engine from the installed game location in a dedicated terminal window.
 
 ## Instructions
 
-Single command — the script handles stopping any existing instance. Pass `--on-title /navigate/tactical` to auto-navigate to tactical on game connect:
+Run the installed launcher script — it stops any existing instance, then opens a gnome-terminal with the engine:
 
 ```bash
-/home/yandros/workspace/menace_mods/scripts/start-tactical-engine.sh --on-title /navigate/tactical
+/home/yandros/.local/share/Steam/steamapps/common/Menace/Mods/BOAM/start-tactical-engine.sh --on-title /navigate/tactical
 ```
 
-Report "Engine started" and proceed. No sleep or verification needed — the engine starts fast and the game takes much longer to reach Title scene.
+The script opens a gnome-terminal and returns immediately. Verify the engine is up with:
+
+```bash
+sleep 2 && curl -s --max-time 3 http://127.0.0.1:7660/status
+```
 
 ## Details
 
 - **Port**: 7660
-- **Project**: `/home/yandros/workspace/menace_mods/BOAM-modpack/boam_tactical_engine/`
-- **Target**: net10.0 (native Linux .NET)
-- **Terminal**: Opens in a gnome-terminal window titled "BOAM Tactical Engine"
+- **Installed location**: `/home/yandros/.local/share/Steam/steamapps/common/Menace/Mods/BOAM/`
+- **Binary**: `tactical_engine/TacticalEngine` (self-contained, no .NET SDK needed)
+- **Terminal**: Opens a gnome-terminal window titled "BOAM Tactical Engine"
+- **Log file**: `/home/yandros/.local/share/Steam/steamapps/common/Menace/Mods/BOAM/logs/tactical_engine.log` (overwritten each run, use `Read` to inspect)
 - `--on-title /navigate/tactical`: auto-navigates to tactical when Title scene detected
 - `--render <battle> [--pattern <glob>]`: render heatmaps and exit (no game needed)
 - No args: engine starts and waits passively
@@ -31,4 +36,4 @@ Report "Engine started" and proceed. No sleep or verification needed — the eng
 ## When to use
 
 - Before `/launch-game` when testing BOAM
-- After modifying engine code (it auto-stops the old one)
+- After `/deploy` to pick up engine changes

@@ -170,7 +170,10 @@ public class BoamCommandServer
                 camera = doc.RootElement.TryGetProperty("camera", out var cv) ? cv.GetString() ?? "follow" : "follow";
             }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            _log.Warning($"[BOAM] Replay start parse error: {ex.Message}");
+        }
 
         BoamBridge.Instance._replayActive = true;
         BoamBridge.Instance._replayCameraFollow = camera == "follow";

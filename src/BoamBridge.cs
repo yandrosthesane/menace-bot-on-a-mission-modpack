@@ -311,6 +311,15 @@ public class BoamBridge : IModpackPlugin
                     Toast.Show("Replay complete", 5f);
                     return;
                 }
+                if (status == "halted")
+                {
+                    _replayActive = false;
+                    var reason = doc.TryGetProperty("reason", out var rv) ? rv.GetString() ?? "" : "";
+                    var divCount = doc.TryGetProperty("divergences", out var dcv) ? dcv.GetInt32() : 0;
+                    Logger.Msg($"[BOAM] Replay HALTED: {reason}, {divCount} divergence(s)");
+                    Toast.Show($"Replay halted: {reason} ({divCount} divergence(s))", 10f);
+                    return;
+                }
                 if (status == "waiting")
                     return;
 

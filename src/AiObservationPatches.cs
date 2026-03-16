@@ -71,7 +71,7 @@ static class Patch_OnTurnStart
             var response = EngineClient.Post("/hook/on-turn-start", payload);
             if (response != null)
             {
-                BoamBridge.Logger.Msg($"[BOAM] on-turn-start f{factionIdx}: engine OK ({response.Length}b, {oppList.Count} opponents)");
+                BoamBridge.Logger.Msg($"[BOAM] on-turn-start f{factionIdx} r{round}: engine OK ({response.Length}b, {oppList.Count} opponents)");
             }
         }
         catch (Exception ex)
@@ -345,6 +345,8 @@ static class Patch_AgentExecute
             var (gameObj, factionId, actorEntityId, _) = info.Value;
             var actorUuid = ActorRegistry.GetUuid(actorEntityId);
 
+            int round = bridge.Round;
+
             // Build chosen behavior info
             var chosenId = (int)active.GetID();
             var chosenName = active.GetName() ?? active.GetID().ToString();
@@ -443,8 +445,6 @@ static class Patch_AgentExecute
                 }
             }
             catch { }
-
-            int round = bridge.Round;
 
             var payload = JsonSerializer.Serialize(new
             {
