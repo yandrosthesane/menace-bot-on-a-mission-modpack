@@ -10,14 +10,6 @@
 
 Use the Menace Modkit to deploy the BOAM modpack.
 
-After this step you should have:
-```
-Menace/Mods/BOAM/
-├── src/              C# source files
-├── modpack.json      Mod manifest
-└── configs/          Default configs
-```
-
 ## Step 2: Install the Tactical Engine
 
 Download the platform-specific tactical engine archive and extract it into `Mods/BOAM/`:
@@ -28,18 +20,6 @@ unzip BOAM-tactical-engine-v1.1.0-linux-x64.zip -d /path/to/Menace/Mods/BOAM/
 
 # Windows
 # Unzip BOAM-tactical-engine-v1.1.0-win-x64.zip into Mods\BOAM\
-```
-
-After this step you should have:
-```
-Menace/Mods/BOAM/
-├── tactical_engine/
-│   └── TacticalEngine(.exe)    Engine binary + runtime
-├── boam-icons(.exe)            Icon generator
-├── start-tactical-engine.sh (.bat)
-└── configs/
-    ├── config.json5            Engine config
-    └── icon-config.json5       Icon mappings
 ```
 
 ## Step 3: Extract Game Art

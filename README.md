@@ -1,3 +1,4 @@
+claude --resume 6346f05a-78df-48d4-8f78-1fb9b81260d5
 # BOAM — Bot On A Mission
 
 AI behavior analysis and replay mod for Menace.
