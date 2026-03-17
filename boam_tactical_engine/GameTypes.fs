@@ -141,6 +141,30 @@ type PlayerActionPayload = {
     Tile: TilePos
 }
 
+/// Per-element hit — atomic combat operation: one projectile hits one model.
+type ElementHitPayload = {
+    Round: int
+    Target: string        // Stable UUID of target actor
+    TargetFaction: FactionId
+    Attacker: string      // Stable UUID of attacker
+    AttackerFaction: FactionId
+    Skill: string
+    ElementIndex: int     // Which model in the squad was hit
+    Damage: int           // Damage applied to this element
+    ElementHpAfter: int   // Element HP after damage
+    ElementAlive: bool    // Is element still alive
+}
+
+/// AI action (move, useskill, endturn) — the actual AP-consuming primitives.
+type AiActionPayload = {
+    Round: int
+    Faction: FactionId
+    Actor: string         // Stable UUID
+    ActionType: string    // "ai_move", "ai_useskill", "ai_endturn"
+    SkillName: string     // for ai_useskill actions
+    Tile: TilePos
+}
+
 /// Battle session start info.
 type BattleStartPayload = {
     Timestamp: string

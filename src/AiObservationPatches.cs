@@ -334,6 +334,12 @@ static class Patch_AgentExecute
             var bridge = BoamBridge.Instance;
             if (bridge == null || !bridge.IsReady) return;
 
+            // Decision forcing: override AI behavior during replay
+            if (bridge._replayActive && ReplayForcing.HasDecisions)
+            {
+                ReplayForcing.TryForceDecision(__instance);
+            }
+
             var actor = __instance.m_Actor;
             if (actor == null) return;
 

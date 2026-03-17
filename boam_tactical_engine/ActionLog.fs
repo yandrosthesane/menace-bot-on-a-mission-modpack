@@ -82,7 +82,12 @@ let amendLastPlayerActionDuration (actor: string) (durationMs: int) =
             amendFile (Path.Combine(dir, actorLogName actor))
         with _ -> ()
 
-/// Log an AI action decision.
+/// Write an entry to the AI decisions log only (separate from round_log).
+let private writeDecisionEntry (dir: string) (actor: string) (json: string) =
+    appendJsonLine (Path.Combine(dir, actorLogName actor)) json
+    appendJsonLine (Path.Combine(dir, "ai_decisions.jsonl")) json
+
+/// Log an AI action decision (written to ai_decisions.jsonl, NOT round_log.jsonl).
 let logActionDecision (payload: ActionDecisionPayload) =
     match battleDir with
     | None -> ()
@@ -107,7 +112,42 @@ let logActionDecision (payload: ActionDecisionPayload) =
             alternatives = payload.Alternatives |> List.map (fun a -> {| behaviorId = a.BehaviorId; name = a.Name; score = a.Score |})
             attackCandidates = attackCandidates
         |}, jsonOptions)
+        writeDecisionEntry dir payload.Actor entry
+
+/// Log an AI action (move, useskill, endturn) to round_log.jsonl.
+let logAiAction (payload: AiActionPayload) =
+    match battleDir with
+    | None -> ()
+    | Some dir ->
+        let entry = JsonSerializer.Serialize({|
+            round = payload.Round
+            faction = payload.Faction
+            actor = payload.Actor
+            ``type`` = payload.ActionType
+            skill = payload.SkillName
+            tile = {| x = payload.Tile.X; z = payload.Tile.Z |}
+        |}, jsonOptions)
         writeEntry dir payload.Actor entry
+
+/// Log a per-element hit to round_log.jsonl.
+let logElementHit (payload: ElementHitPayload) =
+    match battleDir with
+    | None -> ()
+    | Some dir ->
+        let entry = JsonSerializer.Serialize({|
+            round = payload.Round
+            ``type`` = "element_hit"
+            target = payload.Target
+            targetFaction = payload.TargetFaction
+            attacker = payload.Attacker
+            attackerFaction = payload.AttackerFaction
+            skill = payload.Skill
+            elementIndex = payload.ElementIndex
+            damage = payload.Damage
+            elementHpAfter = payload.ElementHpAfter
+            elementAlive = payload.ElementAlive
+        |}, jsonOptions)
+        appendJsonLine (Path.Combine(dir, "round_log.jsonl")) entry
 
 /// Log a player action (click, useskill, endturn, select).
 let logPlayerAction (payload: PlayerActionPayload) =

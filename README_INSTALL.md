@@ -133,3 +133,32 @@ When updating BOAM to a new version:
 5. Shell shortcuts (step 5) only need to be set up once — they survive deploys
 
 Your user configs and source art in `UserData/BOAM/` are never touched by deploys.
+
+## Troubleshooting
+
+### Windows: Compilation fails with `ConcurrentQueue<T>` conflict
+
+If the modkit reports a compile error like:
+
+> The type 'ConcurrentQueue\<T>' exists in both 'MonoMod.Backports' and 'System.Collections.Concurrent'
+
+This is caused by the game's `MelonLoader/net35` directory containing backported types that conflict with the .NET 6 BCL. To fix it:
+
+1. **Navigate to your game's MelonLoader directory:**: `Menace\MelonLoader\`
+2. **Delete the `net35` folder** — it is not used by Menace (Il2Cpp/.NET 6 only).
+
+### Windows: `MelonLoader/net6 directory not found` in modkit bundled path
+
+If the modkit reports:
+
+> MelonLoader/net6 directory not found at ...\third_party\bundled\MelonLoader\net6
+
+The bundled MelonLoader references are missing. To fix it:
+
+1. **Copy your game's `MelonLoader\net6` folder** into the modkit's bundled directory:
+   ```
+   copy from:  Menace\MelonLoader\net6\
+   copy to:    menace-modkit-win-x64\gui-win-x64\third_party\bundled\MelonLoader\net6\
+   ```
+   Create the `MelonLoader` folder inside `third_party\bundled\` if it doesn't exist.
+2. Re-run the deploy.

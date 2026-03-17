@@ -175,6 +175,20 @@ public class BoamCommandServer
             _log.Warning($"[BOAM] Replay start parse error: {ex.Message}");
         }
 
+        // Fetch forcing data from the engine (large payload — separate request)
+        try
+        {
+            var forcingJson = EngineClient.Get("/replay/forcing-data");
+            if (!string.IsNullOrEmpty(forcingJson))
+            {
+                ReplayForcing.LoadFromReplayStart(forcingJson);
+            }
+        }
+        catch (Exception ex)
+        {
+            _log.Warning($"[BOAM] Failed to fetch forcing data: {ex.Message}");
+        }
+
         BoamBridge.Instance._replayActive = true;
         BoamBridge.Instance._replayCameraFollow = camera == "follow";
         Toast.Show($"Replay started (camera: {camera})");
@@ -185,6 +199,7 @@ public class BoamCommandServer
     private string HandleReplayStop()
     {
         BoamBridge.Instance._replayActive = false;
+        ReplayForcing.Clear();
         _log.Msg("[BOAM] Replay stopped");
         return "{\"status\":\"ok\"}";
     }

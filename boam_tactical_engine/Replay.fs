@@ -29,6 +29,7 @@ type ExpectedAiDecision = {
     Round: int
     Faction: int
     Actor: string
+    BehaviorId: int
     ChosenName: string
     ChosenScore: int
     TargetX: int
@@ -98,6 +99,7 @@ let private tryParseAiDecision (line: string) : ExpectedAiDecision option =
                     Round = match root.TryGetProperty("round") with | true, rv -> rv.GetInt32() | _ -> 0
                     Faction = match root.TryGetProperty("faction") with | true, fv -> fv.GetInt32() | _ -> 0
                     Actor = match root.TryGetProperty("actor") with | true, av -> av.GetString() |> Option.ofObj |> Option.defaultValue "" | _ -> ""
+                    BehaviorId = match chosen.TryGetProperty("behavior_id") with | true, bv -> bv.GetInt32() | _ -> 0
                     ChosenName = match chosen.TryGetProperty("name") with | true, nv -> nv.GetString() |> Option.ofObj |> Option.defaultValue "" | _ -> ""
                     ChosenScore = match chosen.TryGetProperty("score") with | true, sv -> sv.GetInt32() | _ -> 0
                     TargetX = tx
@@ -105,6 +107,102 @@ let private tryParseAiDecision (line: string) : ExpectedAiDecision option =
                 }
             | _ -> None
         with _ -> None
+
+/// A recorded combat outcome for replay forcing.
+type CombatOutcome = {
+    Round: int
+    OutcomeType: string   // "combat_damage", "combat_miss", "combat_kill"
+    Target: string
+    Attacker: string
+    Skill: string
+    Damage: int
+    ArmorPenetration: int
+    ArmorDamage: int
+    IsCrit: bool
+    TargetDestroyed: bool
+}
+
+/// Parse a JSONL line into a CombatOutcome, or None if not a combat event.
+let private tryParseCombatOutcome (line: string) : CombatOutcome option =
+    if String.IsNullOrWhiteSpace(line) then None
+    else
+        try
+            let doc = JsonDocument.Parse(line)
+            let root = doc.RootElement
+            let outcomeType =
+                match root.TryGetProperty("type") with
+                | true, v -> v.GetString() |> Option.ofObj |> Option.defaultValue ""
+                | _ -> ""
+            let validTypes = set [ "combat_damage"; "combat_miss"; "combat_kill" ]
+            if not (validTypes.Contains(outcomeType)) then None
+            else
+                let tryI (prop: string) (def: int) : int = match root.TryGetProperty(prop) with | true, v -> v.GetInt32() | _ -> def
+                let tryS (prop: string) (def: string) : string = match root.TryGetProperty(prop) with | true, v -> v.GetString() |> Option.ofObj |> Option.defaultValue def | _ -> def
+                let tryB (prop: string) (def: bool) : bool = match root.TryGetProperty(prop) with | true, v -> v.GetBoolean() | _ -> def
+                Some {
+                    Round = tryI "round" 0
+                    OutcomeType = outcomeType
+                    Target = tryS "target" ""
+                    Attacker = if outcomeType = "combat_kill" then tryS "killer" "" else tryS "attacker" ""
+                    Skill = tryS "skill" ""
+                    Damage = tryI "damage" 0
+                    ArmorPenetration = tryI "armor_penetration" 0
+                    ArmorDamage = tryI "armor_damage" 0
+                    IsCrit = tryB "is_crit" false
+                    TargetDestroyed = tryB "target_destroyed" false
+                }
+        with _ -> None
+
+/// Load combat outcomes from round_log.jsonl.
+let loadCombatOutcomes (logPath: string) : CombatOutcome array =
+    if not (File.Exists(logPath)) then [||]
+    else
+        File.ReadAllLines(logPath)
+        |> Array.choose tryParseCombatOutcome
+
+/// A recorded element hit for replay forcing.
+type ElementHit = {
+    Round: int
+    Target: string        // actor UUID
+    Attacker: string
+    Skill: string
+    ElementIndex: int
+    Damage: int
+    ElementHpAfter: int
+    ElementAlive: bool
+}
+
+/// Parse a JSONL line into an ElementHit, or None if not element_hit.
+let private tryParseElementHit (line: string) : ElementHit option =
+    if String.IsNullOrWhiteSpace(line) then None
+    else
+        try
+            let doc = JsonDocument.Parse(line)
+            let root = doc.RootElement
+            match root.TryGetProperty("type") with
+            | true, v when v.GetString() = "element_hit" ->
+                let tryI (prop: string) (def: int) : int = match root.TryGetProperty(prop) with | true, v -> v.GetInt32() | _ -> def
+                let tryS (prop: string) (def: string) : string = match root.TryGetProperty(prop) with | true, v -> v.GetString() |> Option.ofObj |> Option.defaultValue def | _ -> def
+                let tryB (prop: string) (def: bool) : bool = match root.TryGetProperty(prop) with | true, v -> v.GetBoolean() | _ -> def
+                Some {
+                    Round = tryI "round" 0
+                    Target = tryS "target" ""
+                    Attacker = tryS "attacker" ""
+                    Skill = tryS "skill" ""
+                    ElementIndex = tryI "element_index" 0
+                    Damage = tryI "damage" 0
+                    ElementHpAfter = tryI "element_hp_after" 0
+                    ElementAlive = tryB "element_alive" true
+                }
+            | _ -> None
+        with _ -> None
+
+/// Load all element hits from round_log.jsonl.
+let loadElementHits (logPath: string) : ElementHit array =
+    if not (File.Exists(logPath)) then [||]
+    else
+        File.ReadAllLines(logPath)
+        |> Array.choose tryParseElementHit
 
 /// Load all player actions from a round_log.jsonl file.
 let loadActions (logPath: string) : ReplayAction list =
@@ -114,11 +212,15 @@ let loadActions (logPath: string) : ReplayAction list =
         |> Array.choose tryParseAction
         |> Array.toList
 
-/// Load all expected AI decisions from a round_log.jsonl file.
+/// Load all expected AI decisions. Tries ai_decisions.jsonl first (new format),
+/// falls back to round_log.jsonl (legacy recordings that mixed decisions into round log).
 let loadExpectedAiDecisions (logPath: string) : ExpectedAiDecision array =
-    if not (File.Exists(logPath)) then [||]
+    let dir = Path.GetDirectoryName(logPath)
+    let decisionsPath = Path.Combine(dir, "ai_decisions.jsonl")
+    let sourcePath = if File.Exists(decisionsPath) then decisionsPath else logPath
+    if not (File.Exists(sourcePath)) then [||]
     else
-        File.ReadAllLines(logPath)
+        File.ReadAllLines(sourcePath)
         |> Array.choose tryParseAiDecision
 
 /// Get all distinct rounds in the log.
@@ -150,13 +252,18 @@ type ReplaySession = {
     mutable LastServedPlayerAction: string
 }
 
-let mutable private activeSession: ReplaySession option = None
+let mutable activeSession: ReplaySession option = None
+let mutable private sessionElementHits: ElementHit array = [||]
+
+/// Get element hits for the current session (used by forcing-data endpoint).
+let sessionElementHits_ () = sessionElementHits
 
 /// Is a replay session active?
 let isActive () = activeSession.IsSome
 
-/// Start a replay session with the given actions and determinism mode.
-let startSession (actions: ReplayAction list) (expectedAi: ExpectedAiDecision array) (mode: DeterminismMode) =
+/// Start a replay session with the given actions, element hits, and determinism mode.
+let startSession (actions: ReplayAction list) (expectedAi: ExpectedAiDecision array) (elementHits: ElementHit array) (mode: DeterminismMode) =
+    sessionElementHits <- elementHits
     activeSession <- Some {
         Actions = Array.ofList actions; Index = 0; Log = []
         ExpectedAi = expectedAi; AiIndex = 0

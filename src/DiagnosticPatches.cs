@@ -50,6 +50,7 @@ static class Patch_Diagnostics
         {
             var name = _skill?.GetTitle() ?? "null";
             BoamBridge.Logger.Msg($"[BOAM] DIAG AfterSkillUse: {name}");
+
             // When a player skill finishes, amend the last log entry with the real duration
             // and release the replay gate
             if (_pendingPlayerSkill != null && name == _pendingPlayerSkill)

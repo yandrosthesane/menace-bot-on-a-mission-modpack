@@ -113,6 +113,26 @@ let parsePlayerAction (root: JsonElement) : PlayerActionPayload =
       SkillName = tryStr root "skillName" ""
       Tile = root.GetProperty("tile") |> parseTilePos }
 
+let parseElementHit (root: JsonElement) : ElementHitPayload =
+    { Round = tryInt root "round" 0
+      Target = tryStr root "target" ""
+      TargetFaction = tryInt root "targetFaction" 0
+      Attacker = tryStr root "attacker" ""
+      AttackerFaction = tryInt root "attackerFaction" 0
+      Skill = tryStr root "skill" ""
+      ElementIndex = tryInt root "elementIndex" 0
+      Damage = tryInt root "damage" 0
+      ElementHpAfter = tryInt root "elementHpAfter" 0
+      ElementAlive = tryBool root "elementAlive" true }
+
+let parseAiAction (root: JsonElement) : AiActionPayload =
+    { Round = tryInt root "round" 0
+      Faction = root.GetProperty("faction").GetInt32()
+      Actor = tryStr root "actor" ""
+      ActionType = tryStr root "actionType" ""
+      SkillName = tryStr root "skillName" ""
+      Tile = root.GetProperty("tile") |> parseTilePos }
+
 let parseBattleStart (root: JsonElement) : BattleStartPayload =
     let sd = tryStr root "sessionDir" ""
     { Timestamp = tryStr root "timestamp" (System.DateTime.Now.ToString("yyyy_MM_dd_HH_mm"))

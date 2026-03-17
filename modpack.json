@@ -15,6 +15,8 @@
       "src/BoamCommandServer.cs",
       "src/BoamCommandExecutor.cs",
       "src/AiObservationPatches.cs",
+      "src/AiActionPatches.cs",
+      "src/ReplayForcing.cs",
       "src/PlayerActionPatches.cs",
       "src/DiagnosticPatches.cs",
       "src/Toast.cs",

@@ -209,6 +209,27 @@ let registerRoutes (app: WebApplication) (ctx: RouteContext) =
         return Results.Ok({| hook = "action-decision"; status = "ok" |})
     })) |> ignore
 
+    app.MapPost("/hook/combat-outcome", Func<HttpRequest, Threading.Tasks.Task<IResult>>(fun req -> task {
+        let! root = readJson req
+        let payload = parseElementHit root
+        logHook (sprintf "element-hit  round=%d  %s → %s[%d]  skill=%s  dmg=%d  hp=%d  alive=%b"
+            payload.Round payload.Attacker payload.Target payload.ElementIndex payload.Skill
+            payload.Damage payload.ElementHpAfter payload.ElementAlive)
+        if Config.Current.ActionLogging then
+            ActionLog.logElementHit payload
+        return Results.Ok({| hook = "combat-outcome"; status = "ok" |})
+    })) |> ignore
+
+    app.MapPost("/hook/ai-action", Func<HttpRequest, Threading.Tasks.Task<IResult>>(fun req -> task {
+        let! root = readJson req
+        let payload = parseAiAction root
+        logHook (sprintf "ai-action  round=%d  actor=%s  type=%s  skill=%s  tile=(%d,%d)"
+            payload.Round payload.Actor payload.ActionType payload.SkillName payload.Tile.X payload.Tile.Z)
+        if Config.Current.ActionLogging then
+            ActionLog.logAiAction payload
+        return Results.Ok({| hook = "ai-action"; status = "ok" |})
+    })) |> ignore
+
     app.MapPost("/hook/player-action", Func<HttpRequest, Threading.Tasks.Task<IResult>>(fun req -> task {
         let! root = readJson req
         let payload = parsePlayerAction root
@@ -261,15 +282,17 @@ let registerRoutes (app: WebApplication) (ctx: RouteContext) =
         let logPath = IO.Path.Combine(ctx.BattleReportsDir, battleName, "round_log.jsonl")
         let actions = Replay.loadActions logPath
         let expectedAi = Replay.loadExpectedAiDecisions logPath
-        Replay.startSession actions expectedAi detMode
+        let elementHits = Replay.loadElementHits logPath
+        Replay.startSession actions expectedAi elementHits detMode
+        // Notify bridge that replay is starting (small payload — bridge fetches forcing data separately)
         let optionsJson = sprintf """{"camera":"%s"}""" camera
         try
             let! _ = ctx.HttpClient.PostAsync(sprintf "%s/replay/start" ctx.CommandUrl, new Net.Http.StringContent(optionsJson, Text.Encoding.UTF8, "application/json"))
             ()
         with ex -> logWarn (sprintf "Failed to notify bridge of replay start: %s" ex.Message)
         let detLabel = match detMode with Replay.Off -> "off" | Replay.Log -> "log" | Replay.Stop -> "stop"
-        logInfo (sprintf "Replay session started: %s (%d actions, %d expected AI decisions, camera=%s, determinism=%s)" battleName (List.length actions) expectedAi.Length camera detLabel)
-        return {| status = "started"; battle = battleName; actions = List.length actions; expectedAi = expectedAi.Length; camera = camera; determinism = detLabel |}
+        logInfo (sprintf "Replay session started: %s (%d actions, %d expected AI decisions, %d element hits, camera=%s, determinism=%s)" battleName (List.length actions) expectedAi.Length elementHits.Length camera detLabel)
+        return {| status = "started"; battle = battleName; actions = List.length actions; expectedAi = expectedAi.Length; elementHits = elementHits.Length; camera = camera; determinism = detLabel |}
     }
 
     let parseDeterminismMode (root: System.Text.Json.JsonElement) =
@@ -296,6 +319,17 @@ let registerRoutes (app: WebApplication) (ctx: RouteContext) =
                 let! result = startReplaySession battleName camera detMode
                 return Results.Ok(result)
     })) |> ignore
+
+    app.MapGet("/replay/forcing-data", Func<IResult>(fun () ->
+        let jsonOpts = System.Text.Json.JsonSerializerOptions(PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.SnakeCaseLower)
+        let expectedAi = match Replay.activeSession with | Some s -> s.ExpectedAi | None -> [||]
+        let elementHits = Replay.sessionElementHits_ ()
+        let json = System.Text.Json.JsonSerializer.Serialize({|
+            aiDecisions = expectedAi |> Array.map (fun d -> {| actor = d.Actor; behaviorId = d.BehaviorId; chosenName = d.ChosenName; chosenScore = d.ChosenScore; targetX = d.TargetX; targetZ = d.TargetZ; round = d.Round |})
+            elementHits = elementHits |> Array.map (fun h -> {| target = h.Target; attacker = h.Attacker; skill = h.Skill; elementIndex = h.ElementIndex; damage = h.Damage; elementHpAfter = h.ElementHpAfter; elementAlive = h.ElementAlive; round = h.Round |})
+        |}, jsonOpts)
+        Results.Content(json, "application/json")
+    )) |> ignore
 
     app.MapGet("/replay/next", Func<HttpRequest, IResult>(fun req ->
         let actor = match req.Query.TryGetValue("actor") with | true, v -> string v | _ -> ""

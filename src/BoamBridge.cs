@@ -194,6 +194,54 @@ public class BoamBridge : IModpackPlugin
             Logger.Error($"[BOAM] DIAG patches failed: {ex.Message}");
         }
 
+        // AI action logging: patch TacticalManager events to capture actual AI actions
+        try
+        {
+            var tmType = typeof(Il2CppMenace.Tactical.TacticalManager);
+
+            var m = tmType.GetMethods().FirstOrDefault(m => m.Name == "InvokeOnMovementFinished" && m.GetParameters().Length == 2);
+            if (m != null) { harmony.Patch(m, postfix: new HarmonyMethod(typeof(AiActionPatches), nameof(AiActionPatches.OnMovementFinished))); Logger.Msg("[BOAM] Patched InvokeOnMovementFinished for AI action logging"); }
+
+            m = tmType.GetMethods().FirstOrDefault(m => m.Name == "InvokeOnSkillUse" && m.GetParameters().Length == 3);
+            if (m != null) { harmony.Patch(m, postfix: new HarmonyMethod(typeof(AiActionPatches), nameof(AiActionPatches.OnSkillUse))); Logger.Msg("[BOAM] Patched InvokeOnSkillUse for AI action logging"); }
+
+            m = tmType.GetMethods().FirstOrDefault(m => m.Name == "InvokeOnTurnEnd" && m.GetParameters().Length == 1);
+            if (m != null) { harmony.Patch(m, postfix: new HarmonyMethod(typeof(AiActionPatches), nameof(AiActionPatches.OnTurnEnd))); Logger.Msg("[BOAM] Patched InvokeOnTurnEnd for AI action logging"); }
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"[BOAM] AI action patches failed: {ex.Message}");
+        }
+
+        // Per-element hit logging: patch Element.OnHit for atomic combat logging
+        try
+        {
+            var elementType = typeof(Il2CppMenace.Tactical.Element);
+            // Dump hit/damage methods for diagnostics
+            foreach (var method in elementType.GetMethods())
+            {
+                var name = method.Name;
+                if (name.Contains("Hit") || name.Contains("Damage") || name.Contains("Death"))
+                {
+                    var parms = string.Join(", ", method.GetParameters().Select(p => $"{p.ParameterType.Name} {p.Name}"));
+                    Logger.Msg($"[BOAM] ELEMENT METHOD: {name}({parms}) params={method.GetParameters().Length}");
+                }
+            }
+            var m = elementType.GetMethods().FirstOrDefault(m => m.Name == "OnHit");
+            if (m != null)
+            {
+                var parms = string.Join(", ", m.GetParameters().Select(p => $"{p.ParameterType.Name} {p.Name}"));
+                Logger.Msg($"[BOAM] Found Element.OnHit: {parms} params={m.GetParameters().Length}");
+                harmony.Patch(m, postfix: new HarmonyMethod(typeof(AiActionPatches), nameof(AiActionPatches.OnElementHit)));
+                Logger.Msg("[BOAM] Patched Element.OnHit for combat logging");
+            }
+            else Logger.Warning("[BOAM] Element.OnHit not found");
+        }
+        catch (Exception ex)
+        {
+            Logger.Error($"[BOAM] Element hit patch failed: {ex.Message}");
+        }
+
         // Start command server for receiving actions from tactical engine
         _commandServer = new BoamCommandServer(Logger);
         _commandServer.Start();

@@ -51,6 +51,17 @@ Full usage (heatmaps, replay, HTTP API): [url=https://github.com/yandrosthesane/
 [size=3][b]v1.0.0[/b][/size]
 Initial release: C# bridge, F# tactical engine, minimap, heatmap renderer, replay system, icon generator.
 
+[size=4][b]Virus Scan Notice[/b][/size]
+
+The tactical engine archive bundles a self-contained .NET 10 runtime (~80MB). Some virus scanners may flag bundled .NET system DLLs (e.g. [i]System.Private.CoreLib.dll[/i], [i]clrjit.dll[/i]) as suspicious — these are standard Microsoft runtime files, not malware. The source code is fully available on [url=https://github.com/yandrosthesane/menace-bot-on-a-mission-modpack]GitHub[/url].
+
+[size=4][b]Related Mods[/b][/size]
+
+[list]
+[*][url=https://www.nexusmods.com/menace/mods/86]Tactical Map ~ By YandrosTheSane[/url] — Standalone minimap mod. The tactical minimap feature in BOAM supersedes this mod. Tactical Map will not be updated further.
+[*][url=https://www.nexusmods.com/menace/mods/73]PeekABoo ~ By YandrosTheSane[/url] — AI awareness replay tool. Will be reimplemented within BOAM's replay and analysis framework.
+[/list]
+
 [size=4][b]Requirements[/b][/size]
 
 [list]
