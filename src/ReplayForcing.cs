@@ -104,10 +104,14 @@ static class ReplayForcing
     {
         _decisions.Clear();
         _elementHits.Clear();
+        _currentBurstKey = "";
+        _currentBurstDamageByElement.Clear();
+        _missedElements.Clear();
     }
 
     public static bool HasDecisions => _decisions.Count > 0;
     public static bool HasElementHits => _elementHits.Count > 0;
+    public static bool HasPendingMissedHits => _missedElements.Count > 0;
 
     // ── Decision forcing API ──
 
@@ -197,33 +201,180 @@ static class ReplayForcing
         return true;
     }
 
-    // ── Element hit forcing API ──
+    // ── Element hit forcing (per-hit) ──
+    //
+    // During replay, Element.OnHit Prefix overrides _damageAppliedToElement:
+    // - If this (attacker, target, elementIndex) matches a recorded hit: use recorded damage
+    // - Otherwise: set damage to 0 (nullify the hit)
+    //
+    // Hits are grouped by (attacker, target) burst. When a new burst starts,
+    // the recorded hits for that burst are loaded into a lookup by elementIndex.
+
+    private static string _currentBurstKey = "";
+    private static Dictionary<int, int> _currentBurstDamageByElement = new();
+    // Elements that have recorded damage but were NOT hit by the game during the burst.
+    // Populated when a burst loads, entries removed when the game hits the right element.
+    private static Dictionary<int, int> _missedElements = new();
 
     /// <summary>
-    /// Called from Element.OnHit Postfix during replay.
-    /// Corrects the element's HP to match the recorded value.
-    /// If the hit queue is empty or doesn't match, logs a warning.
+    /// Get the forced damage for a specific element during replay.
+    /// Returns recorded damage if this element was hit in recording, 0 otherwise.
     /// </summary>
-    public static void ForceElementHit(Il2CppMenace.Tactical.Element element, string targetUuid, string attackerUuid, int elementIndex)
+    public static int GetForcedDamage(string attackerUuid, string targetUuid, int elementIndex)
     {
-        if (_elementHits.Count == 0) return;
+        string burstKey = $"{attackerUuid}→{targetUuid}";
 
-        var expected = _elementHits.Peek();
-
-        // Match by target + attacker + elementIndex
-        if (expected.Target != targetUuid || expected.Attacker != attackerUuid || expected.ElementIndex != elementIndex)
+        // If this is a new burst, load the recorded hits for it
+        if (burstKey != _currentBurstKey)
         {
-            BoamBridge.Logger.Warning($"[BOAM] FORCE HIT MISMATCH: expected {expected.Attacker}→{expected.Target}[{expected.ElementIndex}] got {attackerUuid}→{targetUuid}[{elementIndex}]");
-            return;
+            // Before switching burst, any remaining _missedElements from previous burst
+            // should have been applied by ApplyMissedElementHits already.
+            _currentBurstKey = burstKey;
+            _currentBurstDamageByElement.Clear();
+            _missedElements.Clear();
+
+            // Consume all consecutive hits from the queue that match this burst
+            while (_elementHits.Count > 0)
+            {
+                var next = _elementHits.Peek();
+                if (next.Attacker == attackerUuid && next.Target == targetUuid)
+                {
+                    if (!_currentBurstDamageByElement.ContainsKey(next.ElementIndex))
+                        _currentBurstDamageByElement[next.ElementIndex] = next.Damage;
+                    else
+                        _currentBurstDamageByElement[next.ElementIndex] += next.Damage;
+                    _elementHits.Dequeue();
+                }
+                else
+                {
+                    break; // Next burst
+                }
+            }
+
+            // All recorded elements start as "missed" — removed when the game actually hits them
+            foreach (var kvp in _currentBurstDamageByElement)
+                _missedElements[kvp.Key] = kvp.Value;
+
+            BoamBridge.Logger.Msg($"[BOAM] FORCE BURST LOADED: {burstKey} → {_currentBurstDamageByElement.Count} elements");
         }
 
-        _elementHits.Dequeue();
-
-        int actualHp = element.GetHitpoints();
-        if (actualHp != expected.ElementHpAfter)
+        // Look up recorded damage for this element
+        if (_currentBurstDamageByElement.TryGetValue(elementIndex, out var recordedDamage))
         {
-            element.SetHitpoints(expected.ElementHpAfter);
-            BoamBridge.Logger.Msg($"[BOAM] FORCE HIT: {targetUuid}[{elementIndex}] hp={actualHp}→{expected.ElementHpAfter} (expected dmg={expected.Damage})");
+            // Game hit the right element — remove from missed set
+            _missedElements.Remove(elementIndex);
+            return recordedDamage;
         }
+
+        // Element wasn't hit in recording — zero damage
+        return 0;
+    }
+
+    /// <summary>
+    /// Called from InvokeOnAttackTileStart to preload the burst for an attacker→target pair.
+    /// Ensures the burst is loaded even if no Element.OnHit fires (all misses).
+    /// </summary>
+    public static void PreloadBurst(string attackerUuid, string targetUuid)
+    {
+        string burstKey = $"{attackerUuid}→{targetUuid}";
+        if (burstKey == _currentBurstKey) return; // already loaded
+
+        // Apply any missed elements from the previous burst before switching
+        if (_missedElements.Count > 0)
+            ApplyMissedElementHits();
+
+        _currentBurstKey = burstKey;
+        _currentBurstDamageByElement.Clear();
+        _missedElements.Clear();
+
+        while (_elementHits.Count > 0)
+        {
+            var next = _elementHits.Peek();
+            if (next.Attacker == attackerUuid && next.Target == targetUuid)
+            {
+                if (!_currentBurstDamageByElement.ContainsKey(next.ElementIndex))
+                    _currentBurstDamageByElement[next.ElementIndex] = next.Damage;
+                else
+                    _currentBurstDamageByElement[next.ElementIndex] += next.Damage;
+                _elementHits.Dequeue();
+            }
+            else
+            {
+                break;
+            }
+        }
+
+        foreach (var kvp in _currentBurstDamageByElement)
+            _missedElements[kvp.Key] = kvp.Value;
+
+        if (_currentBurstDamageByElement.Count > 0)
+            BoamBridge.Logger.Msg($"[BOAM] FORCE BURST PRELOADED: {burstKey} → {_currentBurstDamageByElement.Count} elements");
+    }
+
+    /// <summary>
+    /// Called after each skill use completes (InvokeOnAfterSkillUse).
+    /// Applies recorded damage to elements that SHOULD have been hit but weren't
+    /// (game's RNG picked different elements). Uses SetHitpoints to subtract damage.
+    /// </summary>
+    public static void ApplyMissedElementHits()
+    {
+        if (_currentBurstDamageByElement.Count == 0) return;
+
+        // Any remaining entries in _currentBurstDamageByElement are elements that
+        // had recorded damage but were never hit by the game during this burst.
+        // (Consumed entries are removed by GetForcedDamage when matched.)
+        // Wait — GetForcedDamage doesn't remove entries. It looks them up.
+        // We need a separate "applied" set to track which elements were actually hit.
+        // For now, use the _appliedElements set populated during GetForcedDamage.
+
+        if (_missedElements.Count == 0) return;
+
+        // Parse burst key back to target UUID
+        var parts = _currentBurstKey.Split('→');
+        if (parts.Length != 2) return;
+        var targetUuid = parts[1];
+
+        try
+        {
+            var allActors = EntitySpawner.ListEntities(-1);
+            if (allActors == null) return;
+
+            foreach (var a in allActors)
+            {
+                var aInfo = EntitySpawner.GetEntityInfo(a);
+                if (aInfo == null) continue;
+                var uuid = ActorRegistry.GetUuid(aInfo.EntityId);
+                if (uuid != targetUuid) continue;
+
+                var actor = new Actor(a.Pointer);
+                var elements = actor.GetElements();
+                if (elements == null) break;
+
+                foreach (var kvp in _missedElements)
+                {
+                    int elementIndex = kvp.Key;
+                    int recordedDamage = kvp.Value;
+                    if (elementIndex < elements.Count)
+                    {
+                        var element = elements[elementIndex];
+                        if (element != null && element.IsAlive())
+                        {
+                            int currentHp = element.GetHitpoints();
+                            int newHp = Math.Max(0, currentHp - recordedDamage);
+                            element.SetHitpoints(newHp);
+                            BoamBridge.Logger.Msg($"[BOAM] FORCE MISSED: {targetUuid}[{elementIndex}] hp={currentHp}→{newHp} (recorded dmg={recordedDamage})");
+                        }
+                    }
+                }
+                break;
+            }
+        }
+        catch (Exception ex)
+        {
+            BoamBridge.Logger.Warning($"[BOAM] FORCE MISSED failed: {ex.Message}");
+        }
+
+        // Clear for next burst
+        _missedElements.Clear();
     }
 }

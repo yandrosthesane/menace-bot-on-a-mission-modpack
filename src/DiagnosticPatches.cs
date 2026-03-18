@@ -51,6 +51,12 @@ static class Patch_Diagnostics
             var name = _skill?.GetTitle() ?? "null";
             BoamBridge.Logger.Msg($"[BOAM] DIAG AfterSkillUse: {name}");
 
+            // Replay forcing: apply recorded damage to elements that weren't hit by the game
+            if (BoamBridge.Instance?._replayActive == true && ReplayForcing.HasPendingMissedHits)
+            {
+                ReplayForcing.ApplyMissedElementHits();
+            }
+
             // When a player skill finishes, amend the last log entry with the real duration
             // and release the replay gate
             if (_pendingPlayerSkill != null && name == _pendingPlayerSkill)
@@ -91,6 +97,29 @@ static class Patch_Diagnostics
                 _pendingSkillStartTime = UnityEngine.Time.time;
             }
             BoamBridge.Logger.Msg($"[BOAM] DIAG AttackStart: {uuid} {skillName} → ({tx},{tz}) duration={_attackDurationInSec}s");
+
+            // Replay forcing: preload burst so ApplyMissedElementHits works even on total misses
+            if (BoamBridge.Instance?._replayActive == true && ReplayForcing.HasElementHits && info.HasValue)
+            {
+                // Find target actor on the target tile
+                try
+                {
+                    if (_targetTile != null && _targetTile.HasActor())
+                    {
+                        var targetActor = _targetTile.GetActor();
+                        if (targetActor != null)
+                        {
+                            var targetInfo = ActorRegistry.GetActorInfo(targetActor);
+                            if (targetInfo.HasValue)
+                            {
+                                var targetUuid = ActorRegistry.GetUuid(targetInfo.Value.entityId);
+                                ReplayForcing.PreloadBurst(uuid, targetUuid);
+                            }
+                        }
+                    }
+                }
+                catch { }
+            }
         }
         catch { }
     }

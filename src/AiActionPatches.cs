@@ -145,16 +145,57 @@ static class AiActionPatches
         }
     }
 
-    // ── Per-element hit logging (ALL factions) ──
+    // ── Per-element hit logging + replay forcing (ALL factions) ──
     //
-    // Entity.OnElementHit is the atomic combat operation: one projectile hits one element (model)
-    // within a squad for a specific amount of damage. Recording and replaying these exactly
-    // produces deterministic combat outcomes — deaths are a natural consequence of HP reaching 0.
+    // Element.OnHit is the atomic combat operation: one projectile hits one model.
+    // During replay, the Prefix saves HP before the hit, the Postfix restores it
+    // (zeroing all damage). After the attack burst completes, ReplayForcing applies
+    // the recorded damage to each element.
 
     /// <summary>
-    /// Element.OnHit(Entity _attacker, DamageInfo, int _damageAppliedToElement, Skill)
-    /// Per-projectile, per-model hit. The atomic unit of combat.
-    /// __instance is the Element that was hit.
+    /// Element.OnHit PREFIX — during replay, override _damageAppliedToElement to match recording.
+    /// Looks up the element index in the current burst's expected hits.
+    /// If this element was hit in recording: set recorded damage.
+    /// If not: set 0 (nullify the hit).
+    /// </summary>
+    public static void OnElementHitPrefix(Il2CppMenace.Tactical.Element __instance,
+        Entity _attacker, ref int _damageAppliedToElement)
+    {
+        try
+        {
+            if (BoamBridge.Instance?._replayActive != true || !ReplayForcing.HasElementHits) return;
+            if (__instance == null || _attacker == null) return;
+
+            var entity = __instance.GetEntity();
+            if (entity == null) return;
+            var targetActor = entity.TryCast<Actor>();
+            if (targetActor == null) return;
+            var targetInfo = ActorRegistry.GetActorInfo(targetActor);
+            if (targetInfo == null) return;
+            var targetUuid = ActorRegistry.GetUuid(targetInfo.Value.entityId);
+
+            var attackerActor = _attacker.TryCast<Actor>();
+            if (attackerActor == null) return;
+            var attackerInfo = ActorRegistry.GetActorInfo(attackerActor);
+            if (attackerInfo == null) return;
+            var attackerUuid = ActorRegistry.GetUuid(attackerInfo.Value.entityId);
+
+            int elementIndex = __instance.GetElementIndex();
+            int originalDamage = _damageAppliedToElement;
+
+            int forcedDamage = ReplayForcing.GetForcedDamage(attackerUuid, targetUuid, elementIndex);
+            _damageAppliedToElement = forcedDamage;
+
+            if (forcedDamage != originalDamage)
+            {
+                BoamBridge.Logger.Msg($"[BOAM] FORCE DMG: {attackerUuid}→{targetUuid}[{elementIndex}] {originalDamage}→{forcedDamage}");
+            }
+        }
+        catch { }
+    }
+
+    /// <summary>
+    /// Element.OnHit POSTFIX — logs the hit (after forcing has been applied).
     /// </summary>
     public static void OnElementHit(Il2CppMenace.Tactical.Element __instance,
         Entity _attacker, Il2CppMenace.Tactical.DamageInfo _damageInfo,
@@ -218,11 +259,7 @@ static class AiActionPatches
             BoamBridge.Logger.Msg($"[BOAM] element_hit {attackerUuid} → {targetUuid}[{elementIndex}]: {_damageAppliedToElement}dmg hp={elementHpAfter} alive={elementAlive}");
             ThreadPool.QueueUserWorkItem(_ => EngineClient.Post("/hook/combat-outcome", payload));
 
-            // Replay forcing: correct element HP to match recording
-            if (bridge._replayActive && ReplayForcing.HasElementHits)
-            {
-                ReplayForcing.ForceElementHit(__instance, targetUuid, attackerUuid, elementIndex);
-            }
+            // Damage forcing handled in OnElementHitPrefix via ref _damageAppliedToElement.
         }
         catch (Exception ex)
         {

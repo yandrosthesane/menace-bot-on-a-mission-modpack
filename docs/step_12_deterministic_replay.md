@@ -199,11 +199,87 @@ Instead of fighting the RNG, we record the actual AI decisions and **force** the
 - Same approach as player action replay — consistent architecture
 - The determinism watchdog still works for detecting when forced decisions differ from what the AI would have chosen (useful for AI modification impact analysis)
 
-## Current Status
+## Current Status — Decision Forcing + Combat Outcome Forcing (IMPLEMENTED)
 
-Removing RNG capture/restore/logging code. Keeping:
-- Determinism watchdog (compare decisions, halt/log modes, divergence endpoint)
-- Select via OnLeftClicked (no RNG pollution)
-- Per-agent RNG state in decision log entries (for diagnostic purposes only)
+RNG capture/restore abandoned. Replaced with two forcing systems that produce deterministic replay.
 
-Next: implement decision forcing in `Patch_AgentExecute`.
+### Log Separation
+
+AI decisions moved from `round_log.jsonl` to `ai_decisions.jsonl`. The round log now contains only actions and combat outcomes:
+- **Player actions**: `player_click`, `player_useskill`, `player_endturn`, `player_select`
+- **AI actions**: `ai_move`, `ai_useskill`, `ai_endturn` — patched via `TacticalManager.InvokeOnMovementFinished`, `InvokeOnSkillUse`, `InvokeOnTurnEnd`, filtered to non-player factions
+- **Element hits**: `element_hit` — per-projectile, per-model damage via `Element.OnHit`
+
+### AI Decision Forcing
+
+**File**: `src/ReplayForcing.cs`, `src/AiObservationPatches.cs` (Patch_AgentExecute)
+
+On replay start, the bridge fetches all expected AI decisions from the engine via `GET /replay/forcing-data`. At each `Agent.Execute` Prefix:
+1. Peek at the next expected decision in the queue
+2. If it matches the current actor, find the behavior by ID in `GetBehaviors()`
+3. Set `agent.m_ActiveBehavior` to the matched behavior
+4. For Move: set `moveBehavior.m_TargetTile` from `agent.m_Tiles` lookup
+5. For SkillBehavior/Attack: set `skillBehavior.m_TargetTile` via `TileMap.GetTile(x, z)`
+
+This forces every AI actor to execute the recorded behavior with the correct target.
+
+### Combat Outcome Forcing (Element-Level)
+
+**Problem**: Even with decision forcing, RNG variance in hit/miss rolls and element selection produces different combat outcomes. A unit surviving that should have died cascades into completely different game state.
+
+**Solution**: Two-phase per-burst element hit forcing.
+
+**Phase 1 — Zero wrong-element damage** (`Element.OnHit` Prefix in `AiActionPatches.cs`):
+- On `InvokeOnAttackTileStart`, preload the expected element hits for the current burst (attacker→target pair) from the queue into a lookup by element index
+- On each `Element.OnHit`, override `_damageAppliedToElement` via `ref` parameter:
+  - If this element index was hit in recording → use recorded damage
+  - If not → set to 0 (nullify the hit)
+- This prevents wrong elements from taking damage or dying
+
+**Phase 2 — Apply missed hits** (`ApplyMissedElementHits` in `ReplayForcing.cs`, called from `InvokeOnAfterSkillUse`):
+- After each skill use completes, check if any recorded element hits were never consumed (game's RNG picked different elements or missed entirely)
+- For each missed element: directly call `element.SetHitpoints(currentHp - recordedDamage)`
+- This ensures elements that should have been hit take the correct damage
+
+**Data flow**:
+```
+Recording:
+  Element.OnHit fires → logs element_hit to round_log.jsonl
+    {target, attacker, elementIndex, damage, elementHpAfter, elementAlive}
+
+Replay start:
+  Engine loads element_hits from round_log.jsonl
+  Bridge fetches via GET /replay/forcing-data
+  Parsed into Queue<ExpectedElementHit>
+
+Replay:
+  InvokeOnAttackTileStart → PreloadBurst(attacker, target)
+    → Consume queue entries into _currentBurstDamageByElement[elementIndex] = damage
+    → Copy to _missedElements (tracks which elements game hasn't hit yet)
+
+  Element.OnHit Prefix → GetForcedDamage(attacker, target, elementIndex)
+    → If element in burst lookup: return recorded damage, remove from _missedElements
+    → If not: return 0
+
+  InvokeOnAfterSkillUse → ApplyMissedElementHits()
+    → For each remaining _missedElements: SetHitpoints(hp - recordedDamage)
+```
+
+**Result**: Per-element HP matches the recording exactly. Deaths are a natural consequence of HP reaching 0 — no need to intercept `Die()` or track kills separately.
+
+### Files Modified
+
+| File | Change |
+|------|--------|
+| `src/AiActionPatches.cs` | AI action logging (move/useskill/endturn), Element.OnHit prefix+postfix |
+| `src/AiObservationPatches.cs` | Decision forcing in Patch_AgentExecute Prefix |
+| `src/ReplayForcing.cs` | Forcing state: decision queue, element hit queue, burst preloading, missed hit application |
+| `src/BoamCommandServer.cs` | Fetch forcing data on replay start |
+| `src/DiagnosticPatches.cs` | PreloadBurst on AttackTileStart, ApplyMissedElementHits on AfterSkillUse |
+| `src/BoamBridge.cs` | Patch registration for all new hooks |
+| `modpack.json` | Added AiActionPatches.cs, ReplayForcing.cs to sources |
+| `boam_tactical_engine/Replay.fs` | ElementHit type, parser, loader; ExpectedAiDecision with BehaviorId |
+| `boam_tactical_engine/GameTypes.fs` | ElementHitPayload, AiActionPayload types |
+| `boam_tactical_engine/HookPayload.fs` | parseElementHit, parseAiAction parsers |
+| `boam_tactical_engine/ActionLog.fs` | logAiAction, logElementHit; decisions to ai_decisions.jsonl |
+| `boam_tactical_engine/Routes.fs` | /hook/ai-action, /hook/combat-outcome, /replay/forcing-data routes |

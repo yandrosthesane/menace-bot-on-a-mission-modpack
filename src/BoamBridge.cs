@@ -213,27 +213,17 @@ public class BoamBridge : IModpackPlugin
             Logger.Error($"[BOAM] AI action patches failed: {ex.Message}");
         }
 
-        // Per-element hit logging: patch Element.OnHit for atomic combat logging
+        // Per-element hit: patch Element.OnHit (prefix for forcing, postfix for logging)
         try
         {
             var elementType = typeof(Il2CppMenace.Tactical.Element);
-            // Dump hit/damage methods for diagnostics
-            foreach (var method in elementType.GetMethods())
-            {
-                var name = method.Name;
-                if (name.Contains("Hit") || name.Contains("Damage") || name.Contains("Death"))
-                {
-                    var parms = string.Join(", ", method.GetParameters().Select(p => $"{p.ParameterType.Name} {p.Name}"));
-                    Logger.Msg($"[BOAM] ELEMENT METHOD: {name}({parms}) params={method.GetParameters().Length}");
-                }
-            }
             var m = elementType.GetMethods().FirstOrDefault(m => m.Name == "OnHit");
             if (m != null)
             {
-                var parms = string.Join(", ", m.GetParameters().Select(p => $"{p.ParameterType.Name} {p.Name}"));
-                Logger.Msg($"[BOAM] Found Element.OnHit: {parms} params={m.GetParameters().Length}");
-                harmony.Patch(m, postfix: new HarmonyMethod(typeof(AiActionPatches), nameof(AiActionPatches.OnElementHit)));
-                Logger.Msg("[BOAM] Patched Element.OnHit for combat logging");
+                harmony.Patch(m,
+                    prefix: new HarmonyMethod(typeof(AiActionPatches), nameof(AiActionPatches.OnElementHitPrefix)),
+                    postfix: new HarmonyMethod(typeof(AiActionPatches), nameof(AiActionPatches.OnElementHit)));
+                Logger.Msg("[BOAM] Patched Element.OnHit (prefix+postfix) for forcing + logging");
             }
             else Logger.Warning("[BOAM] Element.OnHit not found");
         }
