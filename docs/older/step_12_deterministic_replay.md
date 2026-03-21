@@ -283,3 +283,127 @@ Replay:
 | `boam_tactical_engine/HookPayload.fs` | parseElementHit, parseAiAction parsers |
 | `boam_tactical_engine/ActionLog.fs` | logAiAction, logElementHit; decisions to ai_decisions.jsonl |
 | `boam_tactical_engine/Routes.fs` | /hook/ai-action, /hook/combat-outcome, /replay/forcing-data routes |
+
+### 9. InflictDamage polling desync — interrupt timing divergence
+
+**Battle**: `battle_2026_03_18_22_06`
+
+**Symptom**: Replay diverges in round 2. After `civilian.worker.2` acts correctly, `wildlife.alien_01_small_spiderling.1` takes a turn instead of the expected `wildlife.alien_stinger.2`. From that point, the queue is permanently out of sync and the replay ends with only 57/224 AI actions replayed.
+
+**Root cause analysis**:
+
+The divergence is caused by a **civilian.worker.1 interrupt firing at the wrong time** during replay.
+
+**Recording sequence (round 2)**:
+```
+stinger.3 → Shoot @(12,22) → hits worker.1[1] for 6dmg
+stinger.3 → Shoot @(12,22) (second shot, no hit logged)
+stinger.3 → Move @(7,22) → endturn
+[player acts]
+worker.2 → Move @(15,23) → endturn
+stinger.2 → Shoot @(12,22) → hits worker.1[1] for 1dmg → worker.1 INTERRUPT endturn
+stinger.2 → Shoot @(5,19) → hits player.rewa
+stinger.2 → Move @(6,24) → endturn
+```
+
+**Replay sequence (round 2)**:
+```
+stinger.3 → FORCE InflictDamage ×263 (lines 125-396, ~5 seconds of polling)
+  Line 192: element_hit stinger.3→worker.1[2] 0dmg (FORCE DMG: 6→0, wrong element index)
+  Line 285: element_hit stinger.3→worker.1[2] 0dmg (FORCE DMG: 3→0)
+  Line 332: *** civilian.worker.1 ai_endturn *** (INTERRUPT FIRES EARLY)
+stinger.3 → Move @(7,22) → endturn  ✓
+[player acts]
+worker.2 → Move @(15,23) → endturn  ✓
+spiderling.1 → Move @(12,21) → endturn  ✗ (should be stinger.2!)
+[replay effectively ends]
+```
+
+**What happened**:
+
+1. During the original battle, `Agent.Execute` for `stinger.3` produced 263 `InflictDamage` calls (projectile in-flight polling, ~16ms each). All 263 were recorded in `ai_decisions.jsonl`.
+
+2. During replay, the same 263 `InflictDamage` entries are correctly forced from the queue (FORCE log confirms all 263 match). The queue actor-matching guard (`expected.Actor == actorUuid`) ensures only stinger.3's entries are consumed.
+
+3. However, the 5-second InflictDamage polling window creates a timing window during which the game engine processes other actors' reactions. `civilian.worker.1` (sitting at (12,22), the target tile) receives an interrupt and its `Agent.Execute` fires at replay line 332.
+
+4. `TryForceDecision` correctly refuses to force worker.1 (queue head is stinger.3), so worker.1 runs its own PickBehavior → Idle → ai_endturn. **The queue is not corrupted** — worker.1's early interrupt doesn't consume any queue entry.
+
+5. But worker.1's interrupt changes the **game state**: the turn order manager considers worker.1's turn "complete" for this round. In the recording, worker.1's interrupt happened later (during stinger.2's attack). This timing difference causes the turn scheduling engine to select a different next actor after worker.2.
+
+6. When `spiderling.1` fires `Agent.Execute`, the queue head is `stinger.2 InflictDamage`. Actor mismatch → TryForceDecision returns false → spiderling.1 runs unforced. The queue is now permanently stuck (waiting for stinger.2 which never acts), and all subsequent actors run unforced.
+
+**Why worker.1 interrupts early**:
+- The `InflictDamage` behavior polls via `Agent.Execute` every ~16ms. The game is running normally during this time — other actors' AI can fire.
+- In the original play, the interrupt timing was different (worker.1 reacted during stinger.2's attack, not stinger.3's)
+- This is a **non-deterministic timing dependency**: the exact moment an interrupt fires depends on frame timing, animation state, and internal game scheduling — none of which are captured in the recording.
+
+**Element index mismatch (secondary finding)**:
+- Recording: stinger.3 hits worker.1 element [1] for 6 damage
+- Replay: stinger.3 hits worker.1 element [2] — FORCE DMG correctly overrides 6→0
+- The FORCE MISSED mechanism then applies damage to the correct element
+- This is working as designed (combat outcome forcing handles element index differences)
+
+**Key structural problem**: The InflictDamage polling behavior creates a wide timing window (263 frames / ~5 seconds) during which other actors' interrupts can fire. The queue forcing system handles the queue correctly (no corruption), but the **game's internal turn order** diverges because interrupts fire at different relative times.
+
+### 10. Actor turn order forcing — failed approaches
+
+**Goal**: Force the game to pick AI actors in the same order as the recording.
+
+**Data**: Turn order derived from `ai_endturn` entries in `round_log.jsonl` — gives the exact sequence of actors per faction per round.
+
+**Attempt 1: Patch `AIFaction.Pick(Actor)` Prefix with `ref Actor _actor`**
+- Patch registered successfully (method found, Harmony confirmed)
+- **Never fired at runtime** — Pick() is inlined by Il2Cpp into Process()
+- Il2Cpp's ahead-of-time compilation eliminates the method call boundary
+
+**Attempt 2: Patch `BaseFaction.set_m_ActiveActor(Actor)` Prefix**
+- Failed: "Method is a field accessor, it can't be patched" (Il2CppInterop error)
+- Il2Cpp property setters that just set a field have no method body to patch
+
+**Attempt 3: Patch `AIFaction.Execute()` Prefix**
+- Would fire on every AI evaluation iteration (up to 16× per actor turn)
+- Requires tracking first-call-per-actor to avoid consuming turn order entries multiple times
+- Not implemented — abandoned in favor of score rigging
+
+### 11. Actor turn order forcing — score rigging approach (IMPLEMENTED)
+
+**Idea**: Instead of intercepting the pick, control its INPUT. The game picks the actor with the highest `Agent.GetScoreMultForPickingThisAgent()`. Override the score so the recorded actor wins.
+
+**How the game's pick works**:
+```
+AIFaction.Process() [per frame]
+  ├── Think() → Agent.Evaluate() × all agents  [scores tiles/behaviors]
+  ├── Pick logic:
+  │     ├── Agent.GetScoreMultForPickingThisAgent() × all agents  ← OUR POSTFIX
+  │     ├── Select highest score
+  │     ├── Pick(actor)  [INLINED — sets m_ActiveActor]
+  │     └── Agent.OnPicked()  [INLINED]
+  ├── Execute() → Agent.Execute()  ← OUR PREFIX (decision forcing)
+  └── InvokeOnTurnEnd(actor)  ← OUR POSTFIX (consume turn order)
+```
+
+Two scoring systems exist:
+- **Behavior scores** (from Think/Evaluate): "what should this agent do?" — Move(677), Attack(120), Idle(1)
+- **Pick scores** (GetScoreMultForPickingThisAgent): "how urgently does this agent need to act?" — used by the faction to prioritize which agent goes next. May be a multiplier on behavior scores.
+
+**Patches**:
+- `Agent.GetScoreMultForPickingThisAgent` **Postfix**: peek the turn order queue for this faction.
+  - If this agent is the recorded next actor → `__result = 99999` (guaranteed pick)
+  - Otherwise → `__result = -1` (suppressed)
+- Turn order consumption in `InvokeOnTurnEnd` **Postfix**: when an AI actor's turn ends, consume the queue entry so the next cycle boosts the next recorded actor.
+
+**Why not OnPicked for consumption**: `Agent.OnPicked()` is inlined by Il2Cpp (patch registers but never fires). `InvokeOnTurnEnd` fires exactly once per actor turn and is not inlined.
+
+**Data**: Turn order derived from `ai_endturn` entries in `round_log.jsonl` — one entry per actor turn with actor UUID, faction, round. Loaded by engine, served via `/replay/forcing-data`.
+
+**Per-faction queues**: Factions are interleaved in the recording (civilian f=3, wildlife f=7, civilian f=3...). A single global queue fails because when wildlife ends its turn, the queue front has a civilian entry — faction mismatch. Fix: `_turnOrderByFaction` is a `Dictionary<int, Queue<string>>` keyed by faction index. Each faction consumes from its own queue independently.
+
+**Consumption validation**: `OnTurnEnd` only consumes if the ending actor matches the queue head for that faction. Mismatches (interrupt actors ending out of order) are logged as warnings without consuming.
+
+**Flow per actor turn**:
+1. Game evaluates pick scores → our Postfix boosts recorded next actor
+2. Game picks that actor (highest score)
+3. Actor acts (Move, Attack, etc.) — decision forcing + element hit forcing apply
+4. `InvokeOnTurnEnd` fires → we consume queue entry
+5. Next pick cycle → queue now points to next recorded actor

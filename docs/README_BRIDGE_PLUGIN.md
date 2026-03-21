@@ -53,7 +53,7 @@ All player actions are sent to `/hook/player-action` with:
 
 | File | Role |
 |------|------|
-| `src/BoamBridge.cs` | Plugin lifecycle, engine check, overlay wiring, replay pull |
+| `src/BoamBridge.cs` | Plugin lifecycle, engine check, overlay wiring, command queue |
 | `src/AiObservationPatches.cs` | AI hooks (tile-scores, on-turn-start, movement, decisions) |
 | `src/PlayerActionPatches.cs` | Player hooks, map capture, actor-changed |
 | `src/DiagnosticPatches.cs` | Turn/skill lifecycle tracing |

@@ -123,7 +123,16 @@ let parseElementHit (root: JsonElement) : ElementHitPayload =
       ElementIndex = tryInt root "elementIndex" 0
       Damage = tryInt root "damage" 0
       ElementHpAfter = tryInt root "elementHpAfter" 0
-      ElementAlive = tryBool root "elementAlive" true }
+      ElementHpMax = tryInt root "elementHpMax" 0
+      ElementAlive = tryBool root "elementAlive" true
+      UnitHp = tryInt root "unitHp" 0
+      UnitHpMax = tryInt root "unitHpMax" 0
+      UnitAp = tryInt root "unitAp" 0
+      UnitSuppression = match root.TryGetProperty("unitSuppression") with | true, v -> v.GetSingle() | _ -> 0f
+      UnitMorale = match root.TryGetProperty("unitMorale") with | true, v -> v.GetSingle() | _ -> 0f
+      UnitMoraleState = tryInt root "unitMoraleState" 0
+      UnitSuppressionState = tryInt root "unitSuppressionState" 0
+      UnitArmorDurability = tryInt root "unitArmorDurability" 0 }
 
 let parseAiAction (root: JsonElement) : AiActionPayload =
     { Round = tryInt root "round" 0

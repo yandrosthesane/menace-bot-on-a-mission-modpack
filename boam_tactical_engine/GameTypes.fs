@@ -142,6 +142,7 @@ type PlayerActionPayload = {
 }
 
 /// Per-element hit — atomic combat operation: one projectile hits one model.
+/// Includes both element-level and unit-level state after the hit.
 type ElementHitPayload = {
     Round: int
     Target: string        // Stable UUID of target actor
@@ -149,10 +150,21 @@ type ElementHitPayload = {
     Attacker: string      // Stable UUID of attacker
     AttackerFaction: FactionId
     Skill: string
+    // Element state (per model)
     ElementIndex: int     // Which model in the squad was hit
     Damage: int           // Damage applied to this element
     ElementHpAfter: int   // Element HP after damage
+    ElementHpMax: int     // Element max HP
     ElementAlive: bool    // Is element still alive
+    // Unit state (whole squad — combat side effects)
+    UnitHp: int           // Squad total HP
+    UnitHpMax: int
+    UnitAp: int           // Action points remaining
+    UnitSuppression: float32  // Suppression value
+    UnitMorale: float32       // Morale value
+    UnitMoraleState: int      // MoraleState enum
+    UnitSuppressionState: int // SuppressionState enum
+    UnitArmorDurability: int  // Armor durability
 }
 
 /// AI action (move, useskill, endturn) — the actual AP-consuming primitives.

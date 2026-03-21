@@ -8,13 +8,13 @@
   // ── Network ──
   "port": 7660,                // tactical engine HTTP port
   "bridge_port": 7655,         // game bridge port (C# side)
-  "command_port": 7661,        // command server port (replay actions)
+  "command_port": 7661,        // command server port
 
   // ── Features ──
   // Toggle individual features on/off. Only the minimap is enabled by default.
   // The minimap toggle is in tactical_map.json5 ("Enabled": true/false).
   "heatmaps": false,           // collect render job data (tile scores, decisions) for offline heatmap generation
-  "action_logging": false,     // log player actions + AI decisions to round_log.jsonl (required for replay)
+  "action_logging": false,     // log player actions + AI decisions to round_log.jsonl
   "ai_logging": false,         // log AI decisions (requires action_logging; enables determinism watchdog)
 
   // ── Rendering ──

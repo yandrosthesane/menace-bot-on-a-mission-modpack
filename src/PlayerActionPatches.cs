@@ -222,7 +222,7 @@ static class Patch_PreviewReady
 
 /// <summary>
 /// Harmony patch: fires when the active actor changes.
-/// Sends actor info to the tactical engine for event-driven replay and logging.
+/// Sends actor info to the tactical engine for event-driven logging and minimap updates.
 /// </summary>
 static class Patch_ActiveActorChanged
 {
@@ -286,7 +286,7 @@ static class Patch_ActiveActorChanged
 }
 
 /// <summary>
-/// Harmony patch: logs click primitives when the player (or replay) clicks a tile.
+/// Harmony patch: logs click primitives when the player clicks a tile.
 /// Patched on multiple TacticalAction subclasses to capture all clicks.
 /// Logs the concrete action type for diagnostics.
 /// </summary>

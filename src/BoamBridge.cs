@@ -35,8 +35,6 @@ public class BoamBridge : IModpackPlugin
     private bool _ready;
     private BoamCommandServer _commandServer;
     private float _nextCommandTime;
-    internal bool _replayActive;
-    internal bool _replayCameraFollow = true;
     private TacticalMap.TacticalMapOverlay _tacticalMap;
 
 
@@ -213,17 +211,15 @@ public class BoamBridge : IModpackPlugin
             Logger.Error($"[BOAM] AI action patches failed: {ex.Message}");
         }
 
-        // Per-element hit: patch Element.OnHit (prefix for forcing, postfix for logging)
+        // Per-element hit logging: patch Element.OnHit postfix
         try
         {
             var elementType = typeof(Il2CppMenace.Tactical.Element);
             var m = elementType.GetMethods().FirstOrDefault(m => m.Name == "OnHit");
             if (m != null)
             {
-                harmony.Patch(m,
-                    prefix: new HarmonyMethod(typeof(AiActionPatches), nameof(AiActionPatches.OnElementHitPrefix)),
-                    postfix: new HarmonyMethod(typeof(AiActionPatches), nameof(AiActionPatches.OnElementHit)));
-                Logger.Msg("[BOAM] Patched Element.OnHit (prefix+postfix) for forcing + logging");
+                harmony.Patch(m, postfix: new HarmonyMethod(typeof(AiActionPatches), nameof(AiActionPatches.OnElementHit)));
+                Logger.Msg("[BOAM] Patched Element.OnHit for logging");
             }
             else Logger.Warning("[BOAM] Element.OnHit not found");
         }
@@ -312,80 +308,7 @@ public class BoamBridge : IModpackPlugin
             }
         }
 
-        // Pull-based replay: bridge asks the engine for the next action when ready.
-        // Gates: right actor active, not moving, no skill animation in progress.
-        if (_engineAvailable && _ready && _replayActive && UnityEngine.Time.time >= _nextCommandTime)
-        {
-            // Check gates before pulling
-            var activeGameObj = TacticalController.GetActiveActor();
-            if (activeGameObj.IsNull) return;
-            var activeActor = new Actor(activeGameObj.Pointer);
-            if (activeActor.IsMoving()) return;
-
-            var activeInfo = ActorRegistry.GetActorInfo(activeActor);
-            if (activeInfo == null) return;
-            var activeUuid = ActorRegistry.GetUuid(activeInfo.Value.entityId);
-            var activeFaction = activeInfo.Value.factionId;
-
-            // Only pull during player turns — check both active actor AND current game faction
-            if (activeFaction != 1 && activeFaction != 2) return;
-            int gameFaction = TacticalController.GetCurrentFaction();
-            if (gameFaction != 1 && gameFaction != 2) return;
-
-            try
-            {
-                var json = EngineClient.Get($"/replay/next?actor={Uri.EscapeDataString(activeUuid)}&round={Round}");
-                if (json == null) return;
-                var doc = JsonSerializer.Deserialize<JsonElement>(json);
-
-                var status = doc.GetProperty("status").GetString();
-                var respActor = doc.TryGetProperty("actor", out var ra) ? ra.GetString() ?? "" : "";
-                var respAction = doc.TryGetProperty("action", out var ract) ? ract.GetString() ?? "" : "";
-                Logger.Msg($"[BOAM] Replay pull: active={activeUuid} faction={activeFaction} gameFaction={gameFaction} → status={status} actor={respActor} action={respAction}");
-                if (status == "done")
-                {
-                    _replayActive = false;
-                    Logger.Msg("[BOAM] Replay complete");
-                    Toast.Show("Replay complete", 5f);
-                    return;
-                }
-                if (status == "halted")
-                {
-                    _replayActive = false;
-                    var reason = doc.TryGetProperty("reason", out var rv) ? rv.GetString() ?? "" : "";
-                    var divCount = doc.TryGetProperty("divergences", out var dcv) ? dcv.GetInt32() : 0;
-                    Logger.Msg($"[BOAM] Replay HALTED: {reason}, {divCount} divergence(s)");
-                    Toast.Show($"Replay halted: {reason} ({divCount} divergence(s))", 10f);
-                    return;
-                }
-                if (status == "waiting")
-                    return;
-
-                var action = doc.GetProperty("action").GetString() ?? "";
-                var x = doc.TryGetProperty("x", out var xv) ? xv.GetInt32() : 0;
-                var z = doc.TryGetProperty("z", out var zv) ? zv.GetInt32() : 0;
-                var skill = doc.TryGetProperty("skill", out var sv) ? sv.GetString() ?? "" : "";
-                var delayMs = doc.TryGetProperty("delay_ms", out var dv) ? dv.GetInt32() : 0;
-
-                // Use the actor from the response, not the active actor — the engine may
-                // serve select actions for a different actor (player switching units).
-                var cmdActor = !string.IsNullOrEmpty(respActor) ? respActor : activeUuid;
-                var cmd = new BoamCommandServer.ActionCommand
-                {
-                    Action = action, X = x, Z = z, Skill = skill, Actor = cmdActor, DelayMs = delayMs
-                };
-
-                Logger.Msg($"[BOAM] Replay exec: {cmdActor} {action} ({x},{z}) {skill} delayMs={delayMs}");
-                BoamCommandExecutor.Execute(cmd, Logger);
-                _nextCommandTime = UnityEngine.Time.time + (delayMs / 1000f);
-            }
-            catch (Exception ex)
-            {
-                Logger.Warning($"[BOAM] Replay pull error: {ex.Message}");
-            }
-        }
-
-        // Also drain command server queue for non-replay commands
+        // Drain command server queue
         if (_commandServer != null && UnityEngine.Time.time >= _nextCommandTime)
         {
             if (_commandServer.TryDequeue(out var cmd))

@@ -5,11 +5,10 @@
 | Module | Purpose |
 |--------|---------|
 | `Program.fs` | HTTP server startup, route registration |
-| `Routes.fs` | All HTTP endpoints (hooks, render, replay, navigation) |
+| `Routes.fs` | All HTTP endpoints (hooks, render, navigation) |
 | `RenderJobCollector.fs` | Accumulates tile-scores/decisions per actor per round, flushes to disk |
 | `HeatmapRenderer.fs` | Renders PNG heatmaps from tile data + map background + icons |
 | `ActionLog.fs` | Per-actor and shared JSONL action logs |
-| `Replay.fs` | Reads action logs, serves replay actions to the bridge |
 | `Config.fs` | JSON5 config loading with versioned user/default resolution |
 | `Rendering.fs` | Low-level pixel operations, map info parsing, border drawing |
 | `GameTypes.fs` | Shared type definitions (tiles, factions, units, scores) |
@@ -30,6 +29,9 @@
 | `/hook/action-decision` | POST | AI behavior decision -- attached to render job + action log |
 | `/hook/movement-finished` | POST | Move destination -- attached to render job |
 | `/hook/player-action` | POST | Player move, skill, endturn |
+| `/hook/ai-action` | POST | AI move, skill, endturn -- logged to action log |
+| `/hook/combat-outcome` | POST | Per-element hit damage -- logged to action log |
+| `/hook/skill-complete` | POST | Skill animation finished -- amends last action with measured duration |
 | `/hook/battle-start` | POST | Start battle session (uses dir created by C# bridge) |
 | `/hook/battle-end` | POST | End session -- flush remaining render jobs |
 | `/hook/scene-change` | POST | Scene transition -- triggers auto-navigation |
@@ -43,17 +45,6 @@
 |----------|--------|-------------|
 | `/render/battle/{name}` | POST | Render heatmaps from render jobs (see [Heatmap Renderer](../README_HEATMAPS.md)) |
 
-### Replay Endpoints
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/replay/battles` | GET | List recorded battles |
-| `/replay/actions/{name}` | GET | View actions in a battle |
-| `/replay/start` | POST | Start a replay session. Body: `{"battle":"...", "camera":"follow|free", "determinism":"off|log|stop"}`. |
-| `/replay/next` | GET | Pull next replay action (called by bridge). Returns `status: "halted"` if determinism watchdog triggered. |
-| `/replay/stop` | POST | Stop active replay. Response includes divergence list if determinism was enabled. |
-| `/replay/divergences` | GET | Query divergences detected so far during an active replay. |
-
 ### System Endpoints
 
 | Endpoint | Method | Description |
@@ -61,7 +52,6 @@
 | `/status` | GET | Health check -- version, build, uptime |
 | `/shutdown` | POST | Graceful exit |
 | `/navigate/tactical` | POST | Event-driven navigation to tactical scene |
-| `/navigate/replay/{name}` | POST | Navigate to tactical + start replay. Accepts `?camera=follow|free` query param (default: `follow`). |
 
 ## Auto-Navigation
 

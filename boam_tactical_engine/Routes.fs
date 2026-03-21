@@ -15,7 +15,6 @@ open BOAM.TacticalEngine.ActionLog
 open BOAM.TacticalEngine.RenderJobCollector
 open BOAM.TacticalEngine.HeatmapRenderer
 open BOAM.TacticalEngine.EventBus
-open BOAM.TacticalEngine.Replay
 open BOAM.TacticalEngine.Logging
 
 /// Read JSON body from an HTTP request.
@@ -197,15 +196,9 @@ let registerRoutes (app: WebApplication) (ctx: RouteContext) =
             ActionLog.logActionDecision payload
         if Config.Current.Heatmaps then
             RenderJobCollector.attachDecision payload
-        // Determinism watchdog: compare against expected during replay
-        if Replay.isActive () then
-            match Replay.checkAiDecision payload with
-            | Some div ->
-                logWarn (sprintf "DETERMINISM DIVERGENCE #%d r%d %s" div.Index div.Round div.Actor)
-                logWarn (sprintf "  expected: %s" div.Expected)
-                logWarn (sprintf "  actual:   %s" div.Actual)
-                logWarn (sprintf "  after:    %s" div.LastPlayerAction)
-            | None -> ()
+        // Decision-level watchdog disabled — replaced by action-level watchdog in /hook/ai-action.
+        // Decision queue desyncs due to Agent.Execute polling iteration count differences,
+        // producing false positives. Action-level comparison is the correct granularity.
         return Results.Ok({| hook = "action-decision"; status = "ok" |})
     })) |> ignore
 
@@ -252,120 +245,6 @@ let registerRoutes (app: WebApplication) (ctx: RouteContext) =
         return Results.Ok({| hook = "skill-complete"; status = "ok" |})
     })) |> ignore
 
-    // --- Replay ---
-
-    app.MapGet("/replay/battles", Func<IResult>(fun () ->
-        let reportsDir = ctx.BattleReportsDir
-        if not (IO.Directory.Exists(reportsDir)) then
-            Results.Ok({| battles = [||]; count = 0 |})
-        else
-            let battles =
-                IO.Directory.GetDirectories(reportsDir)
-                |> Array.filter (fun d -> IO.File.Exists(IO.Path.Combine(d, "round_log.jsonl")))
-                |> Array.map (fun d ->
-                    let logPath = IO.Path.Combine(d, "round_log.jsonl")
-                    {| name = IO.Path.GetFileName(d); rounds = Replay.getRounds logPath; actionCount = List.length (Replay.loadActions logPath) |})
-                |> Array.sortByDescending (fun b -> b.name)
-            Results.Ok({| battles = battles; count = Array.length battles |})
-    )) |> ignore
-
-    app.MapGet("/replay/actions/{battleName}", Func<string, IResult>(fun battleName ->
-        let logPath = IO.Path.Combine(ctx.BattleReportsDir, battleName, "round_log.jsonl")
-        if not (IO.File.Exists(logPath)) then
-            Results.NotFound({| error = sprintf "No round_log.jsonl in %s" battleName |})
-        else
-            let actions = Replay.loadActions logPath
-            Results.Ok({| battle = battleName; rounds = Replay.getRounds logPath; actions = actions; count = List.length actions |})
-    )) |> ignore
-
-    let startReplaySession (battleName: string) (camera: string) (detMode: Replay.DeterminismMode) = task {
-        let logPath = IO.Path.Combine(ctx.BattleReportsDir, battleName, "round_log.jsonl")
-        let actions = Replay.loadActions logPath
-        let expectedAi = Replay.loadExpectedAiDecisions logPath
-        let elementHits = Replay.loadElementHits logPath
-        Replay.startSession actions expectedAi elementHits detMode
-        // Notify bridge that replay is starting (small payload — bridge fetches forcing data separately)
-        let optionsJson = sprintf """{"camera":"%s"}""" camera
-        try
-            let! _ = ctx.HttpClient.PostAsync(sprintf "%s/replay/start" ctx.CommandUrl, new Net.Http.StringContent(optionsJson, Text.Encoding.UTF8, "application/json"))
-            ()
-        with ex -> logWarn (sprintf "Failed to notify bridge of replay start: %s" ex.Message)
-        let detLabel = match detMode with Replay.Off -> "off" | Replay.Log -> "log" | Replay.Stop -> "stop"
-        logInfo (sprintf "Replay session started: %s (%d actions, %d expected AI decisions, %d element hits, camera=%s, determinism=%s)" battleName (List.length actions) expectedAi.Length elementHits.Length camera detLabel)
-        return {| status = "started"; battle = battleName; actions = List.length actions; expectedAi = expectedAi.Length; elementHits = elementHits.Length; camera = camera; determinism = detLabel |}
-    }
-
-    let parseDeterminismMode (root: System.Text.Json.JsonElement) =
-        match root.TryGetProperty("determinism") with
-        | true, v ->
-            match v.GetString() with
-            | "stop" -> Replay.Stop
-            | "log" -> Replay.Log
-            | _ -> Replay.Off
-        | _ -> Replay.Off
-
-    app.MapPost("/replay/start", Func<HttpRequest, Threading.Tasks.Task<IResult>>(fun req -> task {
-        let! root = readJson req
-        let battleName = match root.TryGetProperty("battle") with | true, v -> v.GetString() |> Option.ofObj |> Option.defaultValue "" | _ -> ""
-        if String.IsNullOrEmpty(battleName) then
-            return Results.BadRequest({| error = "missing 'battle' field" |})
-        else
-            let logPath = IO.Path.Combine(ctx.BattleReportsDir, battleName, "round_log.jsonl")
-            if not (IO.File.Exists(logPath)) then
-                return Results.NotFound({| error = sprintf "No round_log.jsonl in %s" battleName |})
-            else
-                let camera = match root.TryGetProperty("camera") with | true, v -> v.GetString() |> Option.ofObj |> Option.defaultValue "follow" | _ -> "follow"
-                let detMode = parseDeterminismMode root
-                let! result = startReplaySession battleName camera detMode
-                return Results.Ok(result)
-    })) |> ignore
-
-    app.MapGet("/replay/forcing-data", Func<IResult>(fun () ->
-        let jsonOpts = System.Text.Json.JsonSerializerOptions(PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.SnakeCaseLower)
-        let expectedAi = match Replay.activeSession with | Some s -> s.ExpectedAi | None -> [||]
-        let elementHits = Replay.sessionElementHits_ ()
-        let json = System.Text.Json.JsonSerializer.Serialize({|
-            aiDecisions = expectedAi |> Array.map (fun d -> {| actor = d.Actor; behaviorId = d.BehaviorId; chosenName = d.ChosenName; chosenScore = d.ChosenScore; targetX = d.TargetX; targetZ = d.TargetZ; round = d.Round |})
-            elementHits = elementHits |> Array.map (fun h -> {| target = h.Target; attacker = h.Attacker; skill = h.Skill; elementIndex = h.ElementIndex; damage = h.Damage; elementHpAfter = h.ElementHpAfter; elementAlive = h.ElementAlive; round = h.Round |})
-        |}, jsonOpts)
-        Results.Content(json, "application/json")
-    )) |> ignore
-
-    app.MapGet("/replay/next", Func<HttpRequest, IResult>(fun req ->
-        let actor = match req.Query.TryGetValue("actor") with | true, v -> string v | _ -> ""
-        let round =
-            match req.Query.TryGetValue("round") with
-            | true, v -> match Int32.TryParse(string v) with | true, r -> r | _ -> 0
-            | _ -> 0
-        Results.Content(Replay.getNext actor round, "application/json")
-    )) |> ignore
-
-    app.MapPost("/replay/stop", Func<Threading.Tasks.Task<IResult>>(fun () -> task {
-        let divergences = Replay.getDivergences ()
-        match Replay.stopSession() with
-        | Some session ->
-            try
-                let! _ = ctx.HttpClient.PostAsync(sprintf "%s/replay/stop" ctx.CommandUrl, new Net.Http.StringContent(""))
-                ()
-            with ex -> logWarn (sprintf "Failed to notify bridge of replay stop: %s" ex.Message)
-            logInfo (sprintf "Replay stopped: %d/%d actions, %d divergences" session.Index session.Actions.Length (List.length divergences))
-            return Results.Ok({|
-                status = "stopped"; executed = session.Index; total = session.Actions.Length
-                divergences = divergences |> List.map (fun d -> {| index = d.Index; round = d.Round; actor = d.Actor; expected = d.Expected; actual = d.Actual; afterAction = d.LastPlayerAction |})
-                log = session.Log |> List.rev
-            |})
-        | None ->
-            return Results.Ok({| status = "no session" |})
-    })) |> ignore
-
-    app.MapGet("/replay/divergences", Func<IResult>(fun () ->
-        let divs = Replay.getDivergences ()
-        Results.Ok({|
-            count = List.length divs
-            divergences = divs |> List.map (fun d -> {| index = d.Index; round = d.Round; actor = d.Actor; expected = d.Expected; actual = d.Actual; afterAction = d.LastPlayerAction |})
-        |})
-    )) |> ignore
-
     // --- Navigation ---
 
     app.MapPost("/navigate/tactical", Func<Threading.Tasks.Task<IResult>>(fun () -> task {
@@ -385,49 +264,6 @@ let registerRoutes (app: WebApplication) (ctx: RouteContext) =
         let! _ = ctx.EventBus.WaitFor(fun e -> match e with TacticalReady -> true | _ -> false)
         logInfo "  in Tactical"
         return Results.Ok({| status = "tactical"; message = "Navigated to tactical via events" |})
-    })) |> ignore
-
-    app.MapPost("/navigate/replay/{battleName}", Func<string, HttpRequest, Threading.Tasks.Task<IResult>>(fun battleName req -> task {
-        // DIAG: log raw URL, query string, and parsed parameters
-        let rawUrl = sprintf "%s%s" (req.Path.ToString()) (req.QueryString.ToString())
-        logInfo (sprintf "Navigate to tactical + replay — rawUrl=%s battleName=%s" rawUrl battleName)
-        let queryKeys = req.Query.Keys |> Seq.toList
-        logInfo (sprintf "  query keys: [%s]" (String.Join(", ", queryKeys)))
-        for key in queryKeys do
-            let v = match req.Query.TryGetValue(key) with | true, v -> string v | _ -> "?"
-            logInfo (sprintf "  query[%s] = %s" key v)
-        let logPath = IO.Path.Combine(ctx.BattleReportsDir, battleName, "round_log.jsonl")
-        if not (IO.File.Exists(logPath)) then
-            return Results.NotFound({| error = sprintf "No round_log.jsonl in %s" battleName |})
-        else
-            // Navigate to tactical first
-            ctx.EventBus.Clear()
-            do! Threading.Tasks.Task.Delay(3000)
-            let! _ = ctx.HttpClient.PostAsync(sprintf "%s/cmd" ctx.BridgeUrl, new Net.Http.StringContent("continuesave"))
-            logInfo "  sent continuesave, waiting for MissionPreparation..."
-            let! _ = ctx.EventBus.WaitFor(fun e -> match e with SceneChanged s -> s = "MissionPreparation" | _ -> false)
-            logInfo "  MissionPreparation loaded"
-            do! Threading.Tasks.Task.Delay(1000)
-            let! _ = ctx.HttpClient.PostAsync(sprintf "%s/cmd" ctx.BridgeUrl, new Net.Http.StringContent("planmission"))
-            logInfo "  sent planmission, waiting for PreviewReady..."
-            let! _ = ctx.EventBus.WaitFor(fun e -> match e with PreviewReady -> true | _ -> false)
-            logInfo "  preview ready"
-            let! _ = ctx.HttpClient.PostAsync(sprintf "%s/cmd" ctx.BridgeUrl, new Net.Http.StringContent("startmission"))
-            logInfo "  sent startmission, waiting for TacticalReady..."
-            let! _ = ctx.EventBus.WaitFor(fun e -> match e with TacticalReady -> true | _ -> false)
-            logInfo "  in Tactical — starting replay"
-            // Start replay session
-            let camera = match req.Query.TryGetValue("camera") with | true, v -> string v | _ -> "follow"
-            let detMode =
-                match req.Query.TryGetValue("determinism") with
-                | true, v ->
-                    match string v with
-                    | "stop" -> Replay.Stop
-                    | "log" -> Replay.Log
-                    | _ -> Replay.Off
-                | _ -> Replay.Off
-            let! result = startReplaySession battleName camera detMode
-            return Results.Ok({| result with status = "replaying" |})
     })) |> ignore
 
     // --- Render ---

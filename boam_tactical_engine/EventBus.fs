@@ -1,4 +1,4 @@
-/// Simple event bus for synchronizing replay with game events.
+/// Simple event bus for synchronizing auto-navigation with game events.
 /// Hooks push events, auto-navigate awaits them. Thread-safe via SemaphoreSlim.
 module BOAM.TacticalEngine.EventBus
 

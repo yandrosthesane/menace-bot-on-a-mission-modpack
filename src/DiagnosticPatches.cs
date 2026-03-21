@@ -13,7 +13,7 @@ using Menace.SDK;
 namespace BOAM;
 
 /// <summary>
-/// Diagnostic patches for tracing turn/skill lifecycle during replay.
+/// Diagnostic patches for tracing turn/skill lifecycle and measuring skill animation durations.
 /// </summary>
 static class Patch_Diagnostics
 {
@@ -29,7 +29,7 @@ static class Patch_Diagnostics
         _pendingPlayerSkill = skillName;
         _pendingPlayerActor = actor;
         _pendingSkillStartTime = UnityEngine.Time.time;
-        // Block replay until AfterSkillUse fires
+        // Block command execution until AfterSkillUse fires
         SkillAnimationEndTime = float.MaxValue;
     }
 
@@ -51,14 +51,8 @@ static class Patch_Diagnostics
             var name = _skill?.GetTitle() ?? "null";
             BoamBridge.Logger.Msg($"[BOAM] DIAG AfterSkillUse: {name}");
 
-            // Replay forcing: apply recorded damage to elements that weren't hit by the game
-            if (BoamBridge.Instance?._replayActive == true && ReplayForcing.HasPendingMissedHits)
-            {
-                ReplayForcing.ApplyMissedElementHits();
-            }
-
             // When a player skill finishes, amend the last log entry with the real duration
-            // and release the replay gate
+            // and release the command gate
             if (_pendingPlayerSkill != null && name == _pendingPlayerSkill)
             {
                 float actual = UnityEngine.Time.time - _pendingSkillStartTime;
@@ -90,36 +84,13 @@ static class Patch_Diagnostics
             var skillName = _skill?.GetTitle() ?? "null";
             int tx = _targetTile?.GetX() ?? 0;
             int tz = _targetTile?.GetZ() ?? 0;
-            // Track player skill animations for the replay gate
+            // Track player skill animations for the command gate
             // For player attack skills: refine the start time (more accurate than useskill)
             if (info.HasValue && (info.Value.factionId == 1 || info.Value.factionId == 2))
             {
                 _pendingSkillStartTime = UnityEngine.Time.time;
             }
             BoamBridge.Logger.Msg($"[BOAM] DIAG AttackStart: {uuid} {skillName} → ({tx},{tz}) duration={_attackDurationInSec}s");
-
-            // Replay forcing: preload burst so ApplyMissedElementHits works even on total misses
-            if (BoamBridge.Instance?._replayActive == true && ReplayForcing.HasElementHits && info.HasValue)
-            {
-                // Find target actor on the target tile
-                try
-                {
-                    if (_targetTile != null && _targetTile.HasActor())
-                    {
-                        var targetActor = _targetTile.GetActor();
-                        if (targetActor != null)
-                        {
-                            var targetInfo = ActorRegistry.GetActorInfo(targetActor);
-                            if (targetInfo.HasValue)
-                            {
-                                var targetUuid = ActorRegistry.GetUuid(targetInfo.Value.entityId);
-                                ReplayForcing.PreloadBurst(uuid, targetUuid);
-                            }
-                        }
-                    }
-                }
-                catch { }
-            }
         }
         catch { }
     }

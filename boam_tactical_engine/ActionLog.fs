@@ -145,7 +145,16 @@ let logElementHit (payload: ElementHitPayload) =
             elementIndex = payload.ElementIndex
             damage = payload.Damage
             elementHpAfter = payload.ElementHpAfter
+            elementHpMax = payload.ElementHpMax
             elementAlive = payload.ElementAlive
+            unitHp = payload.UnitHp
+            unitHpMax = payload.UnitHpMax
+            unitAp = payload.UnitAp
+            unitSuppression = payload.UnitSuppression
+            unitMorale = payload.UnitMorale
+            unitMoraleState = payload.UnitMoraleState
+            unitSuppressionState = payload.UnitSuppressionState
+            unitArmorDurability = payload.UnitArmorDurability
         |}, jsonOptions)
         appendJsonLine (Path.Combine(dir, "round_log.jsonl")) entry
 

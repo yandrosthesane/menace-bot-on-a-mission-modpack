@@ -5,8 +5,6 @@
 # Usage:
 #   ./start-tactical-engine.sh                                              # passive start
 #   ./start-tactical-engine.sh --on-title /navigate/tactical                # auto-navigate to tactical
-#   ./start-tactical-engine.sh --on-title /navigate/replay/battle_name      # auto-navigate + replay
-#   ./start-tactical-engine.sh --on-title "/navigate/replay/battle?camera=free"  # replay with free camera
 #   ./start-tactical-engine.sh --render battle_name                         # render heatmaps and exit
 #   ./start-tactical-engine.sh --render battle_name --pattern "r01_*"       # render with pattern filter
 #

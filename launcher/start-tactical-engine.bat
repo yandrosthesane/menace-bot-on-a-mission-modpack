@@ -5,8 +5,6 @@ REM
 REM Usage:
 REM   start-tactical-engine.bat                                              passive start
 REM   start-tactical-engine.bat --on-title /navigate/tactical                auto-navigate to tactical
-REM   start-tactical-engine.bat --on-title /navigate/replay/battle_name      auto-navigate + replay
-REM   start-tactical-engine.bat --on-title "/navigate/replay/battle?camera=free"  replay with free camera
 REM   start-tactical-engine.bat --render battle_name                         render heatmaps and exit
 REM
 REM The engine runs in this window — close it or press Ctrl+C to stop.

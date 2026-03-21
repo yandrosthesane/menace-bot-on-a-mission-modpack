@@ -44,15 +44,15 @@ Controls the F# tactical engine (ports, rendering, feature toggles).
 | `configVersion` | int | 2 | Config structure version |
 | `port` | int | 7660 | Tactical engine HTTP port |
 | `bridge_port` | int | 7655 | Game bridge port (C# side) |
-| `command_port` | int | 7661 | Command server port (replay actions) |
+| `command_port` | int | 7661 | Command server port |
 | `heatmaps` | bool | **false** | Collect render job data for offline heatmap generation |
-| `action_logging` | bool | **false** | Log player actions + AI decisions to `round_log.jsonl`. Required for replay. |
-| `ai_logging` | bool | **false** | Log AI decisions (requires `action_logging`). Enables determinism watchdog during replay. |
+| `action_logging` | bool | **false** | Log player actions + AI decisions to `round_log.jsonl` |
+| `ai_logging` | bool | **false** | Log AI behavior decisions (requires `action_logging`) |
 
 **Feature toggle summary:** By default only the minimap is active. Enable features as needed:
 - **Minimap only** (default) — no config changes needed
-- **Replay** — set `action_logging: true`
-- **Replay + determinism watchdog** — set `action_logging: true` and `ai_logging: true`
+- **Action logging** — set `action_logging: true` (records player actions, AI actions, combat outcomes)
+- **Action + AI decision logging** — set `action_logging: true` and `ai_logging: true` (also captures AI behavior scoring and alternatives)
 - **Heatmaps** — set `heatmaps: true` (and `action_logging: true` for action logs in battle reports)
 - **Everything** — set all three to `true`
 | `rendering.minTilePixels` | int | 64 | Minimum pixels per tile (upscaling) |

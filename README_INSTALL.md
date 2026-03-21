@@ -91,7 +91,6 @@ Then from any directory:
 ```bash
 boam-engine                                          # passive start
 boam-engine --on-title /navigate/tactical            # auto-navigate to tactical
-boam-engine --on-title /navigate/replay/battle_name  # auto-navigate + replay
 boam-icons --force                                   # regenerate icons
 ```
 

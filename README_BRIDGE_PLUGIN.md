@@ -6,7 +6,7 @@ The bridge plugin runs inside the game via MelonLoader. It observes AI decisions
 
 The plugin loads automatically when the game starts. No configuration is needed -- it hooks into the game's AI evaluation loop and player input, captures the tactical map at mission prep, and sends all data to the tactical engine on port 7660.
 
-The bridge also runs a command server (port 7661) that accepts replay actions from the engine.
+The bridge also runs a command server (port 7661) that accepts action commands from the engine.
 
 ## Port Settings
 

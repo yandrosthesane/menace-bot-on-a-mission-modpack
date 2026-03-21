@@ -1,8 +1,8 @@
 # Tactical Engine
 
-Companion process that renders heatmaps, logs actions, and drives mission replay. Runs as an HTTP server on port 7660.
+Companion process that renders heatmaps and logs actions. Runs as an HTTP server on port 7660.
 
-Running outside the game keeps the in-game bridge thin and easy to maintain — it only patches and forwards data. All heavy logic (rendering, replay sequencing, action logging) lives in the engine, which can be updated, restarted, or used standalone without touching the game.
+Running outside the game keeps the in-game bridge thin and easy to maintain — it only patches and forwards data. All heavy logic (rendering, action logging) lives in the engine, which can be updated, restarted, or used standalone without touching the game.
 
 For technical details (modules, hook endpoints, auto-navigation internals), see [docs/README_TACTICAL_ENGINE.md](docs/README_TACTICAL_ENGINE.md).
 
@@ -26,12 +26,6 @@ All examples assume `cd /path/to/Menace/Mods/BOAM/`.
 # Start server + auto-navigate to tactical when game connects
 ./start-tactical-engine.sh --on-title /navigate/tactical
 
-# Start server + navigate to tactical + start a replay automatically
-./start-tactical-engine.sh --on-title /navigate/replay/battle_2026_03_15_15_14
-
-# With free camera (no auto-follow on actor switch)
-./start-tactical-engine.sh --on-title "/navigate/replay/battle_2026_03_15_15_14?camera=free"
-
 # Render heatmaps and exit (no server, no game needed)
 ./TacticalEngine --render battle_2026_03_15_15_14
 ./TacticalEngine --render battle_2026_03_15_15_14 --pattern "r01_*_stinger_*"
@@ -45,15 +39,6 @@ curl -s http://127.0.0.1:7660/status
 
 # Render heatmaps
 curl -s -X POST http://127.0.0.1:7660/render/battle/battle_2026_03_15_15_14 -d '{}'
-
-# List battles
-curl -s http://127.0.0.1:7660/replay/battles
-
-# Start replay with camera follow (default)
-curl -s -X POST http://127.0.0.1:7660/replay/start -d '{"battle":"...", "camera":"follow"}'
-
-# Navigate + replay with free camera
-curl -s -X POST "http://127.0.0.1:7660/navigate/replay/battle_2026_03_15_15_14?camera=free"
 
 # Navigate to tactical (game must be on Title)
 curl -s -X POST http://127.0.0.1:7660/navigate/tactical
@@ -72,7 +57,7 @@ battle_reports/battle_YYYY_MM_DD_HH_MM/
 +-- mapbg.info                    Tile dimensions (texW,texH,tilesX,tilesZ)
 +-- mapdata.bin                   Binary tile data (heights + flags)
 +-- dramatis_personae.json        All actors with stable UUIDs
-+-- round_log.jsonl               Chronological action log (used by replay)
++-- round_log.jsonl               Chronological action log
 +-- actor_*.jsonl                 Per-actor action logs
 +-- render_jobs/                  Self-contained render job JSONs
 |   +-- r01_wildlife_alien_stinger_1.json
