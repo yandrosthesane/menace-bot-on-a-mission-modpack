@@ -1,5 +1,7 @@
 # BOAM — Bot On A Mission
 
+**v1.2.0** | [Changelog](docs/features/CHANGELOG.md)
+
 AI behavior analysis mod for Menace.
 Intercepts AI decision-making at runtime,
 captures tactical data for offline heatmap rendering,
@@ -19,11 +21,11 @@ and records full battle sessions (player actions + AI decisions + combat outcome
 
 | Component | Location | Runtime | Description |
 |-----------|----------|---------|-------------|
-| [C# Bridge Plugin](docs/features/README_BRIDGE_PLUGIN.md) | `src/` | In-game (MelonLoader/Wine) | Harmony patches, map capture, minimap overlay, action forwarding |
-| [F# Tactical Engine](docs/features/README_TACTICAL_ENGINE.md) | `boam_tactical_engine/` | Native (.NET 10, port 7660) | Render jobs, heatmap renderer, action logger |
+| [BOAM-modpack](docs/features/README_BOAM_MODPACK.md) | `src/` | In-game (MelonLoader/Wine) | Harmony patches, minimap overlay, map capture, action forwarding |
+| [BOAM-engine](docs/features/README_BOAM_ENGINE.md) | `boam_tactical_engine/` | Native (.NET 10, port 7660) | Heatmap renderer, action logger, auto-navigation |
 | [Icon Generator](docs/features/README_ICON_GENERATOR.md) | `boam_asset_pipeline/` | CLI tool | Resizes game badge art into heatmap/minimap icons |
 
-The minimap works standalone — no tactical engine needed. Start the engine only when you want heatmaps or action logging.
+The BOAM-modpack works standalone — the minimap needs no engine. Start the BOAM-engine only when you want heatmaps or action logging.
 
 **First time?** Follow the [Installation Guide](docs/features/README_INSTALL.md).
 
@@ -102,9 +104,9 @@ After playing a round, render job data is flushed to disk. Render heatmaps on de
 
 **Linux:**
 ```bash
-./TacticalEngine --render battle_2026_03_15_15_14                              # all
-./TacticalEngine --render battle_2026_03_15_15_14 --pattern "r01_*"            # round 1 only
-./TacticalEngine --render battle_2026_03_15_15_14 --pattern "*_alien_stinger*" # one unit
+./tactical_engine/TacticalEngine --render battle_2026_03_15_15_14                              # all
+./tactical_engine/TacticalEngine --render battle_2026_03_15_15_14 --pattern "r01_*"            # round 1 only
+./tactical_engine/TacticalEngine --render battle_2026_03_15_15_14 --pattern "*_alien_stinger*" # one unit
 ```
 
 **Windows:**
@@ -140,6 +142,7 @@ See [Icon Generator](docs/features/README_ICON_GENERATOR.md).
 - [Tactical Minimap](docs/features/README_MINIMAP.md) — In-game overlay controls, display presets, customization
 - [Heatmap Renderer](docs/features/README_HEATMAPS.md) — Render API, pattern matching, what each heatmap shows
 - [Configuration](docs/features/README_CONFIG.md) — Two-tier config system, versioning, all config options
-- [Bridge Plugin](docs/features/README_BRIDGE_PLUGIN.md) — Harmony hooks, data flow, map capture
-- [Tactical Engine](docs/features/README_TACTICAL_ENGINE.md) — HTTP endpoints, CLI arguments, modules
+- [BOAM-modpack](docs/features/README_BOAM_MODPACK.md) — In-game mod: minimap, hooks, map capture
+- [BOAM-engine](docs/features/README_BOAM_ENGINE.md) — External engine: heatmaps, logging, CLI, HTTP API
 - [Icon Generator](docs/features/README_ICON_GENERATOR.md) — Config format, fallback chain, customization
+- [Changelog](docs/features/CHANGELOG.md) — Version history

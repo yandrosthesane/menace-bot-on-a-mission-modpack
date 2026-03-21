@@ -16,8 +16,7 @@ open BOAM.TacticalEngine.HeatmapRenderer
 open BOAM.TacticalEngine.HeatmapTypes
 open BOAM.TacticalEngine.Routes
 
-let private version = "1.0.0"
-let private build = 3
+let private version = "1.2.0"
 
 [<EntryPoint>]
 let main argv =
@@ -44,7 +43,6 @@ let main argv =
     Console.Title <- sprintf "BOAM Tactical Engine v%s" version
     printfn ""
     printfn "  %s %s" (bold "BOAM Tactical Engine") (dim (sprintf "v%s" version))
-    printfn "  %s" (dim (sprintf "Build: #%d" build))
     printfn "  %s" (dim "─────────────────────────────────")
     printfn "  Port:    %s" (cyan (string port))
     printfn "  Target:  %s" (cyan "net10.0")
@@ -167,7 +165,6 @@ let main argv =
 
     let routeCtx : RouteContext = {
         Version = version
-        Build = build
         StartTime = DateTime.UtcNow
         Registry = registry
         Store = store

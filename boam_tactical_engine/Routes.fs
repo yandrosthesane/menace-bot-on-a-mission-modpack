@@ -49,7 +49,6 @@ let private readJson (req: HttpRequest) = task {
 
 type RouteContext = {
     Version: string
-    Build: int
     StartTime: DateTime
     Registry: Registry.Registry
     Store: StateStore.StateStore
@@ -74,7 +73,6 @@ let registerRoutes (app: WebApplication) (ctx: RouteContext) =
         logInfo "Status check"
         Results.Ok({|
             engine = sprintf "BOAM Tactical Engine v%s" ctx.Version
-            build = sprintf "#%d" ctx.Build
             status = "ready"
             uptime = (DateTime.UtcNow - ctx.StartTime).TotalSeconds
         |})
@@ -191,7 +189,7 @@ let registerRoutes (app: WebApplication) (ctx: RouteContext) =
         let payload = parseBattleStart root
         let dir = ActionLog.startBattle ctx.BattleReportsDir payload.SessionDir
         // Write BOAM version file
-        let versionJson = sprintf """{"engine":"%s","build":%d,"timestamp":"%s"}""" ctx.Version ctx.Build (DateTime.UtcNow.ToString("o"))
+        let versionJson = sprintf """{"engine":"%s","version":"%s","timestamp":"%s"}""" "BOAM Tactical Engine" ctx.Version (DateTime.UtcNow.ToString("o"))
         IO.File.WriteAllText(IO.Path.Combine(dir, "boam_version.json"), versionJson)
         logHook (sprintf "battle-start  session=%s" (IO.Path.GetFileName(dir)))
         ctx.EventBus.Push(BattleStarted)

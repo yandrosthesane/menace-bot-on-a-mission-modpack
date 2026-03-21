@@ -19,4 +19,10 @@ for f in "$REPO_ROOT/docs/features/"*.md; do
     [ -f "$f" ] && cp "$f" "$CONTENT_DIR/docs/features/"
 done
 
+# Documentation images
+if [ -d "$REPO_ROOT/docs/images" ]; then
+    mkdir -p "$CONTENT_DIR/docs/images"
+    cp "$REPO_ROOT/docs/images/"* "$CONTENT_DIR/docs/images/"
+fi
+
 echo "Content assembled: $(find "$CONTENT_DIR" -name '*.md' | wc -l) pages"

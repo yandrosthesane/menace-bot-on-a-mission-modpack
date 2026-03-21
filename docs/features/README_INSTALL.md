@@ -12,15 +12,55 @@ Use the Menace Modkit to deploy the BOAM modpack.
 
 ## Step 2: Install the Tactical Engine
 
-Download the platform-specific tactical engine archive and extract it into `Mods/BOAM/`:
+Download the tactical engine archive for your platform and extract it into `Mods/BOAM/`.
 
+### Which variant?
+
+| Variant | Size | Best for |
+|---------|------|----------|
+| **bundled** | ~112 MB | Most users — includes everything, no extra setup |
+| **slim** | ~5 MB | Users who already have .NET 10 or prefer smaller downloads |
+
+**Bundled** includes the .NET 10 runtime inside the archive. Extract and run — nothing else to install. Some antivirus software may flag the bundled .NET system DLLs as suspicious; these are standard Microsoft runtime files.
+
+**Slim** is the same engine without the runtime. It requires [.NET 10](https://dotnet.microsoft.com/download/dotnet/10.0) installed on your system. Much smaller download, no antivirus false positives.
+
+### Installing the .NET 10 runtime (slim variant only)
+
+**Linux:**
 ```bash
-# Linux
-unzip BOAM-tactical-engine-v1.1.0-linux-x64.zip -d /path/to/Menace/Mods/BOAM/
+# Ubuntu/Debian
+sudo apt install dotnet-runtime-10.0
 
-# Windows
-# Unzip BOAM-tactical-engine-v1.1.0-win-x64.zip into Mods\BOAM\
+# Fedora
+sudo dnf install dotnet-runtime-10.0
+
+# Or install from Microsoft: https://dotnet.microsoft.com/download/dotnet/10.0
 ```
+
+**Windows:**
+```bat
+winget install Microsoft.DotNet.Runtime.10
+```
+
+Or download the installer from [dotnet.microsoft.com/download/dotnet/10.0](https://dotnet.microsoft.com/download/dotnet/10.0).
+
+### Extract the archive
+
+**Linux:**
+```bash
+# Bundled
+unzip BOAM-tactical-engine-v1.2.0-linux-x64-bundled.zip -d /path/to/Menace/Mods/BOAM/
+
+# Slim
+unzip BOAM-tactical-engine-v1.2.0-linux-x64-slim.zip -d /path/to/Menace/Mods/BOAM/
+```
+
+**Windows:**
+
+Unzip `BOAM-tactical-engine-v1.2.0-win-x64-bundled.zip` (or `-slim.zip`) into `Mods\BOAM\`.
+
+Usage is identical for both variants — the launcher script and all commands work the same way.
 
 ## Step 3: Extract Game Art
 

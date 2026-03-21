@@ -2,9 +2,11 @@
 # Build release archives for BOAM mod distribution.
 #
 # Produces (in release/):
-#   BOAM-modpack-v{version}.zip                          — C# bridge mod (source + manifest)
-#   BOAM-tactical-engine-v{version}-linux-x64.tar.gz     — Tactical engine + icon generator (Linux)
-#   BOAM-tactical-engine-v{version}-win-x64.zip          — Tactical engine + icon generator (Windows)
+#   BOAM-modpack-v{version}.zip                                    — C# bridge mod (source + manifest)
+#   BOAM-tactical-engine-v{version}-linux-x64-bundled.zip          — Engine + runtime (Linux, ~112MB)
+#   BOAM-tactical-engine-v{version}-win-x64-bundled.zip            — Engine + runtime (Windows, ~112MB)
+#   BOAM-tactical-engine-v{version}-linux-x64-slim.zip             — Engine only (Linux, ~5MB, requires .NET 10)
+#   BOAM-tactical-engine-v{version}-win-x64-slim.zip               — Engine only (Windows, ~5MB, requires .NET 10)
 #
 # Prerequisites: .NET 10 SDK, jq, zip, tar
 
@@ -48,30 +50,40 @@ echo "    $MOD_ZIP"
 build_engine_archive() {
     local RID="$1"         # linux-x64 or win-x64
     local EXT="$2"         # "" or ".exe"
-    local ARCHIVE_EXT="$3" # tar.gz or zip
+    local VARIANT="$3"     # bundled or slim
 
-    echo "==> Publishing tactical engine ($RID)..."
+    local SELF_CONTAINED
+    local SUFFIX
+    if [ "$VARIANT" = "bundled" ]; then
+        SELF_CONTAINED="--self-contained"
+        SUFFIX="bundled"
+    else
+        SELF_CONTAINED="--no-self-contained"
+        SUFFIX="slim"
+    fi
+
+    echo "==> Publishing tactical engine ($RID, $SUFFIX)..."
     dotnet publish "$ENGINE_DIR/TacticalEngine.fsproj" \
-        -c Release -r "$RID" --self-contained \
+        -c Release -r "$RID" $SELF_CONTAINED \
         -p:PublishSingleFile=false \
-        -o "$RELEASE_DIR/.publish-engine-$RID" \
+        -o "$RELEASE_DIR/.publish-engine-$RID-$SUFFIX" \
         -v quiet
 
-    echo "==> Publishing icon generator ($RID)..."
+    echo "==> Publishing icon generator ($RID, $SUFFIX)..."
     dotnet publish "$PIPELINE_DIR/BoamAssetPipeline.fsproj" \
-        -c Release -r "$RID" --self-contained \
+        -c Release -r "$RID" $SELF_CONTAINED \
         -p:PublishSingleFile=true \
-        -o "$RELEASE_DIR/.publish-icons-$RID" \
+        -o "$RELEASE_DIR/.publish-icons-$RID-$SUFFIX" \
         -v quiet
 
-    local STAGE="$RELEASE_DIR/.stage-engine-$RID/$MOD_NAME"
+    local STAGE="$RELEASE_DIR/.stage-engine-$RID-$SUFFIX/$MOD_NAME"
     mkdir -p "$STAGE/tactical_engine"
 
     # Tactical engine — full publish output
-    cp -r "$RELEASE_DIR/.publish-engine-$RID/"* "$STAGE/tactical_engine/"
+    cp -r "$RELEASE_DIR/.publish-engine-$RID-$SUFFIX/"* "$STAGE/tactical_engine/"
 
     # Icon generator — single-file binary
-    cp "$RELEASE_DIR/.publish-icons-$RID/boam-icons$EXT" "$STAGE/"
+    cp "$RELEASE_DIR/.publish-icons-$RID-$SUFFIX/boam-icons$EXT" "$STAGE/"
 
     # Launcher scripts
     if [ "$RID" = "linux-x64" ]; then
@@ -87,20 +99,19 @@ build_engine_archive() {
     # Default configs
     cp -r configs "$STAGE/"
 
-
     # Create archive
-    local ARCHIVE_NAME="${MOD_NAME}-tactical-engine-v${VERSION}-${RID}"
-    if [ "$ARCHIVE_EXT" = "tar.gz" ]; then
-        (cd "$RELEASE_DIR/.stage-engine-$RID" && tar czf "$SCRIPT_DIR/$RELEASE_DIR/${ARCHIVE_NAME}.tar.gz" "$MOD_NAME/")
-        echo "    $RELEASE_DIR/${ARCHIVE_NAME}.tar.gz"
-    else
-        (cd "$RELEASE_DIR/.stage-engine-$RID" && zip -rq "$SCRIPT_DIR/$RELEASE_DIR/${ARCHIVE_NAME}.zip" "$MOD_NAME/")
-        echo "    $RELEASE_DIR/${ARCHIVE_NAME}.zip"
-    fi
+    local ARCHIVE_NAME="${MOD_NAME}-tactical-engine-v${VERSION}-${RID}-${SUFFIX}"
+    (cd "$RELEASE_DIR/.stage-engine-$RID-$SUFFIX" && zip -rq "$SCRIPT_DIR/$RELEASE_DIR/${ARCHIVE_NAME}.zip" "$MOD_NAME/")
+    echo "    $RELEASE_DIR/${ARCHIVE_NAME}.zip"
 }
 
-build_engine_archive "linux-x64" "" "zip"
-build_engine_archive "win-x64" ".exe" "zip"
+# Bundled (self-contained — includes .NET runtime)
+build_engine_archive "linux-x64" "" "bundled"
+build_engine_archive "win-x64" ".exe" "bundled"
+
+# Slim (framework-dependent — requires .NET 10 runtime installed)
+build_engine_archive "linux-x64" "" "slim"
+build_engine_archive "win-x64" ".exe" "slim"
 
 # ─────────────────────────────────────────────
 # Cleanup staging
@@ -109,4 +120,4 @@ rm -rf "$RELEASE_DIR/.stage-"* "$RELEASE_DIR/.publish-"*
 
 echo ""
 echo "==> Release v$VERSION complete:"
-ls -lh "$RELEASE_DIR/"*.{zip,tar.gz} 2>/dev/null
+ls -lh "$RELEASE_DIR/"*.zip 2>/dev/null

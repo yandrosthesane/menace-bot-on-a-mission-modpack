@@ -1,10 +1,10 @@
-# Tactical Engine
+# BOAM-engine
 
-Companion process that renders heatmaps and logs actions. Runs as an HTTP server on port 7660.
+Companion process that runs outside the game. Receives hook data from the BOAM-modpack over HTTP and provides heatmap rendering, action logging, and auto-navigation.
 
-Running outside the game keeps the in-game bridge thin and easy to maintain — it only patches and forwards data. All heavy logic (rendering, action logging) lives in the engine, which can be updated, restarted, or used standalone without touching the game.
+The BOAM-engine is optional — the [BOAM-modpack](README_BOAM_MODPACK.md) works standalone for the minimap. Start the engine when you want heatmaps or action logging.
 
-For technical details (modules, hook endpoints, auto-navigation internals), see [docs/README_TACTICAL_ENGINE.md](../README_TACTICAL_ENGINE.md).
+![BOAM-engine startup](../images/tactical_engine_startup.png)
 
 ## Command-Line Arguments
 
@@ -19,6 +19,9 @@ For technical details (modules, hook endpoints, auto-navigation internals), see 
 
 All examples assume `cd /path/to/Menace/Mods/BOAM/`.
 
+<details>
+<summary>Linux</summary>
+
 ```bash
 # Start server -- passive, no auto-action
 ./start-tactical-engine.sh
@@ -27,9 +30,28 @@ All examples assume `cd /path/to/Menace/Mods/BOAM/`.
 ./start-tactical-engine.sh --on-title /navigate/tactical
 
 # Render heatmaps and exit (no server, no game needed)
-./TacticalEngine --render battle_2026_03_15_15_14
-./TacticalEngine --render battle_2026_03_15_15_14 --pattern "r01_*_stinger_*"
+./tactical_engine/TacticalEngine --render battle_2026_03_15_15_14
+./tactical_engine/TacticalEngine --render battle_2026_03_15_15_14 --pattern "r01_*_stinger_*"
 ```
+
+</details>
+
+<details>
+<summary>Windows</summary>
+
+```bat
+REM Start server -- passive
+start-tactical-engine.bat
+
+REM Start server + auto-navigate to tactical
+start-tactical-engine.bat --on-title /navigate/tactical
+
+REM Render heatmaps and exit
+tactical_engine\TacticalEngine.exe --render battle_2026_03_15_15_14
+tactical_engine\TacticalEngine.exe --render battle_2026_03_15_15_14 --pattern "r01_*_stinger_*"
+```
+
+</details>
 
 ## HTTP Examples
 
