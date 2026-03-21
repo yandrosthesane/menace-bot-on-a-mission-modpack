@@ -1,7 +1,11 @@
 // BOAM Icon Pipeline — icon generation configuration
 //
 // Run 'boam-icons [--force]' to build icons from source assets.
-// Replace /home/user/ with your actual home directory.
+//
+// Paths are resolved automatically:
+//   - output_base: relative to Mods/BOAM/ (default: "icons")
+//   - sources: relative to UserData/BOAM/
+//   - Absolute paths are used as-is (for custom source locations)
 //
 // This is the mod default. To customise, copy to:
 //   <game_dir>/UserData/BOAM/configs/icon-config.json5
@@ -10,13 +14,13 @@
 
   "defaults": {
     "size": 64,
-    "output_base": "/home/user/.local/share/Steam/steamapps/common/Menace/Mods/BOAM/icons"
+    "output_base": "icons"
   },
 
   "sources": {
-    "native":       "/home/user/.local/share/Steam/steamapps/common/Menace/UserData/BOAM",
-    "placeholders": "/home/user/.local/share/Steam/steamapps/common/Menace/UserData/BOAM",
-    "custom":       "/home/user/workspace/menace_mods/BOAM-modpack/sidecar/assets/icons"
+    "native":       "",
+    "placeholders": "",
+    "custom":       "/path/to/my-custom-icons"
   },
 
   "factions": [

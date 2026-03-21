@@ -13,7 +13,15 @@ On startup, each config is loaded by checking the user location first. If a user
 
 ### First Install
 
-On first run, each component automatically copies its config from `Mods/BOAM/configs/` to `UserData/BOAM/configs/` if it doesn't exist yet. The tactical engine seeds `config.json5`, and the minimap overlay seeds `tactical_map.json5` and `tactical_map_presets.json5`. No manual copying needed — just edit the user configs to customise.
+On first run, each component automatically copies its config from `Mods/BOAM/configs/` to `UserData/BOAM/configs/` if it doesn't exist yet:
+
+| Config | Seeded by |
+|--------|-----------|
+| `config.json5` | BOAM-engine (on engine startup) |
+| `tactical_map.json5` | BOAM-modpack (on game launch) |
+| `tactical_map_presets.json5` | BOAM-modpack (on game launch) |
+
+No manual copying needed — just edit the user configs to customise.
 
 ### Config Versioning
 
@@ -23,38 +31,23 @@ Every config has a `"configVersion": N` field. When the mod's config structure c
 [BOAM] TacticalMap — User config is outdated (v1 < v2), using mod default. Update your config at: .../UserData/BOAM/configs/tactical_map.json5
 ```
 
-Update your user config to match the new structure and bump its `configVersion`.
-
-### Override Path
-
-Set `BOAM_PERSISTENT_ASSETS` to override the `UserData/BOAM/` base path:
-
-```bash
-export BOAM_PERSISTENT_ASSETS=/path/to/my/boam/data
-```
+To fix this: update your user config to match the new structure and bump `configVersion` to match the mod default. If you don't bump the version number, your user config will continue to be ignored in favor of the mod default — even if the content is correct.
 
 ## Config Files
 
-### `config.json5` — Tactical Engine
+### `config.json5` — BOAM-engine
 
-Controls the F# tactical engine (ports, rendering, feature toggles).
+Controls the BOAM-engine (ports, rendering, feature toggles).
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `configVersion` | int | 2 | Config structure version |
-| `port` | int | 7660 | Tactical engine HTTP port |
+| `port` | int | 7660 | BOAM-engine HTTP port |
 | `bridge_port` | int | 7655 | Game bridge port (C# side) |
 | `command_port` | int | 7661 | Command server port |
 | `heatmaps` | bool | **false** | Collect render job data for offline heatmap generation |
 | `action_logging` | bool | **false** | Log player actions + AI decisions to `round_log.jsonl` |
 | `ai_logging` | bool | **false** | Log AI behavior decisions (requires `action_logging`) |
-
-**Feature toggle summary:** By default only the minimap is active. Enable features as needed:
-- **Minimap only** (default) — no config changes needed
-- **Action logging** — set `action_logging: true` (records player actions, AI actions, combat outcomes)
-- **Action + AI decision logging** — set `action_logging: true` and `ai_logging: true` (also captures AI behavior scoring and alternatives)
-- **Heatmaps** — set `heatmaps: true` (and `action_logging: true` for action logs in battle reports)
-- **Everything** — set all three to `true`
 | `rendering.minTilePixels` | int | 64 | Minimum pixels per tile (upscaling) |
 | `rendering.gamma` | float | 0.35 | Map background gamma (< 1.0 brightens shadows) |
 | `rendering.fontFamily` | string | `DejaVu Sans Mono` | Font for score text |
@@ -62,6 +55,18 @@ Controls the F# tactical engine (ports, rendering, feature toggles).
 | `rendering.labelFontScale` | float | 0.33 | Label text size relative to tile |
 | `rendering.borders.*` | object | — | Border styles: `margin`, `thickness`, `color [R,G,B,A]` |
 | `rendering.factionColors` | object | — | Per-faction colors keyed by index, `[R,G,B,A]` arrays |
+
+#### Feature toggles
+
+By default only the minimap is active — it works out of the box with no config changes. Enable additional features as needed:
+
+| Goal | Config changes |
+|------|---------------|
+| **Minimap only** (default) | None |
+| **Action logging** | `action_logging: true` |
+| **Action + AI decision logging** | `action_logging: true`, `ai_logging: true` |
+| **Heatmaps** | `heatmaps: true` (add `action_logging: true` for action logs in battle reports) |
+| **Everything** | All three set to `true` |
 
 ### `tactical_map.json5` — Minimap Overlay
 
@@ -89,7 +94,7 @@ Controls the in-game IMGUI minimap.
 | `HeaderFontSize` | int | 11 | Header text size (px) |
 | `ToastFontSize` | int | 14 | Toast notification size (px) |
 
-Keybinding values are [UnityEngine.KeyCode](https://docs.unity3d.com/ScriptReference/KeyCode.html) names. Set to `"None"` to disable.
+Keybinding values are [UnityEngine.KeyCode](https://docs.unity3d.com/ScriptReference/KeyCode.html) names. Common values: `M`, `L`, `F`, `Tab`, `Space`, `BackQuote` (`` ` ``). Set to `"None"` to disable a keybinding.
 
 ### `tactical_map_presets.json5` — Display Presets
 

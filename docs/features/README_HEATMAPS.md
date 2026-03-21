@@ -2,7 +2,7 @@
 
 Renders heatmap PNG images showing AI evaluation scores overlaid on the captured map background. Each heatmap visualizes one actor's turn: tile scores, unit positions, vision range, chosen behavior, and move destination.
 
-For technical details (data collection hooks, render job JSON structure, accumulation internals), see [docs/README_HEATMAPS.md](../tech/README_HEATMAPS.md).
+![Heatmap example](/docs/images/ai_heatmap_blaster_bug_29_r01.png)
 
 ## What the Heatmap Shows
 
@@ -20,6 +20,9 @@ For technical details (data collection hooks, render job JSON structure, accumul
 
 All examples assume `cd /path/to/Menace/Mods/BOAM/`.
 
+<details>
+<summary>Linux</summary>
+
 ```bash
 # Render all jobs from a battle
 ./tactical_engine/TacticalEngine --render battle_2026_03_15_15_14
@@ -33,6 +36,27 @@ All examples assume `cd /path/to/Menace/Mods/BOAM/`.
 # Render a specific unit
 ./tactical_engine/TacticalEngine --render battle_2026_03_15_15_14 --pattern "*_alien_big_blaster*"
 ```
+
+</details>
+
+<details>
+<summary>Windows</summary>
+
+```bat
+REM Render all jobs from a battle
+tactical_engine\TacticalEngine.exe --render battle_2026_03_15_15_14
+
+REM Render only stingers from round 1
+tactical_engine\TacticalEngine.exe --render battle_2026_03_15_15_14 --pattern "r01_*_stinger_*"
+
+REM Render all wildlife across rounds
+tactical_engine\TacticalEngine.exe --render battle_2026_03_15_15_14 --pattern "*_wildlife_*"
+
+REM Render a specific unit
+tactical_engine\TacticalEngine.exe --render battle_2026_03_15_15_14 --pattern "*_alien_big_blaster*"
+```
+
+</details>
 
 ## HTTP (while engine is running)
 

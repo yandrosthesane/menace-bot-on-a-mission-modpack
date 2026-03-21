@@ -5,29 +5,30 @@
 - [Menace](https://store.steampowered.com/app/2432860/Menace/) installed via Steam
 - [MelonLoader](https://melonwiki.xyz/) installed in the game directory
 - [Menace ModpackLoader](https://github.com/YandrosTheSane/menace-modpack-loader) installed (`Menace.ModpackLoader.dll` in `Mods/`)
+- [.NET 10 runtime](https://dotnet.microsoft.com/download/dotnet/10.0) — required for the BOAM-engine (slim variant). Not needed if using the bundled variant.
 
-## Step 1: Install the C# Bridge Plugin
+## Step 1: Install the BOAM-modpack
 
 Use the Menace Modkit to deploy the BOAM modpack.
 
-## Step 2: Install the Tactical Engine
+## Step 2: Install the BOAM-engine
 
-Download the tactical engine archive for your platform and extract it into `Mods/BOAM/`.
+Download the BOAM-engine archive for your platform and extract it into `Mods/BOAM/`.
 
 ### Which variant?
 
 | Variant | Size | Best for |
 |---------|------|----------|
-| **bundled** | ~112 MB | Most users — includes everything, no extra setup |
-| **slim** | ~5 MB | Users who already have .NET 10 or prefer smaller downloads |
+| **slim** | ~5 MB | Recommended — small download, no antivirus false positives. Requires [.NET 10 runtime](https://dotnet.microsoft.com/download/dotnet/10.0). |
+| **bundled** | ~112 MB | Fallback if you can't install .NET 10. Includes the runtime, nothing else to install. Some antivirus may flag bundled .NET system DLLs — these are standard Microsoft files. |
 
-**Bundled** includes the .NET 10 runtime inside the archive. Extract and run — nothing else to install. Some antivirus software may flag the bundled .NET system DLLs as suspicious; these are standard Microsoft runtime files.
-
-**Slim** is the same engine without the runtime. It requires [.NET 10](https://dotnet.microsoft.com/download/dotnet/10.0) installed on your system. Much smaller download, no antivirus false positives.
+Try **slim** first. If the engine fails to start with a missing framework error, either install [.NET 10](https://dotnet.microsoft.com/download/dotnet/10.0) or switch to the **bundled** variant.
 
 ### Installing the .NET 10 runtime (slim variant only)
 
-**Linux:**
+<details>
+<summary>Linux</summary>
+
 ```bash
 # Ubuntu/Debian
 sudo apt install dotnet-runtime-10.0
@@ -38,16 +39,24 @@ sudo dnf install dotnet-runtime-10.0
 # Or install from Microsoft: https://dotnet.microsoft.com/download/dotnet/10.0
 ```
 
-**Windows:**
+</details>
+
+<details>
+<summary>Windows</summary>
+
 ```bat
 winget install Microsoft.DotNet.Runtime.10
 ```
 
 Or download the installer from [dotnet.microsoft.com/download/dotnet/10.0](https://dotnet.microsoft.com/download/dotnet/10.0).
 
+</details>
+
 ### Extract the archive
 
-**Linux:**
+<details>
+<summary>Linux</summary>
+
 ```bash
 # Bundled
 unzip BOAM-tactical-engine-v1.2.0-linux-x64-bundled.zip -d /path/to/Menace/Mods/BOAM/
@@ -56,11 +65,16 @@ unzip BOAM-tactical-engine-v1.2.0-linux-x64-bundled.zip -d /path/to/Menace/Mods/
 unzip BOAM-tactical-engine-v1.2.0-linux-x64-slim.zip -d /path/to/Menace/Mods/BOAM/
 ```
 
-**Windows:**
+</details>
+
+<details>
+<summary>Windows</summary>
 
 Unzip `BOAM-tactical-engine-v1.2.0-win-x64-bundled.zip` (or `-slim.zip`) into `Mods\BOAM\`.
 
-Usage is identical for both variants — the launcher script and all commands work the same way.
+</details>
+
+Replace `v1.2.0` with the version you downloaded. Usage is identical for both variants — the launcher script and all commands work the same way.
 
 ## Step 3: Extract Game Art
 
@@ -94,11 +108,25 @@ Menace/UserData/BOAM/
 
 Run the icon generator to resize the extracted art into heatmap/minimap icons:
 
+<details>
+<summary>Linux</summary>
+
 ```bash
 cd /path/to/Menace/Mods/BOAM/
-./boam-icons --force          # Linux
-boam-icons.exe --force        # Windows
+./boam-icons --force
 ```
+
+</details>
+
+<details>
+<summary>Windows</summary>
+
+```bat
+cd C:\path\to\Menace\Mods\BOAM\
+boam-icons.exe --force
+```
+
+</details>
 
 This reads `configs/icon-config.json5` and produces 64x64 icons:
 ```
@@ -113,14 +141,17 @@ See [Icon Generator](README_ICON_GENERATOR.md) for config format and adding new 
 
 ## Step 5: Set Up Shell Shortcuts (Optional)
 
-Add these to your `~/.bashrc` or `~/.zshrc` so you can run BOAM tools from anywhere:
+<details>
+<summary>Linux (bash/zsh)</summary>
+
+Add to `~/.bashrc` or `~/.zshrc`:
 
 ```bash
 # Adjust MENACE_DIR if your Steam library is in a different location
 export MENACE_DIR="$HOME/.local/share/Steam/steamapps/common/Menace"
 export BOAM_DIR="$MENACE_DIR/Mods/BOAM"
 
-# Start the tactical engine (accepts same args as start-tactical-engine.sh)
+# Start the BOAM-engine
 alias boam-engine='$BOAM_DIR/start-tactical-engine.sh'
 
 # Regenerate icons
@@ -134,6 +165,30 @@ boam-engine --on-title /navigate/tactical            # auto-navigate to tactical
 boam-icons --force                                   # regenerate icons
 ```
 
+</details>
+
+<details>
+<summary>Windows (PowerShell)</summary>
+
+Add to your PowerShell profile (`$PROFILE`):
+
+```powershell
+# Adjust if your Steam library is in a different location
+$env:BOAM_DIR = "C:\Program Files (x86)\Steam\steamapps\common\Menace\Mods\BOAM"
+
+function boam-engine { & "$env:BOAM_DIR\start-tactical-engine.bat" @args }
+function boam-icons { & "$env:BOAM_DIR\boam-icons.exe" @args }
+```
+
+Then from any directory:
+```powershell
+boam-engine                                          # passive start
+boam-engine --on-title /navigate/tactical            # auto-navigate to tactical
+boam-icons --force                                   # regenerate icons
+```
+
+</details>
+
 ## Step 6: Customise Configs (Optional)
 
 On first run, all configs are automatically seeded into `UserData/BOAM/configs/` from mod defaults. Edit them to customise keybindings, display presets, and visual settings — user configs survive deploys.
@@ -142,15 +197,13 @@ If a mod update changes the config structure (version bump), the mod default is 
 See [Configuration](README_CONFIG.md) for all options.
 
 ## Updating
+
 When updating BOAM to a new version:
 
-1. **Re-deploy** the bridge plugin (step 1) — this wipes `Mods/BOAM/`
-2. **Re-extract** the tactical engine (step 2)
-3. **Re-generate** icons (step 4) — deploy wipes `icons/`
-4. **Check config versions** — if the game logs a warning about outdated configs, update your user configs in `UserData/BOAM/configs/` to match the new structure and bump `configVersion`
-5. Shell shortcuts (step 5) only need to be set up once — they survive deploys
+1. **Re-deploy** the BOAM-modpack (step 1)
+2. **Re-extract** the BOAM-engine (step 2)
 
-Your user configs and source art in `UserData/BOAM/` are never touched by deploys.
+Icons are regenerated automatically during deploy. Configs in `UserData/BOAM/` are never touched — if a mod update changes the config structure, a warning is logged and the mod default is used until you update your user config (see [Configuration](README_CONFIG.md)).
 
 ## Troubleshooting
 

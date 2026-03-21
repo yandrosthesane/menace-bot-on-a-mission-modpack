@@ -1,6 +1,6 @@
 # BOAM — Bot On A Mission
 
-**v1.2.0** | [Changelog](docs/features/CHANGELOG.md)
+**v1.2.0** | [Documentation](https://yandrosthesane.github.io/menace-bot-on-a-mission-modpack) | [Changelog](docs/features/CHANGELOG.md)
 
 AI behavior analysis mod for Menace.
 Intercepts AI decision-making at runtime,
@@ -14,7 +14,7 @@ and records full battle sessions (player actions + AI decisions + combat outcome
 |---------|-------------|
 | [Tactical Minimap](docs/features/README_MINIMAP.md) | In-game IMGUI overlay showing unit positions on the captured map background |
 | [Heatmap Renderer](docs/features/README_HEATMAPS.md) | Offline heatmap generation from deferred render jobs — tile scores, decisions, movement |
-| [Action Logging](docs/features/README_CONFIG.md) | Records player actions, AI decisions, and combat outcomes to JSONL battle logs |
+| [Action Logging](docs/features/README_BOAM_ENGINE.md) | Records player actions, AI decisions, and combat outcomes to JSONL battle logs |
 | [Configuration](docs/features/README_CONFIG.md) | Versioned JSON5 configs with user/mod-default two-tier system |
 
 ## Components
@@ -69,7 +69,9 @@ Menace/
 
 ### Start the Engine
 
-**Linux:**
+<details>
+<summary>Linux</summary>
+
 ```bash
 # Passive — engine starts, you control everything
 ./start-tactical-engine.sh
@@ -78,7 +80,11 @@ Menace/
 ./start-tactical-engine.sh --on-title /navigate/tactical
 ```
 
-**Windows:**
+</details>
+
+<details>
+<summary>Windows</summary>
+
 ```bat
 REM Passive
 start-tactical-engine.bat
@@ -86,6 +92,8 @@ start-tactical-engine.bat
 REM Auto-navigate to tactical
 start-tactical-engine.bat --on-title /navigate/tactical
 ```
+
+</details>
 
 Then launch the game normally through Steam. On Linux the engine opens in its own terminal window; on Windows it runs in the command prompt. Logs written to `Mods/BOAM/logs/tactical_engine.log`.
 
@@ -102,18 +110,27 @@ Additional keys (FoW, labels, etc.) can be enabled in `tactical_map.json5`. See 
 
 After playing a round, render job data is flushed to disk. Render heatmaps on demand:
 
-**Linux:**
+<details>
+<summary>Linux</summary>
+
 ```bash
 ./tactical_engine/TacticalEngine --render battle_2026_03_15_15_14                              # all
 ./tactical_engine/TacticalEngine --render battle_2026_03_15_15_14 --pattern "r01_*"            # round 1 only
 ./tactical_engine/TacticalEngine --render battle_2026_03_15_15_14 --pattern "*_alien_stinger*" # one unit
 ```
 
-**Windows:**
+</details>
+
+<details>
+<summary>Windows</summary>
+
 ```bat
 tactical_engine\TacticalEngine.exe --render battle_2026_03_15_15_14
 tactical_engine\TacticalEngine.exe --render battle_2026_03_15_15_14 --pattern "r01_*"
+tactical_engine\TacticalEngine.exe --render battle_2026_03_15_15_14 --pattern "*_alien_stinger*"
 ```
+
+</details>
 
 **HTTP (any platform, while engine is running):**
 ```bash
@@ -124,15 +141,23 @@ See [Heatmap Renderer](docs/features/README_HEATMAPS.md).
 
 ### Generate Icons
 
-**Linux:**
+<details>
+<summary>Linux</summary>
+
 ```bash
 ./boam-icons --force
 ```
 
-**Windows:**
+</details>
+
+<details>
+<summary>Windows</summary>
+
 ```bat
 boam-icons.exe --force
 ```
+
+</details>
 
 See [Icon Generator](docs/features/README_ICON_GENERATOR.md).
 

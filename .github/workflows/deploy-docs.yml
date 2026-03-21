@@ -41,8 +41,11 @@ jobs:
         working-directory: quartz-build
         run: npm ci
 
-      - name: Copy Quartz config
-        run: cp documentation-publish/quartz.config.ts quartz-build/quartz.config.ts
+      - name: Copy Quartz config, layout, and styles
+        run: |
+          cp documentation-publish/quartz.config.ts quartz-build/quartz.config.ts
+          cp documentation-publish/quartz.layout.ts quartz-build/quartz.layout.ts
+          cp documentation-publish/custom.scss quartz-build/quartz/styles/custom.scss
 
       - name: Assemble content
         run: documentation-publish/build-content.sh "$GITHUB_WORKSPACE" quartz-build/content

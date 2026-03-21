@@ -53,6 +53,19 @@ let private stripComments (input: string) =
             i <- i + 1
     sb.ToString()
 
+/// Derive game directory paths from the executable location.
+/// The binary lives at Mods/BOAM/boam-icons, so game dir is two levels up.
+let private resolveGamePaths () =
+    let exeDir = AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+    // exeDir = .../Menace/Mods/BOAM  (or wherever the binary is)
+    let boamModDir = exeDir
+    let gameDir = Path.GetDirectoryName(Path.GetDirectoryName(boamModDir))
+    let persistentDir =
+        Environment.GetEnvironmentVariable("BOAM_PERSISTENT_ASSETS")
+        |> Option.ofObj
+        |> Option.defaultValue (Path.Combine(gameDir, "UserData", "BOAM"))
+    boamModDir, persistentDir
+
 let private parseConfig (configPath: string) =
     let json = stripComments (File.ReadAllText(configPath))
     let doc = JsonDocument.Parse(json)
@@ -60,11 +73,26 @@ let private parseConfig (configPath: string) =
 
     let defaults = root.GetProperty("defaults")
     let defaultSize = defaults.GetProperty("size").GetInt32()
-    let outputBase = defaults.GetProperty("output_base").GetString()
 
+    let boamModDir, persistentDir = resolveGamePaths ()
+
+    // output_base: use config value if absolute, otherwise default to Mods/BOAM/icons
+    let outputBase =
+        match defaults.TryGetProperty("output_base") with
+        | true, v ->
+            let path = v.GetString()
+            if Path.IsPathRooted(path) then path
+            else Path.Combine(boamModDir, path)
+        | _ -> Path.Combine(boamModDir, "icons")
+
+    // sources: resolve "native" and "placeholders" to UserData/BOAM by default
     let sources =
         [ for prop in root.GetProperty("sources").EnumerateObject() ->
-            prop.Name, prop.Value.GetString() ]
+            let path = prop.Value.GetString()
+            let resolved =
+                if Path.IsPathRooted(path) then path
+                else Path.Combine(persistentDir, path)
+            prop.Name, resolved ]
         |> Map.ofList
 
     let parseSection (name: string) =

@@ -1,0 +1,72 @@
+@use "./base.scss";
+
+// BOAM documentation — Quartz style overrides
+
+// Widen the full page layout so content has more room without overlapping the right sidebar
+body {
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+// Larger body text for readability
+article {
+  font-size: 1.1rem;
+  line-height: 1.7;
+}
+
+// Tables: full width, better spacing
+article table {
+  width: 100%;
+  font-size: 1rem;
+
+  th, td {
+    padding: 0.5rem 0.75rem;
+  }
+}
+
+// Code blocks: more breathing room
+article pre {
+  font-size: 0.95rem;
+  padding: 1rem 1.25rem;
+  line-height: 1.5;
+}
+
+// Inline code: slightly larger
+article code {
+  font-size: 0.95em;
+  padding: 0.15em 0.35em;
+}
+
+// Headings: more spacing above
+article h2 {
+  margin-top: 2.5rem;
+}
+
+article h3 {
+  margin-top: 2rem;
+}
+
+// Explorer: hide empty folder nodes, remove nesting, force open
+.explorer .folder-container:has(.folder-title:empty) {
+  display: none;
+}
+
+.explorer .folder-outer {
+  padding-left: 0;
+  margin-left: 0;
+  display: block !important;
+  max-height: none !important;
+  opacity: 1 !important;
+}
+
+// Details/summary (collapsible sections): better styling
+article details {
+  margin: 0.75rem 0;
+  padding: 0.5rem 0;
+
+  summary {
+    cursor: pointer;
+    font-weight: 600;
+    padding: 0.25rem 0;
+  }
+}

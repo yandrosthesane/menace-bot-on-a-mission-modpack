@@ -4,7 +4,7 @@ Companion process that runs outside the game. Receives hook data from the BOAM-m
 
 The BOAM-engine is optional — the [BOAM-modpack](README_BOAM_MODPACK.md) works standalone for the minimap. Start the engine when you want heatmaps or action logging.
 
-![BOAM-engine startup](../images/tactical_engine_startup.png)
+![BOAM-engine startup](/docs/images/tactical_engine_startup.png)
 
 ## Command-Line Arguments
 

@@ -16,13 +16,18 @@ The in-game mod that runs inside MelonLoader. This is what gets deployed via the
 
 ## Standalone vs with BOAM-engine
 
-The modpack works on its own — the minimap is fully functional without the engine. When the BOAM-engine is running, the modpack additionally forwards all hook data to it over HTTP for heatmap rendering and action logging.
+The modpack works on its own with zero configuration — the minimap is enabled by default and needs no config changes. When the BOAM-engine is running, the modpack additionally forwards all hook data to it over HTTP for heatmap rendering and action logging. Those features are opt-in via `config.json5` (see [Configuration](README_CONFIG.md)).
 
 | Mode | What works |
 |------|------------|
 | **BOAM-modpack only** | Minimap overlay with live unit positions, map capture, actor tracking |
 | **BOAM-modpack + BOAM-engine** | Everything above + heatmap rendering, action logging, AI decision logging, auto-navigation |
 
-## Port Settings
+## Ports
 
-See [Configuration](README_CONFIG.md) for port settings (`port`, `bridge_port`, `command_port` in `config.json5`).
+| Port | Used by | Purpose |
+|------|---------|---------|
+| 7660 | BOAM-engine | Receives hook data from the modpack (tile scores, actions, combat) |
+| 7661 | BOAM-modpack | Receives action commands from the engine (click, skill, endturn) |
+
+Both ports are configurable in `config.json5` — see [Configuration](README_CONFIG.md).

@@ -2,8 +2,6 @@
 
 In-game IMGUI overlay showing unit positions on the captured map background. Units are rendered with the same icon fallback chain as heatmaps (leader -- template -- faction).
 
-For technical details (data sources, icon resolution internals, performance notes), see [docs/README_MINIMAP.md](../tech/README_MINIMAP.md).
-
 ## Controls
 
 | Key | Action | Default |
