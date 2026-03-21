@@ -18,4 +18,4 @@ The bridge hosts an in-game minimap overlay. See [Tactical Minimap](README_MINIM
 
 ## Technical Details
 
-See [docs/README_BRIDGE_PLUGIN.md](docs/README_BRIDGE_PLUGIN.md) for Harmony hooks, data flow diagrams, and file descriptions.
+See [docs/README_BRIDGE_PLUGIN.md](../README_BRIDGE_PLUGIN.md) for Harmony hooks, data flow diagrams, and file descriptions.

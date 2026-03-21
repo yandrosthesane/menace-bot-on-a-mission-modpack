@@ -1,7 +1,7 @@
 /// Label and filename logic for units and heatmaps.
 module BOAM.TacticalEngine.Naming
 
-open BOAM.TacticalEngine.GameTypes
+open BOAM.TacticalEngine.HeatmapTypes
 
 /// Full template name after dot prefix (e.g., "enemy.alien_stinger" → "alien_stinger").
 /// Used for icon file lookup — no stopword stripping.
@@ -15,7 +15,7 @@ let templateFileName (name: string) =
 /// Build unit label from stable UUID.
 /// "player.carda" → "player.carda", "wildlife.alien_stinger.1" → "wildlife.alien_stinger.1"
 /// The UUID is already human-readable and unique.
-let unitLabel (u: UnitInfo) = u.Actor
+let unitLabel (u: RenderUnit) = u.Actor
 
 /// Build heatmap filename label from stable UUID and round.
 /// "player.carda" → "player_carda_r01"

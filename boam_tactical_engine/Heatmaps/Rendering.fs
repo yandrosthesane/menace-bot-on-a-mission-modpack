@@ -6,7 +6,7 @@ open System.IO
 open SixLabors.ImageSharp
 open SixLabors.ImageSharp.PixelFormats
 open SixLabors.ImageSharp.Processing
-open BOAM.TacticalEngine.GameTypes
+open BOAM.TacticalEngine.HeatmapTypes
 open BOAM.TacticalEngine.Config
 
 let private cfg = Current.Rendering
@@ -109,7 +109,7 @@ let tileOrigin (mapInfo: MapInfo) (scaledPpt: int) (tileX: int) (tileZ: int) =
     px, py
 
 /// Draw a border rectangle around a tile with the given style.
-let drawTileBorder (bg: Image<Rgba32>) (mapInfo: MapInfo) (scaledPpt: int) (pos: TilePos) (style: BorderStyle) =
+let drawTileBorder (bg: Image<Rgba32>) (mapInfo: MapInfo) (scaledPpt: int) (pos: Pos) (style: BorderStyle) =
     let px, py = tileOrigin mapInfo scaledPpt pos.X pos.Z
     let m = style.Margin
     for i = m to scaledPpt - 1 - m do

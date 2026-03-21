@@ -2,7 +2,7 @@
 
 Renders heatmap PNG images showing AI evaluation scores overlaid on the captured map background. Each heatmap visualizes one actor's turn: tile scores, unit positions, vision range, chosen behavior, and move destination.
 
-For technical details (data collection hooks, render job JSON structure, accumulation internals), see [docs/README_HEATMAPS.md](docs/README_HEATMAPS.md).
+For technical details (data collection hooks, render job JSON structure, accumulation internals), see [docs/README_HEATMAPS.md](../README_HEATMAPS.md).
 
 ## What the Heatmap Shows
 

@@ -33,6 +33,12 @@ public class BoamBridge : IModpackPlugin
     private bool _inTactical;
     private int _initDelay;
     private bool _ready;
+
+    /// <summary>Tactical scene is loaded and initialized (minimap, unit registry).</summary>
+    public bool IsTacticalReady => _ready;
+
+    /// <summary>Tactical scene ready AND engine is connected (for hooks that POST to the engine).</summary>
+    public bool IsEngineReady => _ready && _engineAvailable;
     private BoamCommandServer _commandServer;
     private float _nextCommandTime;
     private TacticalMap.TacticalMapOverlay _tacticalMap;
@@ -446,7 +452,6 @@ public class BoamBridge : IModpackPlugin
         }
     }
 
-    public bool IsReady => _ready && _engineAvailable;
     public int Round => Menace.SDK.TacticalController.GetCurrentRound();
     public void ShowToast(string text, float seconds = 3f) => Toast.Show(text, seconds);
 

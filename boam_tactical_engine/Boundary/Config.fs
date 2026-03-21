@@ -78,7 +78,12 @@ let private readVersion (path: string) =
         | _ -> 0
     with _ -> 0
 
+/// Config source info for logging.
+type ConfigSource = { Path: string; Label: string; Version: int }
+
 /// Resolve config path: user persistent config → mod default → source dev fallback.
+/// Returns the resolved path and source metadata.
+/// Seeds the user config from mod default if it doesn't exist yet.
 let private resolveConfigPath () =
     let exeDir = AppContext.BaseDirectory
     let gameDir =
@@ -86,33 +91,43 @@ let private resolveConfigPath () =
         |> Option.ofObj
         |> Option.defaultValue (Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
             ".steam/steam/steamapps/common/Menace"))
-
-    // User persistent config (survives deploys)
     let persistentDir =
         Environment.GetEnvironmentVariable("BOAM_PERSISTENT_ASSETS")
         |> Option.ofObj
         |> Option.defaultValue (Path.Combine(gameDir, "UserData", "BOAM"))
     let userPath = Path.Combine(persistentDir, "configs", "config.json5")
-
-    // Mod default (configs/ next to the engine binary's parent — i.e. Mods/BOAM/configs/)
     let modDir = Path.GetDirectoryName(exeDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
     let defaultPath = Path.Combine(modDir, "configs", "config.json5")
+
+    // Seed user config from mod default if missing
+    if not (File.Exists(userPath)) && File.Exists(defaultPath) then
+        try
+            Directory.CreateDirectory(Path.GetDirectoryName(userPath)) |> ignore
+            File.Copy(defaultPath, userPath)
+            eprintfn "[Config] Seeded user config from mod default: %s" userPath
+        with ex ->
+            eprintfn "[Config] Failed to seed user config: %s" ex.Message
 
     // Pick the best config: user (if version ok) → default
     if File.Exists(userPath) then
         let userVer = readVersion userPath
         let defaultVer = if File.Exists(defaultPath) then readVersion defaultPath else 0
         if userVer >= defaultVer then
-            eprintfn "[Config] Using user config (v%d): %s" userVer userPath
-            userPath
+            { Path = userPath; Label = "user"; Version = userVer }
         else
-            eprintfn "[Config] User config outdated (v%d < v%d), using default: %s" userVer defaultVer defaultPath
-            defaultPath
-    elif File.Exists(defaultPath) then defaultPath
+            eprintfn "[Config] User config outdated (v%d < v%d), falling back to mod default" userVer defaultVer
+            { Path = defaultPath; Label = "default"; Version = defaultVer }
+    elif File.Exists(defaultPath) then
+        { Path = defaultPath; Label = "default"; Version = readVersion defaultPath }
     else failwithf "config.json5 not found (checked %s, %s)" userPath defaultPath
 
+/// The resolved config source (available after load).
+let mutable Source : ConfigSource = { Path = ""; Label = ""; Version = 0 }
+
 let private load () : TacticalEngineConfig =
-    let configPath = resolveConfigPath ()
+    let source = resolveConfigPath ()
+    Source <- source
+    let configPath = source.Path
 
     let json = stripComments (File.ReadAllText(configPath))
     let doc = JsonDocument.Parse(json)

@@ -4,6 +4,7 @@ module BOAM.TacticalEngine.HookPayload
 
 open System.Text.Json
 open BOAM.TacticalEngine.GameTypes
+open BOAM.TacticalEngine.BoundaryTypes
 
 // --- Reusable JSON helpers ---
 

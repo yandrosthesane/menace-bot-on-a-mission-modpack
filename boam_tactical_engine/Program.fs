@@ -5,6 +5,7 @@ open System
 open Microsoft.AspNetCore.Builder
 open Microsoft.Extensions.Logging
 open BOAM.TacticalEngine.GameTypes
+open BOAM.TacticalEngine.BoundaryTypes
 open BOAM.TacticalEngine.Node
 open BOAM.TacticalEngine.Registry
 open BOAM.TacticalEngine.StateStore
@@ -12,6 +13,7 @@ open BOAM.TacticalEngine.EventBus
 open BOAM.TacticalEngine.Logging
 open BOAM.TacticalEngine.HookPayload
 open BOAM.TacticalEngine.HeatmapRenderer
+open BOAM.TacticalEngine.HeatmapTypes
 open BOAM.TacticalEngine.Routes
 
 let private version = "1.0.0"
@@ -50,6 +52,20 @@ let main argv =
     match onTitleRoute with
     | Some route -> printfn "  OnTitle:   %s" (green route)
     | None -> printfn "  OnTitle:   %s" (dim "none")
+    printfn "  %s" (dim "─────────────────────────────────")
+
+    // Config source
+    let src = Config.Source
+    printfn "  Config:  %s %s" (cyan (sprintf "%s (v%d)" src.Label src.Version)) (dim src.Path)
+
+    // Feature status
+    let on label = sprintf "  %s  %s" (green "●") label
+    let off label = sprintf "  %s  %s" (dim "○") (dim label)
+    printfn "  %s" (dim "─────────────────────────────────")
+    printfn "%s" (if true then on "Minimap" else off "Minimap")
+    printfn "%s" (if Config.Current.Heatmaps then on "Heatmaps" else off "Heatmaps")
+    printfn "%s" (if Config.Current.ActionLogging then on "Action logging" else off "Action logging")
+    printfn "%s" (if Config.Current.AiLogging then on "AI decision logging" else off "AI decision logging")
     printfn "  %s" (dim "─────────────────────────────────")
     printfn ""
 
@@ -118,15 +134,15 @@ let main argv =
                 let job = System.Text.Json.JsonDocument.Parse(jobJson).RootElement
                 let tiles = HookPayload.tryArray job "tiles" (fun el ->
                     { X = el.GetProperty("x").GetInt32(); Z = el.GetProperty("z").GetInt32()
-                      Combined = el.GetProperty("combined").GetSingle() })
+                      Combined = el.GetProperty("combined").GetSingle() } : TileScore)
                 let units = HookPayload.tryArray job "units" (fun el ->
                     { Faction = el.GetProperty("faction").GetInt32()
-                      Position = { X = el.GetProperty("x").GetInt32(); Z = el.GetProperty("z").GetInt32() }
+                      X = el.GetProperty("x").GetInt32(); Z = el.GetProperty("z").GetInt32()
                       Actor = HookPayload.tryStr el "actor" ""
                       Name = HookPayload.tryStr el "name" ""
-                      Leader = HookPayload.tryStr el "leader" "" })
-                let actorPos = HookPayload.parseOptionalTilePos job "actorPosition"
-                let moveDest = HookPayload.parseOptionalTilePos job "moveDestination"
+                      Leader = HookPayload.tryStr el "leader" "" } : RenderUnit)
+                let actorPos = HookPayload.parseOptionalTilePos job "actorPosition" |> Option.map (fun p -> { X = p.X; Z = p.Z } : Pos)
+                let moveDest = HookPayload.parseOptionalTilePos job "moveDestination" |> Option.map (fun p -> { X = p.X; Z = p.Z } : Pos)
                 let faction = HookPayload.tryInt job "faction" 0
                 let visionRange = HookPayload.tryInt job "visionRange" 0
                 let actor = HookPayload.tryStr job "actor" ""

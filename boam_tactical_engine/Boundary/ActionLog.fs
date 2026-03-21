@@ -5,6 +5,7 @@ open System
 open System.IO
 open System.Text.Json
 open BOAM.TacticalEngine.GameTypes
+open BOAM.TacticalEngine.BoundaryTypes
 
 let private jsonOptions = JsonSerializerOptions(PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower)
 

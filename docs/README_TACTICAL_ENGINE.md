@@ -1,22 +1,64 @@
 # F# Tactical Engine -- Technical Reference
 
-## Key Modules
+## Architecture
+
+The engine is organized into bounded contexts, each with its own types and responsibilities:
+
+```
+boam_tactical_engine/
+├── Domain/          Game domain types (shared primitives)
+├── Boundary/        External I/O (config, logging, JSON parsing, serialization)
+├── NodeSystem/      Behavior graph framework (state keys, nodes, walker)
+├── Heatmaps/        Rendering pipeline (own types, decoupled from game domain)
+├── Routes.fs        Composition root — maps between contexts, registers HTTP endpoints
+└── Program.fs       Entry point, CLI args, server startup
+```
+
+### Domain
 
 | Module | Purpose |
 |--------|---------|
-| `Program.fs` | HTTP server startup, route registration |
-| `Routes.fs` | All HTTP endpoints (hooks, render, navigation) |
-| `RenderJobCollector.fs` | Accumulates tile-scores/decisions per actor per round, flushes to disk |
-| `HeatmapRenderer.fs` | Renders PNG heatmaps from tile data + map background + icons |
-| `ActionLog.fs` | Per-actor and shared JSONL action logs |
-| `Config.fs` | JSON5 config loading with versioned user/default resolution |
-| `Rendering.fs` | Low-level pixel operations, map info parsing, border drawing |
-| `GameTypes.fs` | Shared type definitions (tiles, factions, units, scores) |
-| `HookPayload.fs` | JSON parsing for hook payloads |
-| `Naming.fs` | Template name normalization, icon path resolution |
+| `GameTypes.fs` | Shared domain primitives (TilePos, FactionId, FactionState) |
+
+### Boundary
+
+| Module | Purpose |
+|--------|---------|
+| `Types.fs` | Payload DTOs — wire format between C# bridge and engine |
+| `Config.fs` | JSON5 config loading with versioned user/default resolution + auto-seeding |
+| `Logging.fs` | Structured console logging |
+| `HookPayload.fs` | Anti-corruption layer — JSON → domain types |
+| `ActionLog.fs` | Battle session JSONL writer (player actions, AI decisions, combat) |
+| `EventBus.fs` | Game event synchronization for auto-navigation |
+
+### NodeSystem
+
+| Module | Purpose |
+|--------|---------|
+| `StateKey.fs` | Typed state keys with lifetimes (per-session, per-round, per-faction) |
+| `StateStore.fs` | Cross-node key-value state container |
+| `NodeContext.fs` | Read/write API for node functions |
+| `Node.fs` | Node definition record |
+| `Registry.fs` | Node collection, merge validation, dependency checking |
+| `Walker.fs` | Per-hook node execution with tracing |
+
+### Heatmaps
+
+| Module | Purpose |
+|--------|---------|
+| `Types.fs` | Heatmap-internal types (Pos, TileScore, RenderUnit, RenderDecision) |
 | `FactionTheme.fs` | Faction colors and icon filename mapping |
-| `EventBus.fs` | Event-driven synchronization for auto-navigation |
-| `Node.fs`, `Walker.fs`, `Registry.fs` | Behavior graph evaluation (WIP) |
+| `Naming.fs` | Template name normalization, unit labels |
+| `Rendering.fs` | Low-level image ops, map info parsing, border drawing |
+| `HeatmapRenderer.fs` | PNG heatmap composition from tile data + map background + icons |
+| `RenderJobCollector.fs` | Deferred render job accumulation + flush to disk |
+
+### Composition Root
+
+| Module | Purpose |
+|--------|---------|
+| `Routes.fs` | HTTP route registration, Boundary → Heatmaps type mapping |
+| `Program.fs` | Entry point, CLI argument parsing, server startup |
 
 ## HTTP Endpoints
 
@@ -43,7 +85,7 @@
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/render/battle/{name}` | POST | Render heatmaps from render jobs (see [Heatmap Renderer](../README_HEATMAPS.md)) |
+| `/render/battle/{name}` | POST | Render heatmaps from render jobs (see [Heatmap Renderer](features/README_HEATMAPS.md)) |
 
 ### System Endpoints
 

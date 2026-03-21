@@ -4,7 +4,7 @@ Companion process that renders heatmaps and logs actions. Runs as an HTTP server
 
 Running outside the game keeps the in-game bridge thin and easy to maintain — it only patches and forwards data. All heavy logic (rendering, action logging) lives in the engine, which can be updated, restarted, or used standalone without touching the game.
 
-For technical details (modules, hook endpoints, auto-navigation internals), see [docs/README_TACTICAL_ENGINE.md](docs/README_TACTICAL_ENGINE.md).
+For technical details (modules, hook endpoints, auto-navigation internals), see [docs/README_TACTICAL_ENGINE.md](../README_TACTICAL_ENGINE.md).
 
 ## Command-Line Arguments
 

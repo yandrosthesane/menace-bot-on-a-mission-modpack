@@ -9,7 +9,7 @@ open SixLabors.ImageSharp.PixelFormats
 open SixLabors.ImageSharp.Processing
 open SixLabors.ImageSharp.Drawing.Processing
 open SixLabors.Fonts
-open BOAM.TacticalEngine.GameTypes
+open BOAM.TacticalEngine.HeatmapTypes
 open BOAM.TacticalEngine.Config
 open BOAM.TacticalEngine.Rendering
 open BOAM.TacticalEngine.Naming
@@ -61,8 +61,8 @@ let private resolveIcon (iconBaseDir: string) (fullName: string) (leaderName: st
 /// Returns the label assigned to the actor at actorPos (for use in filename).
 let private drawUnits
     (bg: Image<Rgba32>) (mapInfo: MapInfo) (scaledPpt: int)
-    (units: UnitInfo list) (currentFaction: int)
-    (actorPos: TilePos option) (font: Font) (iconBaseDir: string)
+    (units: RenderUnit list) (currentFaction: int)
+    (actorPos: Pos option) (font: Font) (iconBaseDir: string)
     : string option =
     let iconSize = scaledPpt
     let offset = (scaledPpt - iconSize) / 2
@@ -70,7 +70,7 @@ let private drawUnits
     let mutable actorLabel = None
     for unit in units do
         let label = unitLabel unit
-        let px, py = tileOrigin mapInfo scaledPpt unit.Position.X unit.Position.Z
+        let px, py = tileOrigin mapInfo scaledPpt unit.X unit.Z
         let color = factionColor unit.Faction
         let startX = int px + offset
         let startY = int py + offset
@@ -87,7 +87,7 @@ let private drawUnits
                         bg.[ix, iy] <- color
         let isAnalyzedActor =
             match actorPos with
-            | Some ap -> unit.Position.X = ap.X && unit.Position.Z = ap.Z && unit.Faction = currentFaction
+            | Some ap -> unit.X = ap.X && unit.Z = ap.Z && unit.Faction = currentFaction
             | None -> false
         if isAnalyzedActor then actorLabel <- Some label
         let isEnemy = unit.Faction <> currentFaction
@@ -109,7 +109,7 @@ let private compactNum (v: float32) =
     else sprintf "%.1f" v
 
 /// Find the tile with the highest combined score.
-let private bestTile (tiles: TileScoreData list) =
+let private bestTile (tiles: TileScore list) =
     tiles |> List.maxBy (fun t -> t.Combined)
 
 /// Render the combined score image: single value per tile, with unit overlay.
@@ -117,16 +117,16 @@ let private bestTile (tiles: TileScoreData list) =
 let renderCombined
     (bgPath: string)
     (mapInfo: MapInfo)
-    (tiles: TileScoreData list)
-    (actorPos: TilePos option)
-    (units: UnitInfo list)
+    (tiles: TileScore list)
+    (actorPos: Pos option)
+    (units: RenderUnit list)
     (currentFaction: int)
     (iconBaseDir: string)
     (outputDir: string)
     (label: string)
     (actor: string)
     (visionRange: int)
-    (moveDest: TilePos option)
+    (moveDest: Pos option)
     : string * string option =
 
     let bg, scaledPpt = prepareBackground bgPath mapInfo
@@ -185,16 +185,16 @@ let renderCombined
 let renderFromPaths
     (bgPath: string)
     (mapInfoPath: string)
-    (tiles: TileScoreData list)
-    (actorPos: TilePos option)
-    (units: UnitInfo list)
+    (tiles: TileScore list)
+    (actorPos: Pos option)
+    (units: RenderUnit list)
     (currentFaction: int)
     (iconBaseDir: string)
     (outputDir: string)
     (label: string)
     (actor: string)
     (visionRange: int)
-    (moveDest: TilePos option)
+    (moveDest: Pos option)
     : string =
 
     if not (File.Exists(bgPath)) then
@@ -212,9 +212,9 @@ let renderFromPaths
 /// Returns list of (imageName, filePath).
 let renderAll
     (modFolder: string)
-    (tiles: TileScoreData list)
-    (actorPos: TilePos option)
-    (units: UnitInfo list)
+    (tiles: TileScore list)
+    (actorPos: Pos option)
+    (units: RenderUnit list)
     (currentFaction: int)
     (iconBaseDir: string)
     (outputDir: string)

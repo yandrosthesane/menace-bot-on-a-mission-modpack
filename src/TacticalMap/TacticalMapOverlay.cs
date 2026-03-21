@@ -673,6 +673,23 @@ internal class TacticalMapOverlay
     /// </summary>
     private string ResolveConfig(string userPath, string defaultPath, string label)
     {
+        // Seed user config from mod default if missing
+        if (!File.Exists(userPath) && File.Exists(defaultPath))
+        {
+            try
+            {
+                var dir = Path.GetDirectoryName(userPath);
+                if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+                File.Copy(defaultPath, userPath);
+                _log.Msg($"[BOAM] TacticalMap — Seeded user {label}: {userPath}");
+            }
+            catch (Exception ex)
+            {
+                _log.Warning($"[BOAM] TacticalMap — Failed to seed {label}: {ex.Message}");
+                return defaultPath;
+            }
+        }
+
         if (!File.Exists(userPath))
             return defaultPath;
 

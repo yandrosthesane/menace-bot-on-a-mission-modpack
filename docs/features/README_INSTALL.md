@@ -96,9 +96,8 @@ boam-icons --force                                   # regenerate icons
 
 ## Step 6: Customise Configs (Optional)
 
-To preserve your settings across mod updates, copy the configs you want to customise into the BOAM persistent directory `path/to/Menace/UserData/BOAM/configs/`
-User configs in `UserData/BOAM/configs/` take precedence over mod defaults and survive deploys. Edit the keybindings, display presets, and visual settings to your preference.
-If the mod config have a version change because structure has changed the mod default will be use and you'll have to migrate your config. Automatic migration is NOT in the current scope.
+On first run, all configs are automatically seeded into `UserData/BOAM/configs/` from mod defaults. Edit them to customise keybindings, display presets, and visual settings — user configs survive deploys.
+If a mod update changes the config structure (version bump), the mod default is used instead and a warning is logged. Update your user config to match the new structure and bump its `configVersion`.
 
 See [Configuration](README_CONFIG.md) for all options.
 

@@ -27,7 +27,7 @@ static class AiActionPatches
         try
         {
             var bridge = BoamBridge.Instance;
-            if (bridge == null || !bridge.IsReady) return;
+            if (bridge == null || !bridge.IsEngineReady) return;
             if (_actor == null || _to == null) return;
 
             var actorInfo = ActorRegistry.GetActorInfo(_actor);
@@ -67,7 +67,7 @@ static class AiActionPatches
         try
         {
             var bridge = BoamBridge.Instance;
-            if (bridge == null || !bridge.IsReady) return;
+            if (bridge == null || !bridge.IsEngineReady) return;
             if (_actor == null) return;
 
             var actorInfo = ActorRegistry.GetActorInfo(_actor);
@@ -110,7 +110,7 @@ static class AiActionPatches
         try
         {
             var bridge = BoamBridge.Instance;
-            if (bridge == null || !bridge.IsReady) return;
+            if (bridge == null || !bridge.IsEngineReady) return;
             if (_actor == null) return;
 
             var actorInfo = ActorRegistry.GetActorInfo(_actor);
@@ -153,7 +153,7 @@ static class AiActionPatches
         try
         {
             var bridge = BoamBridge.Instance;
-            if (bridge == null || !bridge.IsReady) return;
+            if (bridge == null || !bridge.IsEngineReady) return;
             if (__instance == null) return;
 
             var entity = __instance.GetEntity();

@@ -8,6 +8,7 @@ open Microsoft.AspNetCore.Builder
 open Microsoft.AspNetCore.Http
 open BOAM.TacticalEngine.Config
 open BOAM.TacticalEngine.GameTypes
+open BOAM.TacticalEngine.BoundaryTypes
 open BOAM.TacticalEngine.Node
 open BOAM.TacticalEngine.Walker
 open BOAM.TacticalEngine.HookPayload
@@ -16,6 +17,28 @@ open BOAM.TacticalEngine.RenderJobCollector
 open BOAM.TacticalEngine.HeatmapRenderer
 open BOAM.TacticalEngine.EventBus
 open BOAM.TacticalEngine.Logging
+open BOAM.TacticalEngine.HeatmapTypes
+
+// --- Boundary → Heatmaps mapping ---
+
+let private toPos (p: TilePos) : Pos = { X = p.X; Z = p.Z }
+let private toPosOpt (p: TilePos option) : Pos option = p |> Option.map toPos
+
+let private toTileScoreInput (p: TileScoresPayload) : TileScoreInput =
+    { Round = p.Round; Faction = p.Faction; Actor = p.Actor
+      ActorPosition = toPosOpt p.ActorPosition
+      Tiles = p.Tiles |> List.map (fun t -> { X = t.X; Z = t.Z; Combined = t.Combined } : TileScore)
+      Units = p.Units |> List.map (fun u -> { Faction = u.Faction; X = u.Position.X; Z = u.Position.Z; Actor = u.Actor; Name = u.Name; Leader = u.Leader } : RenderUnit)
+      VisionRange = p.VisionRange }
+
+let private toRenderDecision (p: ActionDecisionPayload) : RenderDecision =
+    { Round = p.Round; Actor = p.Actor
+      Chosen = { BehaviorId = p.Chosen.BehaviorId; Name = p.Chosen.Name; Score = p.Chosen.Score }
+      Target = match p.Target with
+               | BoundaryTypes.TileTarget (pos, ap) -> BehaviorTarget.TileTarget (toPos pos, ap)
+               | BoundaryTypes.NoTarget -> BehaviorTarget.NoTarget
+      Alternatives = p.Alternatives |> List.map (fun a -> { BehaviorId = a.BehaviorId; Name = a.Name; Score = a.Score } : HeatmapTypes.BehaviorScore)
+      AttackCandidates = p.AttackCandidates |> List.map (fun c -> { Position = toPos c.Position; Score = c.Score } : AttackOption) }
 
 /// Read JSON body from an HTTP request.
 let private readJson (req: HttpRequest) = task {
@@ -73,7 +96,7 @@ let registerRoutes (app: WebApplication) (ctx: RouteContext) =
             factionState.FactionIndex (List.length factionState.Opponents) factionState.Round)
         // Flush previous round's render jobs before processing
         if Config.Current.Heatmaps then
-            RenderJobCollector.onRoundChange factionState.Round ctx.BoamModDir ctx.IconBaseDir
+            RenderJobCollector.onRoundChange ActionLog.currentBattleDir factionState.Round ctx.BoamModDir ctx.IconBaseDir
         currentRound <- factionState.Round
         ctx.EventBus.Push(TurnStart(factionState.FactionIndex, factionState.Round))
         let result = Walker.run ctx.Registry ctx.Store OnTurnStart Prefix factionState logEngine
@@ -92,7 +115,7 @@ let registerRoutes (app: WebApplication) (ctx: RouteContext) =
             return Results.Ok({| hook = "tile-scores"; status = "ok"; message = "heatmaps disabled" |})
         else
             // Accumulate for deferred render job output
-            RenderJobCollector.accumulate payload
+            RenderJobCollector.accumulate (toTileScoreInput payload)
             return Results.Ok({| hook = "tile-scores"; status = "ok"; message = "accumulated" |})
     })) |> ignore
 
@@ -103,7 +126,7 @@ let registerRoutes (app: WebApplication) (ctx: RouteContext) =
         ctx.EventBus.Push(MovementFinished(payload.Actor, payload.Tile.X, payload.Tile.Z))
         // Attach move destination to accumulated render job data
         if Config.Current.Heatmaps then
-            RenderJobCollector.attachMoveDestination payload.Actor currentRound payload.Tile
+            RenderJobCollector.attachMoveDestination payload.Actor currentRound (toPos payload.Tile)
         return Results.Ok({| hook = "movement-finished"; status = "ok"; actor = payload.Actor |})
     })) |> ignore
 
@@ -178,7 +201,7 @@ let registerRoutes (app: WebApplication) (ctx: RouteContext) =
     app.MapPost("/hook/battle-end", Func<IResult>(fun () ->
         // Flush any remaining render jobs for the last round
         if Config.Current.Heatmaps then
-            RenderJobCollector.flushAll ctx.BoamModDir ctx.IconBaseDir
+            RenderJobCollector.flushAll ActionLog.currentBattleDir ctx.BoamModDir ctx.IconBaseDir
         currentRound <- 0
         ActionLog.endBattle ()
         logHook "battle-end"
@@ -195,7 +218,7 @@ let registerRoutes (app: WebApplication) (ctx: RouteContext) =
         if Config.Current.ActionLogging && Config.Current.AiLogging then
             ActionLog.logActionDecision payload
         if Config.Current.Heatmaps then
-            RenderJobCollector.attachDecision payload
+            RenderJobCollector.attachDecision (toRenderDecision payload)
         // Decision-level watchdog disabled — replaced by action-level watchdog in /hook/ai-action.
         // Decision queue desyncs due to Agent.Execute polling iteration count differences,
         // producing false positives. Action-level comparison is the correct granularity.
@@ -305,17 +328,17 @@ let registerRoutes (app: WebApplication) (ctx: RouteContext) =
                     let tiles = HookPayload.tryArray job "tiles" (fun el ->
                         { X = el.GetProperty("x").GetInt32()
                           Z = el.GetProperty("z").GetInt32()
-                          Combined = el.GetProperty("combined").GetSingle() })
+                          Combined = el.GetProperty("combined").GetSingle() } : TileScore)
 
                     let units = HookPayload.tryArray job "units" (fun el ->
                         { Faction = el.GetProperty("faction").GetInt32()
-                          Position = { X = el.GetProperty("x").GetInt32(); Z = el.GetProperty("z").GetInt32() }
+                          X = el.GetProperty("x").GetInt32(); Z = el.GetProperty("z").GetInt32()
                           Actor = HookPayload.tryStr el "actor" ""
                           Name = HookPayload.tryStr el "name" ""
-                          Leader = HookPayload.tryStr el "leader" "" })
+                          Leader = HookPayload.tryStr el "leader" "" } : RenderUnit)
 
-                    let actorPos = HookPayload.parseOptionalTilePos job "actorPosition"
-                    let moveDest = HookPayload.parseOptionalTilePos job "moveDestination"
+                    let actorPos = HookPayload.parseOptionalTilePos job "actorPosition" |> toPosOpt
+                    let moveDest = HookPayload.parseOptionalTilePos job "moveDestination" |> toPosOpt
                     let faction = HookPayload.tryInt job "faction" 0
                     let visionRange = HookPayload.tryInt job "visionRange" 0
                     let actor = HookPayload.tryStr job "actor" ""

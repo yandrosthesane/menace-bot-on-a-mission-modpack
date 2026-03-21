@@ -12,24 +12,34 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="Config.fs" />
-    <Compile Include="GameTypes.fs" />
-    <Compile Include="FactionTheme.fs" />
-    <Compile Include="Naming.fs" />
-    <Compile Include="StateKey.fs" />
-    <Compile Include="StateStore.fs" />
-    <Compile Include="NodeContext.fs" />
-    <Compile Include="Node.fs" />
-    <Compile Include="Registry.fs" />
-    <Compile Include="Walker.fs" />
-    <Compile Include="Rendering.fs" />
-    <Compile Include="Logging.fs" />
-    <Compile Include="ActionLog.fs" />
-    <Compile Include="HookPayload.fs" />
-    <Compile Include="HeatmapRenderer.fs" />
-    <Compile Include="RenderJobCollector.fs" />
-    <Compile Include="EventBus.fs" />
+    <!-- Domain: shared type definitions -->
+    <Compile Include="Domain/GameTypes.fs" />
 
+    <!-- Boundary: external I/O (config, logging, game bridge, serialization) -->
+    <Compile Include="Boundary/Types.fs" />
+    <Compile Include="Boundary/Config.fs" />
+    <Compile Include="Boundary/Logging.fs" />
+    <Compile Include="Boundary/ActionLog.fs" />
+    <Compile Include="Boundary/HookPayload.fs" />
+    <Compile Include="Boundary/EventBus.fs" />
+
+    <!-- NodeSystem: behavior graph framework (state keys, store, nodes, walker) -->
+    <Compile Include="NodeSystem/StateKey.fs" />
+    <Compile Include="NodeSystem/StateStore.fs" />
+    <Compile Include="NodeSystem/NodeContext.fs" />
+    <Compile Include="NodeSystem/Node.fs" />
+    <Compile Include="NodeSystem/Registry.fs" />
+    <Compile Include="NodeSystem/Walker.fs" />
+
+    <!-- Heatmaps: rendering pipeline -->
+    <Compile Include="Heatmaps/Types.fs" />
+    <Compile Include="Heatmaps/FactionTheme.fs" />
+    <Compile Include="Heatmaps/Naming.fs" />
+    <Compile Include="Heatmaps/Rendering.fs" />
+    <Compile Include="Heatmaps/HeatmapRenderer.fs" />
+    <Compile Include="Heatmaps/RenderJobCollector.fs" />
+
+    <!-- Composition root -->
     <Compile Include="Routes.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>

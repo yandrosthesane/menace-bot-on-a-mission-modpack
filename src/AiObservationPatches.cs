@@ -24,7 +24,7 @@ static class Patch_OnTurnStart
         try
         {
             var bridge = BoamBridge.Instance;
-            if (bridge == null || !bridge.IsReady) return;
+            if (bridge == null || !bridge.IsEngineReady) return;
 
             int factionIdx = __instance.GetIndex();
 
@@ -96,7 +96,7 @@ static class Patch_PostProcessTileScores
         try
         {
             var bridge = BoamBridge.Instance;
-            if (bridge == null || !bridge.IsReady) return;
+            if (bridge == null || !bridge.IsTacticalReady) return;
 
             var actor = __instance.m_Actor;
             if (actor == null) return;
@@ -247,6 +247,8 @@ static class Patch_PostProcessTileScores
             TacticalMap.TacticalMapState.CurrentRound = round;
             TacticalMap.TacticalMapState.CurrentFaction = factionId;
 
+            if (!bridge.IsEngineReady) return;
+
             var payload = JsonSerializer.Serialize(new
             {
                 hook = "tile-scores",
@@ -288,7 +290,7 @@ static class Patch_MovementFinished
         try
         {
             var bridge = BoamBridge.Instance;
-            if (bridge == null || !bridge.IsReady) return;
+            if (bridge == null || !bridge.IsTacticalReady) return;
             if (_actor == null || _to == null) return;
 
             var actorInfo = ActorRegistry.GetActorInfo(_actor);
@@ -298,6 +300,11 @@ static class Patch_MovementFinished
             int tileX = _to.GetX();
             int tileZ = _to.GetZ();
 
+            // Update minimap overlay with new position
+            TacticalMap.TacticalMapState.UpdateUnitPosition(actorUuid, tileX, tileZ);
+
+            if (!bridge.IsEngineReady) return;
+
             var payload = JsonSerializer.Serialize(new
             {
                 hook = "movement_finished",
@@ -305,9 +312,6 @@ static class Patch_MovementFinished
                 actor = actorUuid,
                 tile = new { x = tileX, z = tileZ }
             });
-
-            // Update minimap overlay with new position
-            TacticalMap.TacticalMapState.UpdateUnitPosition(actorUuid, tileX, tileZ);
 
             BoamBridge.Logger.Msg($"[BOAM] movement-finished {actorUuid} tile=({tileX},{tileZ})");
             EngineClient.Post("/hook/movement-finished", payload);
@@ -332,7 +336,7 @@ static class Patch_AgentExecute
         try
         {
             var bridge = BoamBridge.Instance;
-            if (bridge == null || !bridge.IsReady) return;
+            if (bridge == null || !bridge.IsEngineReady) return;
 
             // Logging only — capture AI behavior decisions for analysis.
 

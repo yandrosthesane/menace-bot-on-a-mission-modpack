@@ -5,8 +5,7 @@ module BOAM.TacticalEngine.RenderJobCollector
 open System
 open System.IO
 open System.Text.Json
-open BOAM.TacticalEngine.GameTypes
-open BOAM.TacticalEngine.ActionLog
+open BOAM.TacticalEngine.HeatmapTypes
 open BOAM.TacticalEngine.Logging
 
 /// Data accumulated for a single actor in a single round.
@@ -14,12 +13,12 @@ type ActorRoundData = {
     Round: int
     Faction: int
     Actor: string
-    ActorPosition: TilePos option
-    Tiles: TileScoreData list
-    Units: UnitInfo list
+    ActorPosition: Pos option
+    Tiles: TileScore list
+    Units: RenderUnit list
     VisionRange: int
-    mutable MoveDestination: TilePos option
-    mutable Decision: ActionDecisionPayload option
+    mutable MoveDestination: Pos option
+    mutable Decision: RenderDecision option
 }
 
 /// Mutable accumulator keyed by (round, actor).
@@ -29,7 +28,7 @@ let private pending = Collections.Concurrent.ConcurrentDictionary<(int * string)
 let mutable private lastFlushedRound = 0
 
 /// Accumulate tile-scores data for an actor.
-let accumulate (payload: TileScoresPayload) =
+let accumulate (payload: TileScoreInput) =
     let key = (payload.Round, payload.Actor)
     let data = {
         Round = payload.Round
@@ -52,39 +51,40 @@ let accumulate (payload: TileScoresPayload) =
     |> ignore
 
 /// Attach a movement destination to an actor's accumulated data.
-let attachMoveDestination (actor: string) (round: int) (dest: TilePos) =
+let attachMoveDestination (actor: string) (round: int) (dest: Pos) =
     let key = (round, actor)
     match pending.TryGetValue(key) with
     | true, data -> data.MoveDestination <- Some dest
     | _ -> () // No tile-scores for this actor yet — ignore
 
 /// Attach an action decision to an actor's accumulated data.
-let attachDecision (payload: ActionDecisionPayload) =
-    let key = (payload.Round, payload.Actor)
+let attachDecision (decision: RenderDecision) =
+    let key = (decision.Round, decision.Actor)
     match pending.TryGetValue(key) with
-    | true, data -> data.Decision <- Some payload
+    | true, data -> data.Decision <- Some decision
     | _ -> () // No tile-scores for this actor yet — ignore
 
 /// Serialize a TilePos option to a JsonElement-friendly object.
-let private serializePos (pos: TilePos option) =
+let private serializePos (pos: Pos option) =
     match pos with
     | Some p -> {| x = p.X; z = p.Z |} |> box
     | None -> null
 
-let private serializeDecision (d: ActionDecisionPayload option) =
+let private serializeDecision (d: RenderDecision option) =
     match d with
     | Some dec ->
         {| chosen = {| behaviorId = dec.Chosen.BehaviorId; name = dec.Chosen.Name; score = dec.Chosen.Score |}
            alternatives = dec.Alternatives |> List.map (fun a -> {| behaviorId = a.BehaviorId; name = a.Name; score = a.Score |})
            target = match dec.Target with
-                    | TileTarget (pos, ap) -> {| x = pos.X; z = pos.Z; apCost = ap |} |> box
-                    | NoTarget -> null
+                    | BehaviorTarget.TileTarget (pos, ap) -> {| x = pos.X; z = pos.Z; apCost = ap |} |> box
+                    | BehaviorTarget.NoTarget -> null
            attackCandidates = dec.AttackCandidates |> List.map (fun c -> {| x = c.Position.X; z = c.Position.Z; score = c.Score |})
         |} |> box
     | None -> null
 
 /// Flush all pending data for a given round to disk.
-let flushRound (round: int) (boamModDir: string) (iconBaseDir: string) =
+/// getBattleDir: injected function that returns the active battle session directory.
+let flushRound (getBattleDir: unit -> string option) (round: int) (boamModDir: string) (iconBaseDir: string) =
     let toFlush =
         pending
         |> Seq.filter (fun kvp -> fst kvp.Key = round)
@@ -94,7 +94,7 @@ let flushRound (round: int) (boamModDir: string) (iconBaseDir: string) =
     if List.isEmpty toFlush then ()
     else
 
-    match currentBattleDir () with
+    match getBattleDir () with
     | None ->
         logWarn (sprintf "RenderJobCollector: no active battle dir — dropping %d jobs for round %d" (List.length toFlush) round)
         for (key, _) in toFlush do pending.TryRemove(key) |> ignore
@@ -121,7 +121,7 @@ let flushRound (round: int) (boamModDir: string) (iconBaseDir: string) =
                 actor = data.Actor
                 actorPosition = serializePos data.ActorPosition
                 tiles = data.Tiles |> List.map (fun t -> {| x = t.X; z = t.Z; combined = t.Combined |})
-                units = data.Units |> List.map (fun u -> {| faction = u.Faction; x = u.Position.X; z = u.Position.Z; actor = u.Actor; name = u.Name; leader = u.Leader |})
+                units = data.Units |> List.map (fun u -> {| faction = u.Faction; x = u.X; z = u.Z; actor = u.Actor; name = u.Name; leader = u.Leader |})
                 visionRange = data.VisionRange
                 moveDestination = serializePos data.MoveDestination
                 decision = serializeDecision data.Decision
@@ -142,15 +142,15 @@ let flushRound (round: int) (boamModDir: string) (iconBaseDir: string) =
     lastFlushedRound <- round
 
 /// Flush ALL pending data (called at battle-end for the last round).
-let flushAll (boamModDir: string) (iconBaseDir: string) =
+let flushAll (getBattleDir: unit -> string option) (boamModDir: string) (iconBaseDir: string) =
     let rounds = pending.Keys |> Seq.map fst |> Seq.distinct |> Seq.sort |> Seq.toList
     for round in rounds do
-        flushRound round boamModDir iconBaseDir
+        flushRound getBattleDir round boamModDir iconBaseDir
 
 /// Called on on-turn-start: flush previous round's data if any.
-let onRoundChange (newRound: int) (boamModDir: string) (iconBaseDir: string) =
+let onRoundChange (getBattleDir: unit -> string option) (newRound: int) (boamModDir: string) (iconBaseDir: string) =
     if newRound > 1 then
         // Flush all rounds before the current one
         let roundsToFlush = pending.Keys |> Seq.map fst |> Seq.filter (fun r -> r < newRound) |> Seq.distinct |> Seq.sort |> Seq.toList
         for round in roundsToFlush do
-            flushRound round boamModDir iconBaseDir
+            flushRound getBattleDir round boamModDir iconBaseDir

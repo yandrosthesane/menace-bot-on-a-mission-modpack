@@ -13,7 +13,7 @@ On startup, each config is loaded by checking the user location first. If a user
 
 ### First Install
 
-No user configs exist — mod defaults are used automatically. To customise, copy a config from `Mods/BOAM/configs/` to `UserData/BOAM/configs/` and edit it.
+On first run, each component automatically copies its config from `Mods/BOAM/configs/` to `UserData/BOAM/configs/` if it doesn't exist yet. The tactical engine seeds `config.json5`, and the minimap overlay seeds `tactical_map.json5` and `tactical_map_presets.json5`. No manual copying needed — just edit the user configs to customise.
 
 ### Config Versioning
 

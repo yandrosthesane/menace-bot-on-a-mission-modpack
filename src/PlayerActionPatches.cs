@@ -30,7 +30,7 @@ static class Patch_EndTurn
         try
         {
             var bridge = BoamBridge.Instance;
-            if (bridge == null || !bridge.IsReady) return;
+            if (bridge == null || !bridge.IsEngineReady) return;
 
             // Only log during player faction turns
             int factionId = TacticalController.GetCurrentFaction();
@@ -231,12 +231,13 @@ static class Patch_ActiveActorChanged
         try
         {
             var bridge = BoamBridge.Instance;
-            if (bridge == null || !bridge.IsReady) return;
+            if (bridge == null || !bridge.IsTacticalReady) return;
 
             if (_activeActor == null)
             {
-                ThreadPool.QueueUserWorkItem(_ => EngineClient.Post("/hook/actor-changed",
-                    JsonSerializer.Serialize(new { actor = "", faction = 0, x = 0, z = 0 })));
+                if (bridge.IsEngineReady)
+                    ThreadPool.QueueUserWorkItem(_ => EngineClient.Post("/hook/actor-changed",
+                        JsonSerializer.Serialize(new { actor = "", faction = 0, x = 0, z = 0 })));
                 return;
             }
 
@@ -245,6 +246,12 @@ static class Patch_ActiveActorChanged
             var (gameObj, factionId, entityId, _) = actorInfo.Value;
             var actorUuid = ActorRegistry.GetUuid(entityId);
             var (px, pz) = ActorRegistry.GetPos(gameObj);
+
+            // Update minimap overlay (always, even without engine)
+            TacticalMap.TacticalMapState.ActiveActor = actorUuid;
+            TacticalMap.TacticalMapState.UpdateUnitPosition(actorUuid, px, pz);
+
+            if (!bridge.IsEngineReady) return;
 
             var round = bridge.Round;
             var payload = JsonSerializer.Serialize(new
@@ -255,11 +262,6 @@ static class Patch_ActiveActorChanged
                 x = px,
                 z = pz
             });
-
-            // Update minimap overlay
-            TacticalMap.TacticalMapState.ActiveActor = actorUuid;
-            TacticalMap.TacticalMapState.UpdateUnitPosition(actorUuid, px, pz);
-
 
             BoamBridge.Logger.Msg($"[BOAM] active-actor-changed: {actorUuid} r={round} at ({px},{pz})");
             ThreadPool.QueueUserWorkItem(_ => EngineClient.Post("/hook/actor-changed", payload));
@@ -297,7 +299,7 @@ static class Patch_ClickOnTile
         try
         {
             var bridge = BoamBridge.Instance;
-            if (bridge == null || !bridge.IsReady) return;
+            if (bridge == null || !bridge.IsEngineReady) return;
 
             // Get the concrete action type name for diagnostics
             var actionClassName = __instance?.GetType()?.Name ?? "unknown";
@@ -350,7 +352,7 @@ static class Patch_SelectSkill
             if (!__result) return; // skill selection failed
 
             var bridge = BoamBridge.Instance;
-            if (bridge == null || !bridge.IsReady) return;
+            if (bridge == null || !bridge.IsEngineReady) return;
 
             int factionId = TacticalController.GetCurrentFaction();
             if (factionId != 1 && factionId != 2) return;
