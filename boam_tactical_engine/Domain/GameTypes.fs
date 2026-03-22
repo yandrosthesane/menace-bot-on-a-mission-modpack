@@ -56,6 +56,14 @@ type FactionState = {
     Round: int
 }
 
+/// A tile modifier sent to the bridge to influence AI movement scoring.
+type TileModifier = {
+    TargetX: int
+    TargetZ: int
+    AddUtility: float32
+    SuppressAttack: bool
+}
+
 /// Tile score components as evaluated by the AI's ConsiderZones.
 type TileScoreInfo = {
     Tile: TilePos

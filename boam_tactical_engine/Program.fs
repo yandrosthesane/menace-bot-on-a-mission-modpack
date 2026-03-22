@@ -146,6 +146,7 @@ let main argv =
                 (List.length known) (List.length alive))
     }
     registry.Register([testNode])
+    registry.Register([Nodes.ShapeTileModifier.node])
 
     logInfo "Engine initialized"
     for line in registry.FormatReport() do logEngine line

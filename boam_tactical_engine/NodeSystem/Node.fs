@@ -12,6 +12,7 @@ type Timing =
 /// Which game hook point a node binds to.
 type HookPoint =
     | OnTurnStart
+    | OnTurnEnd
     | OnRoundStart
     | ConsiderZones
     | SetTile

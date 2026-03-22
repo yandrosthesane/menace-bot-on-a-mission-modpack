@@ -39,6 +39,10 @@
     <Compile Include="Heatmaps/HeatmapRenderer.fs" />
     <Compile Include="Heatmaps/RenderJobCollector.fs" />
 
+    <!-- Nodes -->
+    <Compile Include="Nodes/Keys.fs" />
+    <Compile Include="Nodes/ShapeTileModifier.fs" />
+
     <!-- Composition root -->
     <Compile Include="Routes.fs" />
     <Compile Include="Program.fs" />

@@ -3,7 +3,7 @@
 ## v1.3.0
 
 ### Tile modifier system
-Engine-controlled tile score injection for directing AI unit movement. Supports target-tile mode (gradient toward a position), distance-gating mode (flat bonus in range), attack suppression, and forced idle on arrival. See [Tile Modifier System](../next/tile-modifier-system.md).
+Engine-controlled tile score injection for directing AI unit movement. Supports target-tile mode (gradient toward a position), distance-gating mode (flat bonus in range), attack suppression, and forced idle on arrival. See [Tile Modifier System](../done/1_tile-modifier-system.md).
 
 ### Modpack config (`modpack.json5`)
 Independent config file for the C# bridge, separate from the engine's `engine.json5`. Loaded with the same two-tier resolution (user → default) and config version check. Currently gates `opponent_filter`.

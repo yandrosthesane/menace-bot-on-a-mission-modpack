@@ -26,6 +26,9 @@ static class Patch_OnTurnStart
             var bridge = BoamBridge.Instance;
             if (bridge == null || !bridge.IsEngineReady) return;
 
+            // Wait for engine to finish sending tile modifiers
+            TileModifierStore.WaitReady();
+
             int factionIdx = __instance.GetIndex();
 
             var opponents = __instance.m_Opponents;

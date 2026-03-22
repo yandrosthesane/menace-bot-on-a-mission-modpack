@@ -103,41 +103,58 @@ static class AiActionPatches
     }
 
     /// <summary>
-    /// InvokeOnTurnEnd(Actor) — AI actor's turn ended.
+    /// InvokeOnTurnEnd(Actor) — any actor's turn ended (player + AI).
+    /// Sends ai-action endturn for AI factions, and on-turn-end notification for all.
     /// </summary>
     public static void OnTurnEnd(Actor _actor)
     {
         try
         {
-            var bridge = BoamBridge.Instance;
-            if (bridge == null || !bridge.IsEngineReady) return;
             if (_actor == null) return;
 
             var actorInfo = ActorRegistry.GetActorInfo(_actor);
             if (actorInfo == null) return;
             var (gameObj, factionId, entityId, _) = actorInfo.Value;
-            if (!IsAiFaction(factionId)) return;
-
             var actorUuid = ActorRegistry.GetUuid(entityId);
             var (tileX, tileZ) = ActorRegistry.GetPos(gameObj);
 
-            var payload = JsonSerializer.Serialize(new
+            BoamBridge.Logger.Msg($"[BOAM] TurnEnd: {actorUuid} f{factionId}");
+
+            var bridge = BoamBridge.Instance;
+            if (bridge == null || !bridge.IsEngineReady) return;
+
+            int round = bridge.Round;
+
+            // Notify engine of turn end (all factions)
+            var turnEndPayload = JsonSerializer.Serialize(new
             {
-                hook = "ai-action",
-                round = bridge.Round,
+                round,
                 faction = factionId,
                 actor = actorUuid,
-                actionType = "ai_endturn",
-                skillName = "",
                 tile = new { x = tileX, z = tileZ }
             });
+            TileModifierStore.SetPending();
+            ThreadPool.QueueUserWorkItem(_ => EngineClient.Post("/hook/on-turn-end", turnEndPayload));
 
-            BoamBridge.Logger.Msg($"[BOAM] ai-action {actorUuid}: ai_endturn");
-            ThreadPool.QueueUserWorkItem(_ => EngineClient.Post("/hook/ai-action", payload));
+            // AI action logging (AI factions only)
+            if (IsAiFaction(factionId))
+            {
+                var payload = JsonSerializer.Serialize(new
+                {
+                    hook = "ai-action",
+                    round,
+                    faction = factionId,
+                    actor = actorUuid,
+                    actionType = "ai_endturn",
+                    skillName = "",
+                    tile = new { x = tileX, z = tileZ }
+                });
+                ThreadPool.QueueUserWorkItem(_ => EngineClient.Post("/hook/ai-action", payload));
+            }
         }
         catch (Exception ex)
         {
-            BoamBridge.Logger.Error($"[BOAM] ai-action endturn error: {ex.Message}");
+            BoamBridge.Logger.Error($"[BOAM] endturn error: {ex.Message}");
         }
     }
 

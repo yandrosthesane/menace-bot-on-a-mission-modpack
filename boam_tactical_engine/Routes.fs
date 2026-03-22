@@ -18,6 +18,7 @@ open BOAM.TacticalEngine.HeatmapRenderer
 open BOAM.TacticalEngine.EventBus
 open BOAM.TacticalEngine.Logging
 open BOAM.TacticalEngine.HeatmapTypes
+open BOAM.TacticalEngine.Keys
 
 // --- Boundary → Heatmaps mapping ---
 
@@ -65,6 +66,32 @@ type RouteContext = {
 /// Track current round for attaching movement data to render jobs.
 let mutable private currentRound = 0
 
+/// Send tile modifiers from the store to the bridge, then signal ready.
+let private flushTileModifiers (store: StateStore.StateStore) (httpClient: Net.Http.HttpClient) (commandUrl: string) =
+    try
+        // Clear previous modifiers
+        httpClient.PostAsync(sprintf "%s/tile-modifier/clear" commandUrl, new Net.Http.StringContent("")).Result |> ignore
+
+        // Read computed modifiers from store
+        let modifiers = store.ReadOrDefault(tileModifiers, Map.empty)
+        let mutable sent = 0
+        for kv in modifiers do
+            let actor = kv.Key
+            let m = kv.Value
+            let json = sprintf """{"actor":"%s","add_utility":%g,"target_x":%d,"target_z":%d,"suppress_attack":%s}"""
+                        actor m.AddUtility m.TargetX m.TargetZ (if m.SuppressAttack then "true" else "false")
+            try
+                let content = new Net.Http.StringContent(json, Text.Encoding.UTF8, "application/json")
+                httpClient.PostAsync(sprintf "%s/tile-modifier" commandUrl, content).Result |> ignore
+                sent <- sent + 1
+            with _ -> ()
+        if sent > 0 then logInfo (sprintf "Flushed %d tile modifiers to bridge" sent)
+    with ex -> logWarn (sprintf "flushTileModifiers error: %s" ex.Message)
+
+    // Signal ready
+    try httpClient.PostAsync(sprintf "%s/tile-modifier/ready" commandUrl, new Net.Http.StringContent("")).Result |> ignore
+    with _ -> ()
+
 let registerRoutes (app: WebApplication) (ctx: RouteContext) =
 
     // --- System ---
@@ -106,6 +133,25 @@ let registerRoutes (app: WebApplication) (ctx: RouteContext) =
         let result = Walker.run ctx.Registry ctx.Store OnTurnStart Prefix factionState logEngine
         logHook (sprintf "  walk: %d ran, %d skipped, %.1fms" result.NodesRun result.NodesSkipped result.ElapsedMs)
         return Results.Ok({| hook = "on-turn-start"; status = "ok"; nodesRun = result.NodesRun; nodesSkipped = result.NodesSkipped; elapsedMs = result.ElapsedMs; faction = factionState.FactionIndex |})
+    })) |> ignore
+
+    app.MapPost("/hook/on-turn-end", Func<HttpRequest, Threading.Tasks.Task<IResult>>(fun req -> task {
+        let! root = readJson req
+        let round = match root.TryGetProperty("round") with | true, v -> v.GetInt32() | _ -> currentRound
+        let faction = match root.TryGetProperty("faction") with | true, v -> v.GetInt32() | _ -> 0
+        logHook (sprintf "on-turn-end  faction=%d  round=%d" faction round)
+        // Build minimal faction state for the walker
+        let factionState : FactionState = {
+            FactionIndex = faction; IsAlliedWithPlayer = false
+            Opponents = []; Actors = []; Round = round
+        }
+        // Run OnTurnEnd nodes — they compute tile modifiers and write to store
+        let result = Walker.run ctx.Registry ctx.Store OnTurnEnd Prefix factionState logEngine
+        if result.NodesRun > 0 then
+            logHook (sprintf "  walk: %d ran, %d skipped, %.1fms" result.NodesRun result.NodesSkipped result.ElapsedMs)
+        // Flush computed modifiers to the bridge
+        flushTileModifiers ctx.Store ctx.HttpClient ctx.CommandUrl
+        return Results.Ok({| hook = "on-turn-end"; status = "ok"; nodesRun = result.NodesRun |})
     })) |> ignore
 
     app.MapPost("/hook/tile-scores", Func<HttpRequest, Threading.Tasks.Task<IResult>>(fun req -> task {
@@ -200,6 +246,27 @@ let registerRoutes (app: WebApplication) (ctx: RouteContext) =
                 | None -> logWarn "  no active battle — dramatis personae not saved"
             | _ -> logWarn "  no dramatis_personae in payload"
         with ex -> logWarn (sprintf "  failed to save dramatis personae: %s" ex.Message)
+        // Register AI actors in the store for behavior nodes
+        try
+            match root.TryGetProperty("dramatis_personae") with
+            | true, dp ->
+                let actors = ResizeArray()
+                for item in dp.EnumerateArray() do
+                    let faction = item.GetProperty("faction").GetInt32()
+                    if faction <> 1 then actors.Add(item.GetProperty("actor").GetString())
+                ctx.Store.Write(aiActors, actors.ToArray())
+                logInfo (sprintf "Registered %d AI actors in store" actors.Count)
+                // Run OnTurnEnd nodes for round 1 so modifiers are ready before first AI turn
+                let initState : FactionState = {
+                    FactionIndex = FactionType.Player; IsAlliedWithPlayer = true
+                    Opponents = []; Actors = []; Round = 1
+                }
+                let result = Walker.run ctx.Registry ctx.Store OnTurnEnd Prefix initState logEngine
+                flushTileModifiers ctx.Store ctx.HttpClient ctx.CommandUrl
+                if result.NodesRun > 0 then
+                    logInfo (sprintf "Initial tile modifiers: %d nodes ran" result.NodesRun)
+            | _ -> ()
+        with _ -> ()
         ctx.EventBus.Push(TacticalReady)
         return Results.Ok({| hook = "tactical-ready" |})
     })) |> ignore

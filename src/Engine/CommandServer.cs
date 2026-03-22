@@ -100,6 +100,7 @@ public class BoamCommandServer
                         "/execute" => HandleExecute(request),
                         "/tile-modifier" => HandleTileModifier(request),
                         "/tile-modifier/clear" => HandleTileModifierClear(),
+                        "/tile-modifier/ready" => HandleTileModifierReady(),
                         "/status" => "{\"status\":\"ok\"}",
                         _ => "{\"error\":\"unknown route\"}"
                     };
@@ -169,5 +170,11 @@ public class BoamCommandServer
     {
         TileModifierStore.Clear();
         return "{\"status\":\"cleared\"}";
+    }
+
+    private string HandleTileModifierReady()
+    {
+        TileModifierStore.SetReady();
+        return "{\"status\":\"ready\"}";
     }
 }

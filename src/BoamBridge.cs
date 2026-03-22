@@ -206,10 +206,7 @@ public class BoamBridge : IModpackPlugin
         try
         {
             var tmType = typeof(Il2CppMenace.Tactical.TacticalManager);
-            var m = tmType.GetMethods().FirstOrDefault(m => m.Name == "InvokeOnTurnEnd" && m.GetParameters().Length == 1);
-            if (m != null) { harmony.Patch(m, postfix: new HarmonyMethod(typeof(Patch_Diagnostics), nameof(Patch_Diagnostics.OnTurnEnd))); Logger.Msg("[BOAM] DIAG: Patched InvokeOnTurnEnd"); }
-
-            m = tmType.GetMethods().FirstOrDefault(m => m.Name == "InvokeOnAfterSkillUse" && m.GetParameters().Length == 1);
+            var m = tmType.GetMethods().FirstOrDefault(m => m.Name == "InvokeOnAfterSkillUse" && m.GetParameters().Length == 1);
             if (m != null) { harmony.Patch(m, postfix: new HarmonyMethod(typeof(Patch_Diagnostics), nameof(Patch_Diagnostics.OnAfterSkillUse))); Logger.Msg("[BOAM] DIAG: Patched InvokeOnAfterSkillUse"); }
 
             m = tmType.GetMethods().FirstOrDefault(m => m.Name == "InvokeOnAttackTileStart" && m.GetParameters().Length == 4);
@@ -333,7 +330,6 @@ public class BoamBridge : IModpackPlugin
             // BuildDramatisPersonae must run first — it registers actor UUIDs
             var dp = ActorRegistry.BuildDramatisPersonae(Logger);
             PopulateInitialUnits();
-            SetupTestTileModifiers();
             ReloadMapFromDisk();
             _tacticalMap?.OnTacticalReady();
             if (_engineAvailable)
@@ -342,10 +338,6 @@ public class BoamBridge : IModpackPlugin
                 ThreadPool.QueueUserWorkItem(_ => EngineClient.Post("/hook/tactical-ready", payload));
             }
         }
-
-        // Update test shape based on current round
-        if (_inTactical && _ready)
-            UpdateTestTileModifiers();
 
         // Drain command server queue
         if (_commandServer != null && UnityEngine.Time.time >= _nextCommandTime)
@@ -493,88 +485,6 @@ public class BoamBridge : IModpackPlugin
         {
             Logger.Error($"[BOAM] PopulateInitialUnits error: {ex.Message}");
         }
-    }
-
-    // BOAM shape test data (see docs/next/tile-modifier-test-shape.txt)
-    private static readonly (int x, int z)[][] TestShapes = {
-        new (int,int)[] { // B
-            (2,15),(2,17),(2,19),(2,21),(2,23),(2,25),(2,27),
-            (4,27),(6,27),(8,27),(10,27),(4,21),(6,21),(8,21),(10,21),
-            (4,15),(6,15),(8,15),(10,15),(10,25),(10,23),(10,19),(10,17),
-            (8,25),(8,23),(8,19),(8,17),
-        },
-        new (int,int)[] { // O
-            (12,15),(12,17),(12,19),(12,21),(12,23),(12,25),(12,27),
-            (20,15),(20,17),(20,19),(20,21),(20,23),(20,25),(20,27),
-            (14,27),(16,27),(18,27),(14,15),(16,15),(18,15),
-            (14,25),(18,25),(14,17),(18,17),(16,23),(16,21),(16,19),
-        },
-        new (int,int)[] { // A
-            (22,15),(22,17),(22,19),(22,21),(22,23),(22,25),(22,27),
-            (30,15),(30,17),(30,19),(30,21),(30,23),(30,25),(30,27),
-            (24,27),(26,27),(28,27),(24,21),(26,21),(28,21),
-            (24,25),(28,25),(24,23),(28,23),(24,19),(26,19),(28,19),
-        },
-        new (int,int)[] { // M
-            (32,15),(32,17),(32,19),(32,21),(32,23),(32,25),(32,27),
-            (40,15),(40,17),(40,19),(40,21),(40,23),(40,25),(40,27),
-            (34,27),(36,27),(38,27),(34,25),(36,23),(38,25),(36,21),
-            (34,23),(38,23),(34,15),(36,15),(38,15),(36,19),
-        },
-    };
-    private static readonly string[] ShapeNames = { "B", "O", "A", "M" };
-    private string[] _testAiActors;
-    private int _lastShapeIndex = -1;
-
-    private void SetupTestTileModifiers()
-    {
-        var aiActors = new System.Collections.Generic.List<string>();
-        var allActors = Menace.SDK.EntitySpawner.ListEntities(-1);
-        if (allActors == null) return;
-        foreach (var a in allActors)
-        {
-            var info = Menace.SDK.EntitySpawner.GetEntityInfo(a);
-            if (info == null || !info.IsAlive || info.FactionIndex == 1) continue;
-            aiActors.Add(ActorRegistry.GetUuid(info.EntityId));
-        }
-        _testAiActors = aiActors.ToArray();
-        _lastShapeIndex = -1;
-        ApplyTestShape(0);
-    }
-
-    private void UpdateTestTileModifiers()
-    {
-        if (_testAiActors == null) return;
-        int round = Round;
-        int shapeIndex;
-        if (round <= 15)
-            shapeIndex = 0;
-        else
-            shapeIndex = 1 + (round - 16) / 10;
-        if (shapeIndex >= TestShapes.Length) { TileModifierStore.Clear(); return; }
-        if (shapeIndex != _lastShapeIndex)
-            ApplyTestShape(shapeIndex);
-    }
-
-    private void ApplyTestShape(int shapeIndex)
-    {
-        if (_testAiActors == null || shapeIndex >= TestShapes.Length) return;
-        TileModifierStore.Clear();
-        var targets = TestShapes[shapeIndex];
-        int count = System.Math.Min(_testAiActors.Length, targets.Length);
-        for (int i = 0; i < count; i++)
-        {
-            var (tx, tz) = targets[i];
-            TileModifierStore.Set(_testAiActors[i], new TileModifierStore.TileModifier
-            {
-                AddUtility = 20000f, MultCombined = 1f,
-                MinDistance = 0f, MaxDistance = 0f,
-                TargetX = tx, TargetZ = tz,
-                SuppressAttack = true
-            });
-        }
-        _lastShapeIndex = shapeIndex;
-        Logger.Msg($"[BOAM] TileModifier TEST: shape {ShapeNames[shapeIndex]} applied to {count} actors (rounds {shapeIndex*20+1}-{(shapeIndex+1)*20})");
     }
 
     public int Round => Menace.SDK.TacticalController.GetCurrentRound();

@@ -33,17 +33,6 @@ static class Patch_Diagnostics
         SkillAnimationEndTime = float.MaxValue;
     }
 
-    public static void OnTurnEnd(Actor _actor)
-    {
-        try
-        {
-            var info = ActorRegistry.GetActorInfo(_actor);
-            var uuid = info.HasValue ? ActorRegistry.GetUuid(info.Value.entityId) : "null";
-            BoamBridge.Logger.Msg($"[BOAM] DIAG TurnEnd: {uuid}");
-        }
-        catch { }
-    }
-
     public static void OnAfterSkillUse(Il2CppMenace.Tactical.Skills.Skill _skill)
     {
         try

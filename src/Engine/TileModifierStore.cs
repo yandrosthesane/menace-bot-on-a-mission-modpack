@@ -30,6 +30,25 @@ static class TileModifierStore
     }
 
     private static readonly ConcurrentDictionary<string, TileModifier> _store = new();
+    private static readonly System.Threading.ManualResetEventSlim _ready = new(true);
+
+    /// <summary>Block until the engine signals modifiers are ready.</summary>
+    internal static void WaitReady()
+    {
+        _ready.Wait();
+    }
+
+    /// <summary>Mark modifiers as pending (engine is computing).</summary>
+    internal static void SetPending()
+    {
+        _ready.Reset();
+    }
+
+    /// <summary>Mark modifiers as ready (engine finished sending).</summary>
+    internal static void SetReady()
+    {
+        _ready.Set();
+    }
 
     internal static void Set(string actorUuid, TileModifier modifier)
     {
