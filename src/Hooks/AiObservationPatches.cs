@@ -127,12 +127,33 @@ static class Patch_PostProcessTileScores
                     if (float.IsInfinity(combined) || float.IsNaN(combined))
                         combined = combined > 0 ? 9999f : -9999f;
 
-                    tileList.Add(new
+                    if (bridge.CriterionLogging)
                     {
-                        x = tile.GetX(),
-                        z = tile.GetZ(),
-                        combined
-                    });
+                        tileList.Add(new
+                        {
+                            x = tile.GetX(),
+                            z = tile.GetZ(),
+                            combined,
+                            utility = score.UtilityScore,
+                            utilityScaled = score.UtilityScoreScaled,
+                            safety = score.SafetyScore,
+                            safetyScaled = score.SafetyScoreScaled,
+                            distance = score.DistanceScore,
+                            distanceToCurrent = score.DistanceToCurrentTile,
+                            apCost = score.APCost,
+                            isVisible = score.IsVisibleToOpponentsHere,
+                            utilityByAttacks = score.UtilityByAttacksScore
+                        });
+                    }
+                    else
+                    {
+                        tileList.Add(new
+                        {
+                            x = tile.GetX(),
+                            z = tile.GetZ(),
+                            combined
+                        });
+                    }
                 }
                 catch { } // skip individual tile on error
             }

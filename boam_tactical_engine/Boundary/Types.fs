@@ -9,6 +9,15 @@ type TileScoreData = {
     X: int
     Z: int
     Combined: float32
+    Utility: float32
+    UtilityScaled: float32
+    Safety: float32
+    SafetyScaled: float32
+    Distance: float32
+    DistanceToCurrent: float32
+    APCost: int
+    IsVisible: bool
+    UtilityByAttacks: float32
 }
 
 /// A unit on the tactical map (any faction), used for hook payloads.

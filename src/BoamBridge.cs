@@ -30,6 +30,12 @@ public class BoamBridge : IModpackPlugin
 
     private HarmonyLib.Harmony _harmony;
     private volatile bool _engineAvailable;
+
+    // Feature flags — populated from engine /status response
+    public bool CriterionLogging { get; private set; }
+    public bool HeatmapsEnabled { get; private set; }
+    public bool ActionLoggingEnabled { get; private set; }
+    public bool AiLoggingEnabled { get; private set; }
     private bool _inTactical;
     private int _initDelay;
     private bool _ready;
@@ -343,8 +349,18 @@ public class BoamBridge : IModpackPlugin
                     var doc = JsonSerializer.Deserialize<JsonElement>(json);
                     var status = doc.GetProperty("status").GetString();
                     Logger.Msg($"[BOAM] Tactical engine found (status: {status})");
-                    _engineAvailable = true;
 
+                    // Parse feature flags from engine
+                    if (doc.TryGetProperty("features", out var features))
+                    {
+                        CriterionLogging = features.TryGetProperty("criterionLogging", out var cl) && cl.GetBoolean();
+                        HeatmapsEnabled = features.TryGetProperty("heatmaps", out var hm) && hm.GetBoolean();
+                        ActionLoggingEnabled = features.TryGetProperty("actionLogging", out var al) && al.GetBoolean();
+                        AiLoggingEnabled = features.TryGetProperty("aiLogging", out var ai) && ai.GetBoolean();
+                        Logger.Msg($"[BOAM] Features: criterion={CriterionLogging} heatmaps={HeatmapsEnabled} actions={ActionLoggingEnabled} ai={AiLoggingEnabled}");
+                    }
+
+                    _engineAvailable = true;
                     return;
                 }
                 catch { }

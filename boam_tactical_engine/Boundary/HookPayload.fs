@@ -55,10 +55,23 @@ let parseOnTurnStart (root: JsonElement) : FactionState =
       Actors = []
       Round = tryInt root "round" 0 }
 
+let tryFloat (el: JsonElement) (prop: string) defaultVal =
+    match el.TryGetProperty(prop) with
+    | true, v -> v.GetSingle() | _ -> defaultVal
+
 let private parseTileScore (el: JsonElement) : TileScoreData =
     { X = el.GetProperty("x").GetInt32()
       Z = el.GetProperty("z").GetInt32()
-      Combined = el.GetProperty("combined").GetSingle() }
+      Combined = el.GetProperty("combined").GetSingle()
+      Utility = tryFloat el "utility" 0f
+      UtilityScaled = tryFloat el "utilityScaled" 0f
+      Safety = tryFloat el "safety" 0f
+      SafetyScaled = tryFloat el "safetyScaled" 0f
+      Distance = tryFloat el "distance" 0f
+      DistanceToCurrent = tryFloat el "distanceToCurrent" 0f
+      APCost = tryInt el "apCost" 0
+      IsVisible = tryBool el "isVisible" false
+      UtilityByAttacks = tryFloat el "utilityByAttacks" 0f }
 
 let private parseUnit (el: JsonElement) : UnitInfo =
     { Faction = el.GetProperty("faction").GetInt32()

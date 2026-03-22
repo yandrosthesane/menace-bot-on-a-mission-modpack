@@ -75,23 +75,35 @@ let private parseConfig (configPath: string) =
     let defaultSize = defaults.GetProperty("size").GetInt32()
 
     let boamModDir, persistentDir = resolveGamePaths ()
+    let userDataDir = Path.GetDirectoryName(persistentDir)
 
-    // output_base: use config value if absolute, otherwise default to Mods/BOAM/icons
+    // output_base: use config value if absolute, otherwise relative to UserData/
+    // This ensures generated icons survive mod deploys (Mods/BOAM/ gets wiped)
     let outputBase =
         match defaults.TryGetProperty("output_base") with
         | true, v ->
             let path = v.GetString()
             if Path.IsPathRooted(path) then path
-            else Path.Combine(boamModDir, path)
-        | _ -> Path.Combine(boamModDir, "icons")
+            else Path.Combine(userDataDir, path)
+        | _ -> Path.Combine(persistentDir, "icons")
 
-    // sources: resolve "native" and "placeholders" to UserData/BOAM by default
+    // assets_base: where extracted game assets live (relative to UserData/)
+    let assetsBase =
+        match defaults.TryGetProperty("assets_base") with
+        | true, v ->
+            let path = v.GetString()
+            if Path.IsPathRooted(path) then path
+            else Path.Combine(userDataDir, path)
+        | _ -> Path.Combine(userDataDir, "ExtractedData", "Assets")
+
+    // sources: empty values resolve to assets_base, relative paths to UserData/
     let sources =
         [ for prop in root.GetProperty("sources").EnumerateObject() ->
             let path = prop.Value.GetString()
             let resolved =
-                if Path.IsPathRooted(path) then path
-                else Path.Combine(persistentDir, path)
+                if String.IsNullOrEmpty(path) then assetsBase
+                elif Path.IsPathRooted(path) then path
+                else Path.Combine(userDataDir, path)
             prop.Name, resolved ]
         |> Map.ofList
 

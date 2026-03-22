@@ -75,6 +75,12 @@ let registerRoutes (app: WebApplication) (ctx: RouteContext) =
             engine = sprintf "BOAM Tactical Engine v%s" ctx.Version
             status = "ready"
             uptime = (DateTime.UtcNow - ctx.StartTime).TotalSeconds
+            features = {|
+                heatmaps = Config.Current.Heatmaps
+                actionLogging = Config.Current.ActionLogging
+                aiLogging = Config.Current.AiLogging
+                criterionLogging = Config.Current.CriterionLogging
+            |}
         |})
     )) |> ignore
 
@@ -109,12 +115,38 @@ let registerRoutes (app: WebApplication) (ctx: RouteContext) =
             payload.Round payload.Faction payload.Actor (List.length payload.Tiles) (List.length payload.Units) payload.VisionRange)
         if List.isEmpty payload.Tiles then
             return Results.Ok({| hook = "tile-scores"; status = "ok"; message = "no tile data" |})
-        elif not Config.Current.Heatmaps then
-            return Results.Ok({| hook = "tile-scores"; status = "ok"; message = "heatmaps disabled" |})
         else
+            // Criterion logging — separate file from heatmaps and round_log
+            if Config.Current.CriterionLogging then
+                match ActionLog.currentBattleDir() with
+                | Some dir ->
+                    let entry = JsonSerializer.Serialize({|
+                        round = payload.Round
+                        faction = payload.Faction
+                        actor = payload.Actor
+                        tileCount = List.length payload.Tiles
+                        tiles = payload.Tiles |> List.map (fun t -> {|
+                            x = t.X; z = t.Z
+                            combined = t.Combined
+                            utility = t.Utility
+                            utilityScaled = t.UtilityScaled
+                            safety = t.Safety
+                            safetyScaled = t.SafetyScaled
+                            distance = t.Distance
+                            distanceToCurrent = t.DistanceToCurrent
+                            apCost = t.APCost
+                            isVisible = t.IsVisible
+                            utilityByAttacks = t.UtilityByAttacks
+                        |})
+                    |})
+                    IO.File.AppendAllText(IO.Path.Combine(dir, "criterion_scores.jsonl"), entry + "\n")
+                | None -> ()
+
             // Accumulate for deferred render job output
-            RenderJobCollector.accumulate (toTileScoreInput payload)
-            return Results.Ok({| hook = "tile-scores"; status = "ok"; message = "accumulated" |})
+            if Config.Current.Heatmaps then
+                RenderJobCollector.accumulate (toTileScoreInput payload)
+
+            return Results.Ok({| hook = "tile-scores"; status = "ok"; message = "ok" |})
     })) |> ignore
 
     app.MapPost("/hook/movement-finished", Func<HttpRequest, Threading.Tasks.Task<IResult>>(fun req -> task {

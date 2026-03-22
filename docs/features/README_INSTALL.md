@@ -59,10 +59,10 @@ Or download the installer from [dotnet.microsoft.com/download/dotnet/10.0](https
 
 ```bash
 # Bundled
-unzip BOAM-tactical-engine-v1.2.0-linux-x64-bundled.zip -d /path/to/Menace/Mods/BOAM/
+unzip BOAM-tactical-engine-v1.3.0-linux-x64-bundled.zip -d /path/to/Menace/Mods/BOAM/
 
 # Slim
-unzip BOAM-tactical-engine-v1.2.0-linux-x64-slim.zip -d /path/to/Menace/Mods/BOAM/
+unzip BOAM-tactical-engine-v1.3.0-linux-x64-slim.zip -d /path/to/Menace/Mods/BOAM/
 ```
 
 </details>
@@ -70,43 +70,32 @@ unzip BOAM-tactical-engine-v1.2.0-linux-x64-slim.zip -d /path/to/Menace/Mods/BOA
 <details>
 <summary>Windows</summary>
 
-Unzip `BOAM-tactical-engine-v1.2.0-win-x64-bundled.zip` (or `-slim.zip`) into `Mods\BOAM\`.
+Unzip `BOAM-tactical-engine-v1.3.0-win-x64-bundled.zip` (or `-slim.zip`) into `Mods\BOAM\`.
 
 </details>
 
-Replace `v1.2.0` with the version you downloaded. Usage is identical for both variants — the launcher script and all commands work the same way.
+Replace `v1.3.0` with the version you downloaded. Usage is identical for both variants — the launcher script and all commands work the same way.
 
 ## Step 3: Extract Game Art
 
-BOAM does not ship game art.
-Use custom files or extract badge and faction icon PNGs from the game data using the modkit asset extractor.
-Do not share those assets online.
+BOAM does not ship game art. Extract badge and faction icon PNGs from the game data using the modkit asset extractor. Do not share those assets online.
 
-If using the first option, the source locations in the extracted data folder:
+The extracted data is placed by the modkit into:
+```
+Menace/UserData/ExtractedData/Assets/
+```
+
+BOAM reads source icons from:
 ```
 Assets/Resources/ui/sprites/badges/       → squad badges, leader badges
 Assets/Resources/ui/sprites/factions/     → faction icons
 ```
 
-Copy the extracted PNGs into the persistent assets directory:
-```
-Menace/UserData/BOAM/
-├── badges/                    Squad badges (234x234 PNGs)
-│   ├── squad_badge_bugs_stinger_234x234.png
-│   ├── squad_badge_bugs_dragonfly_234x234.png
-│   ├── leaders/
-│   │   ├── carda_badge_234x234.png
-│   │   └── ...
-│   └── ...
-└── factions/                  Faction icons
-    ├── enemy_faction_01.png
-    ├── faction_icon_hud_01.png
-    └── ...
-```
+No manual copying is needed — the icon generator reads directly from the extracted data location.
 
 ## Step 4: Generate Icons
 
-Run the icon generator to resize the extracted art into heatmap/minimap icons:
+Icons are generated automatically by the tactical engine on first startup if none are found. You can also run the generator manually:
 
 <details>
 <summary>Linux</summary>
@@ -128,66 +117,54 @@ boam-icons.exe --force
 
 </details>
 
-This reads `configs/icon-config.json5` and produces 64x64 icons:
+This reads `configs/icon-config.json5` and produces 64x64 icons into the persistent data directory:
 ```
-Mods/BOAM/icons/
+UserData/BOAM/icons/
 ├── factions/          Faction fallback icons (wildlife.png, player.png, ...)
 └── templates/         Per-unit icons (alien_stinger.png, carda.png, ...)
 ```
 
-Icons are used by both the minimap overlay and the heatmap renderer. Resolution chain: leader → template → faction → colored dot.
+Icons survive mod deploys (stored in `UserData/`, not `Mods/`). Resolution chain: leader → template → faction → colored dot.
 
 See [Icon Generator](README_ICON_GENERATOR.md) for config format and adding new units.
 
-## Step 5: Set Up Shell Shortcuts (Optional)
+## Step 5: Set Up Steam Launch (Recommended)
+
+Configure Steam to automatically start the tactical engine alongside the game.
+
+**Right-click Menace in Steam → Properties → General → Launch Options**, then set:
 
 <details>
-<summary>Linux (bash/zsh)</summary>
+<summary>Linux</summary>
 
-Add to `~/.bashrc` or `~/.zshrc`:
-
-```bash
-# Adjust MENACE_DIR if your Steam library is in a different location
-export MENACE_DIR="$HOME/.local/share/Steam/steamapps/common/Menace"
-export BOAM_DIR="$MENACE_DIR/Mods/BOAM"
-
-# Start the BOAM-engine
-alias boam-engine='$BOAM_DIR/start-tactical-engine.sh'
-
-# Regenerate icons
-alias boam-icons='$BOAM_DIR/boam-icons'
+```
+/path/to/Menace/Mods/BOAM/boam-launch.sh %command%
 ```
 
-Then from any directory:
-```bash
-boam-engine                                          # passive start
-boam-engine --on-title /navigate/tactical            # auto-navigate to tactical
-boam-icons --force                                   # regenerate icons
+Example with default Steam library path:
+```
+~/.local/share/Steam/steamapps/common/Menace/Mods/BOAM/boam-launch.sh %command%
 ```
 
 </details>
 
 <details>
-<summary>Windows (PowerShell)</summary>
+<summary>Windows</summary>
 
-Add to your PowerShell profile (`$PROFILE`):
-
-```powershell
-# Adjust if your Steam library is in a different location
-$env:BOAM_DIR = "C:\Program Files (x86)\Steam\steamapps\common\Menace\Mods\BOAM"
-
-function boam-engine { & "$env:BOAM_DIR\start-tactical-engine.bat" @args }
-function boam-icons { & "$env:BOAM_DIR\boam-icons.exe" @args }
+```
+"C:\Program Files (x86)\Steam\steamapps\common\Menace\Mods\BOAM\boam-launch.bat" %command%
 ```
 
-Then from any directory:
-```powershell
-boam-engine                                          # passive start
-boam-engine --on-title /navigate/tactical            # auto-navigate to tactical
-boam-icons --force                                   # regenerate icons
-```
+Adjust the path if your Steam library is in a different location.
 
 </details>
+
+This will:
+1. Start the BOAM Tactical Engine in a separate window
+2. Launch the game
+3. Shut down the engine when the game exits
+
+To start the engine manually without Steam integration, use `start-tactical-engine.sh` (Linux) or `start-tactical-engine.bat` (Windows) directly.
 
 ## Step 6: Customise Configs (Optional)
 
@@ -203,7 +180,7 @@ When updating BOAM to a new version:
 1. **Re-deploy** the BOAM-modpack (step 1)
 2. **Re-extract** the BOAM-engine (step 2)
 
-Icons are regenerated automatically during deploy. Configs in `UserData/BOAM/` are never touched — if a mod update changes the config structure, a warning is logged and the mod default is used until you update your user config (see [Configuration](README_CONFIG.md)).
+Icons are regenerated automatically by the tactical engine on startup if missing. Configs in `UserData/BOAM/` are never touched — if a mod update changes the config structure, a warning is logged and the mod default is used until you update your user config (see [Configuration](README_CONFIG.md)).
 
 ## Troubleshooting
 

@@ -25,6 +25,7 @@ type TacticalEngineConfig = {
     Heatmaps: bool
     ActionLogging: bool
     AiLogging: bool
+    CriterionLogging: bool
     Rendering: RenderingConfig
 }
 
@@ -141,6 +142,7 @@ let private load () : TacticalEngineConfig =
       Heatmaps = match root.TryGetProperty("heatmaps") with | true, v -> v.GetBoolean() | _ -> false
       ActionLogging = match root.TryGetProperty("action_logging") with | true, v -> v.GetBoolean() | _ -> false
       AiLogging = match root.TryGetProperty("ai_logging") with | true, v -> v.GetBoolean() | _ -> false
+      CriterionLogging = match root.TryGetProperty("criterion_logging") with | true, v -> v.GetBoolean() | _ -> false
       Rendering = {
         MinTilePixels = r.GetProperty("minTilePixels").GetInt32()
         Gamma = r.GetProperty("gamma").GetSingle()

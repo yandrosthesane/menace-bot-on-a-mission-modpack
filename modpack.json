@@ -1,11 +1,18 @@
 {
   "manifestVersion": 2,
   "name": "BOAM",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "author": "YandrosTheSane",
   "description": "Bot On A Mission — Toolkit for Menace. In-game minimap, offline heatmap rendering, tactical and AI logging.",
   "loadOrder": 102,
-  "patches": {},
+  "patches": {
+    "EntityTemplate": {
+      "player_squad.darby": {
+        "Properties.Concealment": 2,
+        "Properties.ActionPoints": 120
+      }
+    }
+  },
   "assets": {},
   "code": {
     "sources": [

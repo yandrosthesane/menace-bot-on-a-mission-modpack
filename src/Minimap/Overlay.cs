@@ -119,9 +119,31 @@ internal class TacticalMapOverlay
         _activeEntityKey = _displayStyles[0].EntityStyleKey;
         _activeAnchorKey = _displayStyles[0].AnchorKey;
 
-        _iconsDir = Path.Combine(modFolder, "icons");
+        _iconsDir = Path.Combine(persistentDir, "icons");
+        EnsureIcons(modFolder);
         RegisterSettings();
         _log.Msg($"[BOAM] TacticalMap initialized (toggle={_toggleKey}, {_displayStyles.Length} presets)");
+    }
+
+    /// <summary>
+    /// Check if icons directory has content; if missing, ask the tactical engine to generate them.
+    /// The game runs under Wine so we can't spawn native binaries directly — delegate to the
+    /// tactical engine which runs natively and has access to boam-icons.
+    /// </summary>
+    private void EnsureIcons(string modFolder)
+    {
+        try
+        {
+            if (Directory.Exists(_iconsDir) && Directory.GetFiles(_iconsDir, "*.png", SearchOption.AllDirectories).Length > 0)
+                return;
+
+            _log.Warning($"[BOAM] No icons found in {_iconsDir}");
+            Toast.Show("BOAM: No icons found — run 'boam-icons --force' or start the tactical engine", 8f);
+        }
+        catch (Exception ex)
+        {
+            _log.Warning($"[BOAM] Icon check failed: {ex.Message}");
+        }
     }
 
     internal void OnSceneLoaded(string sceneName)

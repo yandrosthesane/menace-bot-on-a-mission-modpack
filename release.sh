@@ -8,7 +8,7 @@
 #   BOAM-tactical-engine-v{version}-linux-x64-slim.zip             — Engine only (Linux, ~5MB, requires .NET 10)
 #   BOAM-tactical-engine-v{version}-win-x64-slim.zip               — Engine only (Windows, ~5MB, requires .NET 10)
 #
-# Prerequisites: .NET 10 SDK, jq, zip, tar
+# Prerequisites: .NET 10 SDK, jq, zip
 
 set -euo pipefail
 
@@ -40,7 +40,7 @@ cp -r src "$STAGE_MOD/"
 
 MOD_ZIP="$RELEASE_DIR/${MOD_NAME}-modpack-v${VERSION}.zip"
 rm -f "$MOD_ZIP"
-(cd "$RELEASE_DIR" && zip -rq "../$MOD_ZIP" "$MOD_NAME/")
+(cd "$RELEASE_DIR" && zip -qr9 "../$MOD_ZIP" "$MOD_NAME/")
 echo "    $MOD_ZIP"
 
 # ─────────────────────────────────────────────
@@ -88,12 +88,14 @@ build_engine_archive() {
     # Launcher scripts
     if [ "$RID" = "linux-x64" ]; then
         cp "$LAUNCHER_DIR/start-tactical-engine.sh" "$STAGE/"
+        cp "$LAUNCHER_DIR/boam-launch.sh" "$STAGE/"
         chmod +x "$STAGE/start-tactical-engine.sh"
+        chmod +x "$STAGE/boam-launch.sh"
         chmod +x "$STAGE/tactical_engine/TacticalEngine"
-        cp "$PIPELINE_DIR/generate-icons.sh" "$STAGE/"
-        chmod +x "$STAGE/generate-icons.sh"
+        chmod +x "$STAGE/boam-icons"
     else
         cp "$LAUNCHER_DIR/start-tactical-engine.bat" "$STAGE/"
+        cp "$LAUNCHER_DIR/boam-launch.bat" "$STAGE/"
     fi
 
     # Default configs
@@ -101,7 +103,7 @@ build_engine_archive() {
 
     # Create archive
     local ARCHIVE_NAME="${MOD_NAME}-tactical-engine-v${VERSION}-${RID}-${SUFFIX}"
-    (cd "$RELEASE_DIR/.stage-engine-$RID-$SUFFIX" && zip -rq "$SCRIPT_DIR/$RELEASE_DIR/${ARCHIVE_NAME}.zip" "$MOD_NAME/")
+    (cd "$RELEASE_DIR/.stage-engine-$RID-$SUFFIX" && zip -qr9 "$SCRIPT_DIR/$RELEASE_DIR/${ARCHIVE_NAME}.zip" "$MOD_NAME/")
     echo "    $RELEASE_DIR/${ARCHIVE_NAME}.zip"
 }
 
