@@ -212,6 +212,7 @@ static class Patch_PreviewReady
             TacticalMap.TacticalMapState.TileDataArray = tileDataArray;
 
             BoamBridge.Logger.Msg($"[BOAM] Map captured: {mapTexture.width}x{mapTexture.height} px, {sizeX}x{sizeZ} tiles, height [{heightMin:F1}..{heightMax:F1}] → {sessionDir}");
+            Toast.Show($"BOAM: Map captured ({sizeX}x{sizeZ} tiles)", 3f);
         }
         catch (Exception ex)
         {

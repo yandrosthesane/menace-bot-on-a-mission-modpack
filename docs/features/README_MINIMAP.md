@@ -2,6 +2,9 @@
 
 In-game IMGUI overlay showing unit positions on the captured map background. Units are rendered with the same icon fallback chain as heatmaps (leader -- template -- faction).
 
+
+![BOAM-engine startup](/docs/images/ai_heatmap_blaster_bug_29_r01.png)
+
 ## Controls
 
 | Key | Action | Default |

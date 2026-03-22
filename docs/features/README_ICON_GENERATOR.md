@@ -151,7 +151,7 @@ Each entry in `factions`, `templates`, and `leaders`:
 Place 64x64 PNGs directly into the icons directory:
 
 ```
-Mods/BOAM/icons/
+UserData/BOAM/icons/
 ├── factions/
 │   ├── wildlife.png
 │   └── constructs.png

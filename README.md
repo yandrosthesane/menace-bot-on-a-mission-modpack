@@ -55,15 +55,14 @@ Menace/
 │   │   └── TacticalEngine(.exe)
 │   ├── start-tactical-engine.sh   Launcher (opens terminal, logs to file)
 │   ├── boam-icons(.exe)           Icon generator
-│   ├── icons/                     Generated heatmap/minimap icons
-│   │   ├── factions/
-│   │   └── templates/
+│   ├── boam-launch.sh(.bat)       Steam launch helper
 │   └── logs/                      Engine log (overwritten each run)
 │       └── tactical_engine.log
 └── UserData/BOAM/
     ├── configs/                   User configs (persistent, checked first)
-    ├── badges/                    Source art for icon generation
-    ├── factions/
+    ├── icons/                     Generated heatmap/minimap icons
+    │   ├── factions/
+    │   └── templates/
     └── battle_reports/            Recorded battles (auto-created per session)
         └── battle_YYYY_MM_DD_HH_MM/
             ├── mapbg.png          Captured map background

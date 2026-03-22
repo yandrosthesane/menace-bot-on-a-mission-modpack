@@ -17,6 +17,15 @@ New `boam-launch.sh` / `boam-launch.bat` scripts start the tactical engine via S
 ### Engine startup health check
 The tactical engine banner now displays resolved paths (game dir, mod dir, data dir, reports dir) and icon count with color-coded status.
 
+### Icon directory moved to UserData
+Icons are now read from `UserData/BOAM/icons/` instead of `Mods/BOAM/icons/`. This applies to both the C# minimap overlay and the F# tactical engine. Icons survive mod deploys without regeneration.
+
+### Engine no longer shuts down on game exit
+The C# bridge no longer sends `/shutdown` to the tactical engine when the game closes. The engine stays running independently — useful for rendering heatmaps after a session.
+
+### Passive engine start by default
+The Steam launch scripts start the engine in passive mode (no `--on-title` auto-navigation). Use `start-tactical-engine.sh --on-title /navigate/tactical` for dev workflows.
+
 ---
 
 ## v1.2.0

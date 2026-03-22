@@ -23,4 +23,4 @@ if not exist "%ENGINE_EXE%" (
     exit /b 0
 )
 
-start "BOAM Tactical Engine" "%ENGINE_EXE%" --on-title /navigate/tactical
+start "BOAM Tactical Engine" "%ENGINE_EXE%"

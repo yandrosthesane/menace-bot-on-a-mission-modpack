@@ -26,7 +26,7 @@ fi
 
 mkdir -p "$LOG_DIR"
 gnome-terminal --title="BOAM Tactical Engine" --geometry=120x30 -- \
-    bash -c "\"$ENGINE_BIN\" --on-title /navigate/tactical 2>&1 | tee \"$LOG_FILE\"; echo -e '\n\x1b[31mTactical engine exited. Press Enter to close.\x1b[0m'; read"
+    bash -c "\"$ENGINE_BIN\" 2>&1 | tee \"$LOG_FILE\"; echo -e '\n\x1b[31mTactical engine exited. Press Enter to close.\x1b[0m'; read"
 
 # Wait for engine to be ready before returning to Steam
 for i in $(seq 1 10); do
