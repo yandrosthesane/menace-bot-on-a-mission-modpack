@@ -98,6 +98,8 @@ public class BoamCommandServer
                     responseBody = path switch
                     {
                         "/execute" => HandleExecute(request),
+                        "/tile-modifier" => HandleTileModifier(request),
+                        "/tile-modifier/clear" => HandleTileModifierClear(),
                         "/status" => "{\"status\":\"ok\"}",
                         _ => "{\"error\":\"unknown route\"}"
                     };
@@ -155,4 +157,17 @@ public class BoamCommandServer
         return JsonSerializer.Serialize(new { status = "queued", action, x, z, skill });
     }
 
+    private string HandleTileModifier(HttpListenerRequest request)
+    {
+        using var reader = new StreamReader(request.InputStream);
+        var body = reader.ReadToEnd();
+        TileModifierStore.SetFromJson(body);
+        return "{\"status\":\"ok\"}";
+    }
+
+    private string HandleTileModifierClear()
+    {
+        TileModifierStore.Clear();
+        return "{\"status\":\"cleared\"}";
+    }
 }

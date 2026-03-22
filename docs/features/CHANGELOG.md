@@ -2,6 +2,18 @@
 
 ## v1.3.0
 
+### Tile modifier system
+Engine-controlled tile score injection for directing AI unit movement. Supports target-tile mode (gradient toward a position), distance-gating mode (flat bonus in range), attack suppression, and forced idle on arrival. See [Tile Modifier System](../next/tile-modifier-system.md).
+
+### Modpack config (`modpack.json5`)
+Independent config file for the C# bridge, separate from the engine's `engine.json5`. Loaded with the same two-tier resolution (user → default) and config version check. Currently gates `opponent_filter`.
+
+### Config rename
+`config.json5` renamed to `engine.json5` for clarity. The engine config seeds and resolves identically.
+
+### Map capture fix
+Map background and tile data now captured at `LaunchMission` (right before scene transition) instead of only `OnPreviewReady`. Fixes missing map data when the preview was already cached. Toast notification on capture.
+
 ### Zero-config icon generation
 Icons are now generated automatically from extracted game assets. No manual copying of PNGs into `UserData/BOAM/` is needed — the icon generator reads directly from `UserData/ExtractedData/Assets/`. The tactical engine auto-generates icons on startup if none are found. Generated icons are stored in `UserData/BOAM/icons/` and survive mod deploys.
 
@@ -56,7 +68,7 @@ On first run, each component automatically copies its config to `UserData/BOAM/c
 ### Engine startup banner
 The BOAM-engine now shows config source and feature status at startup:
 ```
-Config:  user (v2)  .../UserData/BOAM/configs/config.json5
+Config:  user (v2)  .../UserData/BOAM/configs/engine.json5
 ─────────────────────────────────
 ●  Minimap
 ○  Heatmaps

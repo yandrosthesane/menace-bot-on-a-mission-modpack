@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Simulate a fresh user install from release archives.
 #
-# Usage: ./user-install-from-release.sh
+# Usage: ./user-install-from-release.sh [slim|bundled]
+#   Default: slim
 #
 # What it does:
 #   1. Removes existing Mods/BOAM/ (clean install)
@@ -15,11 +16,17 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
+VARIANT="${1:-slim}"
+if [ "$VARIANT" != "slim" ] && [ "$VARIANT" != "bundled" ]; then
+    echo "Usage: $0 [slim|bundled]"
+    exit 1
+fi
+
 VERSION=$(jq -r '.version' modpack.json)
 GAME_DIR="$HOME/.local/share/Steam/steamapps/common/Menace"
 MOD_DIR="$GAME_DIR/Mods/BOAM"
 ICONS_DIR="$GAME_DIR/UserData/BOAM/icons"
-ARCHIVE="release/BOAM-tactical-engine-v${VERSION}-linux-x64-slim.zip"
+ARCHIVE="release/BOAM-tactical-engine-v${VERSION}-linux-x64-${VARIANT}.zip"
 
 if [ ! -f "$ARCHIVE" ]; then
     echo "ERROR: Release archive not found: $ARCHIVE"

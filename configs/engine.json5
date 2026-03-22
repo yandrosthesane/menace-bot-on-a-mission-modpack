@@ -1,7 +1,7 @@
 // BOAM Tactical Engine — main configuration
 //
 // This is the mod default. To customise, copy to:
-//   <game_dir>/UserData/BOAM/configs/config.json5
+//   <game_dir>/UserData/BOAM/configs/engine.json5
 {
   "configVersion": 2,
 

@@ -84,27 +84,67 @@ static class Patch_EndTurn
 /// </summary>
 static class Patch_PreviewReady
 {
+    // Cache the preview data — written to disk at LaunchMission
+    internal static Il2CppMenace.UI.Strategy.MissionPrepUIScreen CachedInstance;
+    internal static Il2CppMenace.Strategy.MissionPreviewResult CachedResult;
+
     public static void Postfix(
         Il2CppMenace.UI.Strategy.MissionPrepUIScreen __instance,
         Il2CppMenace.Strategy.MissionPreviewResult _result)
     {
         try
         {
+            CachedInstance = __instance;
+            CachedResult = _result;
             BoamBridge.Logger.Msg("[BOAM] Mission preview ready — capturing map data");
 
             // Always notify engine (even before IsReady — needed for navigation)
             ThreadPool.QueueUserWorkItem(_ => EngineClient.Post("/hook/preview-ready", "{}"));
 
-            // Capture map texture and tile data
-            CaptureMapData(__instance, _result);
+            // Write immediately — LaunchMission will re-capture if needed
+            Patch_LaunchMission.CaptureMapData(__instance, _result);
         }
         catch (Exception ex)
         {
             BoamBridge.Logger.Error($"[BOAM] preview-ready error: {ex.Message}");
         }
     }
+}
 
-    private static void CaptureMapData(
+/// <summary>
+/// Harmony patch: captures map data right before mission launch (scene transition).
+/// This ensures the map texture and tile data are saved before they get unloaded.
+/// Uses cached data from OnPreviewReady.
+/// </summary>
+static class Patch_LaunchMission
+{
+    public static void Prefix(Il2CppMenace.UI.Strategy.MissionPrepUIScreen __instance)
+    {
+        try
+        {
+            var instance = Patch_PreviewReady.CachedInstance ?? __instance;
+            var result = Patch_PreviewReady.CachedResult;
+
+            if (result == null)
+            {
+                BoamBridge.Logger.Warning("[BOAM] LaunchMission — no cached preview result, cannot capture map");
+                return;
+            }
+
+            BoamBridge.Logger.Msg("[BOAM] LaunchMission — re-capturing map data before scene transition");
+            CaptureMapData(instance, result);
+
+            // Clear cache
+            Patch_PreviewReady.CachedInstance = null;
+            Patch_PreviewReady.CachedResult = null;
+        }
+        catch (Exception ex)
+        {
+            BoamBridge.Logger.Error($"[BOAM] LaunchMission capture error: {ex.Message}");
+        }
+    }
+
+    internal static void CaptureMapData(
         Il2CppMenace.UI.Strategy.MissionPrepUIScreen instance,
         Il2CppMenace.Strategy.MissionPreviewResult result)
     {

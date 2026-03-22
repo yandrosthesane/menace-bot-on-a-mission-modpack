@@ -185,7 +185,7 @@ chmod +x "$GAME_MOD_DIR/boam-launch.sh"
 
 # Default configs
 mkdir -p "$GAME_MOD_DIR/configs"
-cp configs/config.json5 configs/tactical_map.json5 configs/tactical_map_presets.json5 "$GAME_MOD_DIR/configs/"
+cp configs/engine.json5 configs/modpack.json5 configs/tactical_map.json5 configs/tactical_map_presets.json5 "$GAME_MOD_DIR/configs/"
 cp configs/icon-config.json5 "$GAME_MOD_DIR/configs/icon-config.json5"
 echo "    All configs installed to configs/"
 

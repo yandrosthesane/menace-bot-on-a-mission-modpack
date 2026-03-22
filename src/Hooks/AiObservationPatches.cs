@@ -79,6 +79,7 @@ static class Patch_OnTurnStart
             BoamBridge.Logger.Error($"[BOAM] on-turn-start error: {ex.Message}");
         }
     }
+
 }
 
 /// <summary>
@@ -359,7 +360,6 @@ static class Patch_AgentExecute
             var bridge = BoamBridge.Instance;
             if (bridge == null || !bridge.IsEngineReady) return;
 
-            // Logging only — capture AI behavior decisions for analysis.
 
             var actor = __instance.m_Actor;
             if (actor == null) return;

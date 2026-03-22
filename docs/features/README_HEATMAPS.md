@@ -86,7 +86,7 @@ Output PNGs go to `battle_reports/<session>/heatmaps/`.
 
 ## Rendering Settings
 
-The `rendering` section of `config.json5` controls heatmap appearance. The `heatmaps` toggle controls whether render job data is collected during gameplay.
+The `rendering` section of `engine.json5` controls heatmap appearance. The `heatmaps` toggle controls whether render job data is collected during gameplay.
 
 | Setting | Default | Description |
 |---------|---------|-------------|

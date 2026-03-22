@@ -17,7 +17,7 @@ On first run, each component automatically copies its config from `Mods/BOAM/con
 
 | Config | Seeded by |
 |--------|-----------|
-| `config.json5` | BOAM-engine (on engine startup) |
+| `engine.json5` | BOAM-engine (on engine startup) |
 | `tactical_map.json5` | BOAM-modpack (on game launch) |
 | `tactical_map_presets.json5` | BOAM-modpack (on game launch) |
 
@@ -35,7 +35,7 @@ To fix this: update your user config to match the new structure and bump `config
 
 ## Config Files
 
-### `config.json5` — BOAM-engine
+### `engine.json5` — BOAM-engine
 
 Controls the BOAM-engine (ports, rendering, feature toggles).
 
@@ -143,7 +143,7 @@ See [Icon Generator](README_ICON_GENERATOR.md) for full details.
 
 | Config | Version |
 |--------|:-------:|
-| `config.json5` | 2 |
+| `engine.json5` | 2 |
 | `tactical_map.json5` | 1 |
 | `tactical_map_presets.json5` | 1 |
 | `icon-config.json5` | 1 |

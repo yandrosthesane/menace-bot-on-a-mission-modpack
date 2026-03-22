@@ -1,4 +1,4 @@
-/// Loads config.json5 at startup. No hot reload.
+/// Loads engine.json5 at startup. No hot reload.
 module BOAM.TacticalEngine.Config
 
 open System
@@ -96,9 +96,9 @@ let private resolveConfigPath () =
         Environment.GetEnvironmentVariable("BOAM_PERSISTENT_ASSETS")
         |> Option.ofObj
         |> Option.defaultValue (Path.Combine(gameDir, "UserData", "BOAM"))
-    let userPath = Path.Combine(persistentDir, "configs", "config.json5")
+    let userPath = Path.Combine(persistentDir, "configs", "engine.json5")
     let modDir = Path.GetDirectoryName(exeDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
-    let defaultPath = Path.Combine(modDir, "configs", "config.json5")
+    let defaultPath = Path.Combine(modDir, "configs", "engine.json5")
 
     // Seed user config from mod default if missing
     if not (File.Exists(userPath)) && File.Exists(defaultPath) then
@@ -120,7 +120,7 @@ let private resolveConfigPath () =
             { Path = defaultPath; Label = "default"; Version = defaultVer }
     elif File.Exists(defaultPath) then
         { Path = defaultPath; Label = "default"; Version = readVersion defaultPath }
-    else failwithf "config.json5 not found (checked %s, %s)" userPath defaultPath
+    else failwithf "engine.json5 not found (checked %s, %s)" userPath defaultPath
 
 /// The resolved config source (available after load).
 let mutable Source : ConfigSource = { Path = ""; Label = ""; Version = 0 }

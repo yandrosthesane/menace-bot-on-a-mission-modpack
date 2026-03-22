@@ -47,7 +47,7 @@ Menace/
 │   ├── dlls/BOAM.dll              C# bridge (compiled by ModpackLoader)
 │   ├── modpack.json               Mod manifest
 │   ├── configs/                   Mod default configs (reset on deploy)
-│   │   ├── config.json5           Engine ports, rendering, heatmaps toggle
+│   │   ├── engine.json5           Engine ports, rendering, heatmaps toggle
 │   │   ├── tactical_map.json5     Minimap keybindings, visual defaults
 │   │   ├── tactical_map_presets.json5  Display presets (sizes, styles, anchors)
 │   │   └── icon-config.json5      Icon generation source mappings

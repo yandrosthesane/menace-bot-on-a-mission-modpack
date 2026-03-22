@@ -106,3 +106,165 @@ Hypothesis: the freeze happens because the AI knows the player exists (via `m_Op
 - Round 8 move target (23,29) does not match the highest criterion-scored tile (26,31)=0. The Move behavior target is not explained by the tile criterion scores captured in `PostProcessTileScores`.
 - The `InflictDamage` alternative scored 0 in every round, including round 7 where the dragonfly fired.
 - The Move decision was re-evaluated 40-70 times in rounds 5-8 (looping pattern).
+
+===============
+
+Test 2
+
+Battle 2.1 (opponent_filter=false, concealment +2, 110 AP, seed 5) player get vision on R2
+
+Dragonfly.1
+- R1-R5: (26,38) idle
+- R6: → (32,38)
+- R7–R10: idle
+
+Dragonfly.2
+- R1: → (31,4)
+- R2: → (27,4)
+- R3: → (26,6)
+- R4: → (27,10)
+- R5: → (24,7)
+- R6: → (21,9)
+- R7: → (25,11)
+- R8: → (21,12)
+- R9: → (20,14)
+- R10: → (22,16)
+
+Dragonfly.3
+- R1: → (38,5)
+- R2: → (40,2)
+- R3: → (36,1)
+- R4: → (32,1)
+- R5: → (31,3)
+- R6: → (35,4)
+- R7: → (31,6)
+- R8: → (27,5)
+- R9: → (30,8)
+- R10: → (28,4)
+
+
+Battle 2.1 (opponent_filter=true, concealment +2, 110 AP, seed 5) player get vision on R2
+
+Dragonfly.1 — (26,38) — near-static, player in concealed LOS from R3
+- R1: → (26,38) idle
+- R2: idle
+- R3: → (25,37) 
+- R4–R9: idle
+- R10: → (25,32)
+
+Dragonfly.2
+- R1: → (33,0)
+- R2: → (35,3)
+- R3: → (34,6)
+- R4: → (37,6)
+- R5: → (38,5)
+- R6: → (36,6)
+- R7: → (40,6)
+- R8: → (41,10)
+- R9: → (40,6)
+- R10: → (37,6)
+
+Dragonfly.3
+- R1: → (38,5)
+- R2: idle
+- R3: → (41,8) → (41,4)
+- R4: → (37,4)
+- R5: → (34,7) → (30,5)
+- R6: → (35,5)
+- R7: → (37,1)
+- R8: → (39,4)
+- R9: → (36,6)
+
+  ---
+Battle 2.2 (opponent_filter=true, concealment +2, 110 AP, seed 5) - player stay on spawn
+
+Dragonfly.1 
+- R1: → (27,38)
+- R2: → (29,40)
+- R3: → (25,38)
+- R4: → (26,40)
+- R5: → (29,38)
+- R6: idle
+- R7: → (30,38)
+- R8: idle
+
+Dragonfly.2 
+- R1: → (27,0)
+- R2: → (29,4)
+- R3: → (33,4)
+- R4: → (37,2)
+- R5: → (34,3)
+- R6: → (30,3)
+- R7: → (29,6)
+
+Dragonfly.3 
+- R1: → (38,3)
+- R2: → (40,4)
+- R3: → (37,1)
+- R4: → (38,3)
+- R5: → (38,7)
+- R6: → (33,7)
+- R7: → (28,7)
+
+Battle 2.3 (opponent_filter=false, concealment +2, 110 AP, seed 5) - player stay on spawn
+
+Dragonfly.1
+- R1: → (27,38)
+- R2: → (25,38)
+- R3: → (28,40)
+- R4: → (32,38)
+- R5: → (32,41)
+- R6: → (31,41)
+- R7: → (34,38)
+- R8: → (35,37)
+- R9: → (32,35)
+- R10: → (29,38)
+
+Dragonfly.2
+- R1: → (38,5)
+- R2: → (35,6)
+- R3: → (38,7)
+- R4: → (35,7)
+- R5: → (32,5)
+- R6: → (35,3)
+- R7: → (31,1)
+- R8: → (31,4)
+- R9: → (29,3)
+- R10: → (31,5)
+
+Dragonfly.3
+- R1: → (40,3)
+- R2: → (36,3)
+- R3: → (34,7)
+- R4: → (34,11)
+- R5: → (30,13)
+- R6: → (32,16)
+- R7: → (33,19)
+- R8: → (37,19)
+- R9: → (40,19)
+- R10: → (39,18)
+- 
+
+As a line 
+
+  Battle 2.1 (filter=OFF, concealment +2, 110 AP, seed 5, player gets vision R2)
+  - D1: idle → idle → idle → idle → idle → (32,38) → idle → idle → idle → idle
+  - D2: (31,4) → (27,4) → (26,6) → (27,10) → (24,7) → (21,9) → (25,11) → (21,12) → (20,14) → (22,16)
+  - D3: (38,5) → (40,2) → (36,1) → (32,1) → (31,3) → (35,4) → (31,6) → (27,5) → (30,8) → (28,4)
+
+  Battle 2.1 filtered (filter=ON, concealment +2, 110 AP, seed 5, player gets vision R2)
+  - D1: idle → idle → (25,37) → idle → idle → idle → idle → idle → idle → (25,32)
+  - D2: (33,0) → (35,3) → (34,6) → (37,6) → (38,5) → (36,6) → (40,6) → (41,10) → (40,6) → (37,6)
+  - D3: (38,5) → idle → (41,8)→(41,4) → (37,4) → (34,7)→(30,5) → (35,5) → (37,1) → (39,4) → (36,6)
+
+  Battle 2.2 (filter=ON, concealment +2, 110 AP, seed 5, player stays on spawn)
+  - D1: (27,38) → (29,40) → (25,38) → (26,40) → (29,38) → idle → (30,38) → idle
+  - D2: (27,0) → (29,4) → (33,4) → (37,2) → (34,3) → (30,3) → (29,6)
+  - D3: (38,3) → (40,4) → (37,1) → (38,3) → (38,7) → (33,7) → (28,7)
+
+  Battle 2.3 (filter=OFF, concealment +2, 110 AP, seed 5, player stays on spawn)
+  - D1: (27,38) → (25,38) → (28,40) → (32,38) → (32,41) → (31,41) → (34,38) → (35,37) → (32,35) → (29,38)
+  - D2: (38,5) → (35,6) → (38,7) → (35,7) → (32,5) → (35,3) → (31,1) → (31,4) → (29,3) → (31,5)
+  - D3: (40,3) → (36,3) → (34,7) → (34,11) → (30,13) → (32,16) → (33,19) → (37,19) → (40,19) → (39,18)
+
+Clearly the AI evaluation is affected by the hidden player unit =_=
