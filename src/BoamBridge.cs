@@ -478,10 +478,5 @@ public class BoamBridge : IModpackPlugin
     public void OnUnload()
     {
         _commandServer?.Stop();
-        if (_engineAvailable)
-        {
-            try { EngineClient.Post("/shutdown", "{}"); } catch { }
-            Logger.Msg("[BOAM] Sent shutdown to tactical engine");
-        }
     }
 }

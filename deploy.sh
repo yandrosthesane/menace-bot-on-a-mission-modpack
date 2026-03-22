@@ -177,9 +177,11 @@ chmod +x "$GAME_MOD_DIR/tactical_engine/TacticalEngine"
 cp "$PUBLISH_ICONS/boam-icons" "$GAME_MOD_DIR/"
 chmod +x "$GAME_MOD_DIR/boam-icons"
 
-# Launcher script
+# Launcher scripts
 cp "$LAUNCHER_DIR/start-tactical-engine.sh" "$GAME_MOD_DIR/"
+cp "$LAUNCHER_DIR/boam-launch.sh" "$GAME_MOD_DIR/"
 chmod +x "$GAME_MOD_DIR/start-tactical-engine.sh"
+chmod +x "$GAME_MOD_DIR/boam-launch.sh"
 
 # Default configs
 mkdir -p "$GAME_MOD_DIR/configs"

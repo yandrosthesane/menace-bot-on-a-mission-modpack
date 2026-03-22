@@ -1,5 +1,24 @@
 # Changelog
 
+## v1.3.0
+
+### Zero-config icon generation
+Icons are now generated automatically from extracted game assets. No manual copying of PNGs into `UserData/BOAM/` is needed — the icon generator reads directly from `UserData/ExtractedData/Assets/`. The tactical engine auto-generates icons on startup if none are found. Generated icons are stored in `UserData/BOAM/icons/` and survive mod deploys.
+
+### Steam launch integration
+New `boam-launch.sh` / `boam-launch.bat` scripts start the tactical engine via Steam Launch Options. The engine runs in a separate window alongside the game and stays running after the game exits.
+
+### Cross-platform release improvements
+- Replaced 7z with zip for release archives
+- Removed old `generate-icons.sh` (python/ffmpeg) — replaced by `boam-icons` binary
+- `boam-icons` / `boam-icons.exe` included in all release variants
+- All config paths are now relative and portable (Linux and Windows)
+
+### Engine startup health check
+The tactical engine banner now displays resolved paths (game dir, mod dir, data dir, reports dir) and icon count with color-coded status.
+
+---
+
 ## v1.2.0
 
 ### Standalone minimap

@@ -1,6 +1,6 @@
 [size=5][b]BOAM — Bot On A Mission[/b][/size]
 
-[b]Version:[/b] 1.2.0 | [url=https://yandrosthesane.github.io/menace-bot-on-a-mission-modpack]Documentation[/url] | [url=https://yandrosthesane.github.io/menace-bot-on-a-mission-modpack/docs/features/CHANGELOG]Changelog[/url]
+[b]Version:[/b] 1.3.0 | [url=https://yandrosthesane.github.io/menace-bot-on-a-mission-modpack]Documentation[/url] | [url=https://yandrosthesane.github.io/menace-bot-on-a-mission-modpack/docs/features/CHANGELOG]Changelog[/url]
 
 AI behavior analysis mod for Menace.
 Intercepts AI decision-making at runtime, captures tactical data for offline heatmap rendering, provides a real-time in-game minimap overlay, and records full battle sessions (player actions + AI decisions + combat outcomes).
@@ -25,6 +25,18 @@ Intercepts AI decision-making at runtime, captures tactical data for offline hea
 The BOAM-modpack works standalone — the minimap needs no engine. Start the BOAM-engine only when you want heatmaps or action logging.
 
 [b]First time?[/b] Follow the [url=https://yandrosthesane.github.io/menace-bot-on-a-mission-modpack/docs/features/README_INSTALL]Installation Guide[/url].
+
+[size=4][b]Downloads[/b][/size]
+
+Pre-built engine binaries (Linux and Windows) are available on the [url=https://github.com/yandrosthesane/menace-bot-on-a-mission-modpack/releases/]Releases page[/url]. This is the only distribution channel — binaries are not hosted elsewhere.
+
+Each release includes:
+[list]
+[*][b]BOAM-modpack[/b] — C# source (compiled at deploy time by the Menace Modkit)
+[*][b]BOAM-tactical-engine[/b] — pre-built binaries for Linux and Windows (bundled and slim variants)
+[/list]
+
+Prefer to build yourself? See the [url=https://github.com/yandrosthesane/menace-bot-on-a-mission-modpack/blob/main/docs/features/README_BUILD.md]build instructions[/url].
 
 [size=4][b]Install Layout[/b][/size]
 
@@ -137,6 +149,14 @@ Two BOAM-engine variants are available:
 [/list]
 
 [size=4][b]Changelog[/b][/size]
+
+[size=3][b]v1.3.0[/b][/size]
+[list]
+[*][b]Zero-config icon generation[/b] — Icons generated automatically from extracted game assets. No manual copying needed. Tactical engine auto-generates on startup if missing.
+[*][b]Steam launch integration[/b] — New boam-launch scripts start the tactical engine via Steam Launch Options alongside the game.
+[*][b]Cross-platform releases[/b] — Portable config paths, zip archives, boam-icons binary included for both Linux and Windows.
+[*][b]Engine health check[/b] — Startup banner shows resolved paths and icon count with color status.
+[/list]
 
 [size=3][b]v1.2.0[/b][/size]
 [list]

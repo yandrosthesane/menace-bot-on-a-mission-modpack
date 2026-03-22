@@ -14,7 +14,7 @@
   // Bump when the config structure changes between releases.
   // If the user config version is older than the mod default, the mod default is used
   // and a warning is logged. Update your user config to match the new structure.
-  "configVersion": 1,
+  "configVersion": 3,
 
   // ── Feature Toggle ──
   "Enabled": true,             // false = disable the minimap overlay entirely
@@ -38,13 +38,13 @@
   // These are global defaults. Display presets in tactical_map_presets.json5
   // can override Opacity and MapBrightness per-preset.
   "Opacity": 0.8,              // panel opacity: 0.1 (transparent) to 1.0 (opaque)
-  "MapBrightness": 2.0,        // map background brightness: 0.1 (dark) to 4.0 (overbright)
+  "MapBrightness": 4.0,        // map background brightness: 0.1 (dark) to 4.0 (overbright)
 
   // ── Layout ──
   "Margin": 12,                // margin from screen edges (px)
   "HeaderHeight": 20,          // header bar height (px)
   "Padding": 4,                // padding inside panel border (px)
-  "LabelFontSize": 9,          // fallback font size if EntityStyle has no FontSize
-  "HeaderFontSize": 11,        // header text font size (px)
-  "ToastFontSize": 14          // toast notification font size (px)
+  "LabelFontSize": 12,          // fallback font size if EntityStyle has no FontSize
+  "HeaderFontSize": 13,        // header text font size (px)
+  "ToastFontSize": 16          // toast notification font size (px)
 }

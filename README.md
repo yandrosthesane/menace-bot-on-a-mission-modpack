@@ -1,6 +1,6 @@
 # BOAM — Bot On A Mission
 
-**v1.2.0** | [Documentation](https://yandrosthesane.github.io/menace-bot-on-a-mission-modpack) | [Changelog](docs/features/CHANGELOG.md)
+**v1.3.0** | [Documentation](https://yandrosthesane.github.io/menace-bot-on-a-mission-modpack) | [Changelog](docs/features/CHANGELOG.md)
 
 AI behavior analysis mod for Menace.
 Intercepts AI decision-making at runtime,
@@ -28,6 +28,16 @@ and records full battle sessions (player actions + AI decisions + combat outcome
 The BOAM-modpack works standalone — the minimap needs no engine. Start the BOAM-engine only when you want heatmaps or action logging.
 
 **First time?** Follow the [Installation Guide](docs/features/README_INSTALL.md).
+
+## Downloads
+
+Pre-built engine binaries (Linux and Windows) are available on the [Releases page](https://github.com/yandrosthesane/menace-bot-on-a-mission-modpack/releases/). This is the only distribution channel — binaries are not hosted elsewhere.
+
+Each release includes:
+- **BOAM-modpack** — C# source (compiled at deploy time by the Menace Modkit)
+- **BOAM-tactical-engine** — pre-built binaries for Linux and Windows (bundled and slim variants)
+
+Prefer to build yourself? See [Building from Source](docs/features/README_BUILD.md).
 
 ## Install Layout
 
@@ -170,4 +180,5 @@ See [Icon Generator](docs/features/README_ICON_GENERATOR.md).
 - [BOAM-modpack](docs/features/README_BOAM_MODPACK.md) — In-game mod: minimap, hooks, map capture
 - [BOAM-engine](docs/features/README_BOAM_ENGINE.md) — External engine: heatmaps, logging, CLI, HTTP API
 - [Icon Generator](docs/features/README_ICON_GENERATOR.md) — Config format, fallback chain, customization
+- [Building from Source](docs/features/README_BUILD.md) — Clone, build, and install from source
 - [Changelog](docs/features/CHANGELOG.md) — Version history

@@ -138,13 +138,15 @@ Configure Steam to automatically start the tactical engine alongside the game.
 <summary>Linux</summary>
 
 ```
-/path/to/Menace/Mods/BOAM/boam-launch.sh %command%
+/path/to/Menace/Mods/BOAM/boam-launch.sh; WINEDLLOVERRIDES="version=n,b" %command%
 ```
 
 Example with default Steam library path:
 ```
-~/.local/share/Steam/steamapps/common/Menace/Mods/BOAM/boam-launch.sh %command%
+~/.local/share/Steam/steamapps/common/Menace/Mods/BOAM/boam-launch.sh; WINEDLLOVERRIDES="version=n,b" %command%
 ```
+
+`WINEDLLOVERRIDES="version=n,b"` is required for MelonLoader under Wine/Proton.
 
 </details>
 
@@ -152,17 +154,14 @@ Example with default Steam library path:
 <summary>Windows</summary>
 
 ```
-"C:\Program Files (x86)\Steam\steamapps\common\Menace\Mods\BOAM\boam-launch.bat" %command%
+"C:\Program Files (x86)\Steam\steamapps\common\Menace\Mods\BOAM\boam-launch.bat" & %command%
 ```
 
 Adjust the path if your Steam library is in a different location.
 
 </details>
 
-This will:
-1. Start the BOAM Tactical Engine in a separate window
-2. Launch the game
-3. Shut down the engine when the game exits
+The launcher starts the tactical engine in a separate window and returns. The engine stays running after the game exits.
 
 To start the engine manually without Steam integration, use `start-tactical-engine.sh` (Linux) or `start-tactical-engine.bat` (Windows) directly.
 

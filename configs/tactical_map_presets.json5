@@ -14,7 +14,7 @@
   // ── Config Version ──
   // Bump when the preset structure changes between releases.
   // If the user preset version is older than the mod default, the mod default is used.
-  "configVersion": 1,
+  "configVersion": 3,
 
   // ── Anchors ──
   // Screen position. X/Y are floats 0.0–1.0:
@@ -105,7 +105,7 @@
       }
     },
     {
-      "Key": "native-4k", "IconSize": 36, "FontSize": 22,
+      "Key": "native-4k", "IconSize": 48, "FontSize": 22,
       "Background": "#120803E6", "HeaderText": "#F7AD66",
       "FactionColors": {
         "Player": "#4DC99E", "PlayerAI": "#4DC99E", "Civilian": "#F7AD40",
