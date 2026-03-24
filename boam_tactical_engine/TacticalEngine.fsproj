@@ -42,6 +42,8 @@
     <!-- Nodes -->
     <Compile Include="Nodes/Keys.fs" />
     <Compile Include="Nodes/ShapeTileModifier.fs" />
+    <Compile Include="Nodes/RoamingBehaviour.fs" />
+    <Compile Include="Nodes/PackBehaviour.fs" />
 
     <!-- Composition root -->
     <Compile Include="Routes.fs" />

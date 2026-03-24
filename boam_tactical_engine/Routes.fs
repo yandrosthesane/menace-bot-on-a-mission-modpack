@@ -66,7 +66,12 @@ type RouteContext = {
 /// Track current round for attaching movement data to render jobs.
 let mutable private currentRound = 0
 
-/// Send tile modifiers from the store to the bridge, then signal ready.
+/// Thread-safe actor position tracking. Updated atomically per-actor at turn-end.
+/// Snapshotted to the StateStore before each walker run.
+let private actorPosDict = System.Collections.Concurrent.ConcurrentDictionary<string, ActorPosState>()
+
+/// Send per-tile modifiers from the store to the bridge, then signal ready.
+/// One POST per actor containing all tile modifiers as a JSON array.
 let private flushTileModifiers (store: StateStore.StateStore) (httpClient: Net.Http.HttpClient) (commandUrl: string) =
     try
         // Clear previous modifiers
@@ -75,17 +80,23 @@ let private flushTileModifiers (store: StateStore.StateStore) (httpClient: Net.H
         // Read computed modifiers from store
         let modifiers = store.ReadOrDefault(tileModifiers, Map.empty)
         let mutable sent = 0
+        let mutable totalTiles = 0
         for kv in modifiers do
             let actor = kv.Key
-            let m = kv.Value
-            let json = sprintf """{"actor":"%s","add_utility":%g,"target_x":%d,"target_z":%d,"suppress_attack":%s}"""
-                        actor m.AddUtility m.TargetX m.TargetZ (if m.SuppressAttack then "true" else "false")
-            try
-                let content = new Net.Http.StringContent(json, Text.Encoding.UTF8, "application/json")
-                httpClient.PostAsync(sprintf "%s/tile-modifier" commandUrl, content).Result |> ignore
-                sent <- sent + 1
-            with _ -> ()
-        if sent > 0 then logInfo (sprintf "Flushed %d tile modifiers to bridge" sent)
+            let tileMap = kv.Value
+            if not (Map.isEmpty tileMap) then
+                let tilesJson =
+                    tileMap |> Map.toSeq |> Seq.map (fun (pos, utility) ->
+                        sprintf """{"x":%d,"z":%d,"u":%g}""" pos.X pos.Z utility)
+                    |> String.concat ","
+                let json = sprintf """{"actor":"%s","tiles":[%s]}""" actor tilesJson
+                try
+                    let content = new Net.Http.StringContent(json, Text.Encoding.UTF8, "application/json")
+                    httpClient.PostAsync(sprintf "%s/tile-modifier" commandUrl, content).Result |> ignore
+                    sent <- sent + 1
+                    totalTiles <- totalTiles + Map.count tileMap
+                with _ -> ()
+        if sent > 0 then logInfo (sprintf "Flushed %d actors (%d total tiles) to bridge" sent totalTiles)
     with ex -> logWarn (sprintf "flushTileModifiers error: %s" ex.Message)
 
     // Signal ready
@@ -129,6 +140,12 @@ let registerRoutes (app: WebApplication) (ctx: RouteContext) =
         if Config.Current.Heatmaps then
             RenderJobCollector.onRoundChange ActionLog.currentBattleDir factionState.Round ctx.BoamModDir ctx.IconBaseDir
         currentRound <- factionState.Round
+        // Store opponent positions for contact detection
+        let opponentPositions = factionState.Opponents |> List.map (fun o -> o.Position)
+        ctx.Store.Write(knownOpponents, opponentPositions)
+        // Reset HasActed for all actors at faction turn start (atomic per-key)
+        for kv in actorPosDict do
+            actorPosDict.[kv.Key] <- { kv.Value with HasActed = false }
         ctx.EventBus.Push(TurnStart(factionState.FactionIndex, factionState.Round))
         let result = Walker.run ctx.Registry ctx.Store OnTurnStart Prefix factionState logEngine
         logHook (sprintf "  walk: %d ran, %d skipped, %.1fms" result.NodesRun result.NodesSkipped result.ElapsedMs)
@@ -139,7 +156,73 @@ let registerRoutes (app: WebApplication) (ctx: RouteContext) =
         let! root = readJson req
         let round = match root.TryGetProperty("round") with | true, v -> v.GetInt32() | _ -> currentRound
         let faction = match root.TryGetProperty("faction") with | true, v -> v.GetInt32() | _ -> 0
-        logHook (sprintf "on-turn-end  faction=%d  round=%d" faction round)
+        let actor = match root.TryGetProperty("actor") with | true, v -> v.GetString() | _ -> ""
+        let tileX = match root.TryGetProperty("tile") with | true, t -> match t.TryGetProperty("x") with | true, v -> v.GetInt32() | _ -> 0 | _ -> 0
+        let tileZ = match root.TryGetProperty("tile") with | true, t -> match t.TryGetProperty("z") with | true, v -> v.GetInt32() | _ -> 0 | _ -> 0
+        logHook (sprintf "on-turn-end  faction=%d  round=%d  actor=%s  tile=(%d,%d)" faction round actor tileX tileZ)
+
+        // Parse actor status and write to store
+        try
+            let s = match root.TryGetProperty("status") with | true, v -> Some v | _ -> None
+            let skills =
+                match root.TryGetProperty("skills") with
+                | true, arr ->
+                    [ for sk in arr.EnumerateArray() ->
+                        { Name = match sk.TryGetProperty("name") with | true, v -> v.GetString() | _ -> ""
+                          ApCost = match sk.TryGetProperty("apCost") with | true, v -> v.GetInt32() | _ -> 0
+                          MinRange = match sk.TryGetProperty("minRange") with | true, v -> v.GetInt32() | _ -> 0
+                          MaxRange = match sk.TryGetProperty("maxRange") with | true, v -> v.GetInt32() | _ -> 0
+                          IdealRange = match sk.TryGetProperty("idealRange") with | true, v -> v.GetInt32() | _ -> 0 } ]
+                | _ -> []
+            let actorStatus : ActorStatus = {
+                Actor = actor
+                Faction = faction
+                Position = { X = tileX; Z = tileZ }
+                Ap = s |> Option.map (fun s -> match s.TryGetProperty("ap") with | true, v -> v.GetInt32() | _ -> 0) |> Option.defaultValue 0
+                ApStart = s |> Option.map (fun s -> match s.TryGetProperty("apStart") with | true, v -> v.GetInt32() | _ -> 0) |> Option.defaultValue 0
+                Hp = s |> Option.map (fun s -> match s.TryGetProperty("hp") with | true, v -> v.GetInt32() | _ -> 0) |> Option.defaultValue 0
+                HpMax = s |> Option.map (fun s -> match s.TryGetProperty("hpMax") with | true, v -> v.GetInt32() | _ -> 0) |> Option.defaultValue 0
+                Armor = s |> Option.map (fun s -> match s.TryGetProperty("armor") with | true, v -> v.GetInt32() | _ -> 0) |> Option.defaultValue 0
+                ArmorMax = s |> Option.map (fun s -> match s.TryGetProperty("armorMax") with | true, v -> v.GetInt32() | _ -> 0) |> Option.defaultValue 0
+                Vision = s |> Option.map (fun s -> match s.TryGetProperty("vision") with | true, v -> v.GetInt32() | _ -> 0) |> Option.defaultValue 0
+                Concealment = s |> Option.map (fun s -> match s.TryGetProperty("concealment") with | true, v -> v.GetInt32() | _ -> 0) |> Option.defaultValue 0
+                Morale = s |> Option.map (fun s -> match s.TryGetProperty("morale") with | true, v -> v.GetSingle() | _ -> 0f) |> Option.defaultValue 0f
+                MoraleMax = s |> Option.map (fun s -> match s.TryGetProperty("moraleMax") with | true, v -> v.GetSingle() | _ -> 0f) |> Option.defaultValue 0f
+                Suppression = s |> Option.map (fun s -> match s.TryGetProperty("suppression") with | true, v -> v.GetSingle() | _ -> 0f) |> Option.defaultValue 0f
+                IsStunned = s |> Option.map (fun s -> match s.TryGetProperty("isStunned") with | true, v -> v.GetBoolean() | _ -> false) |> Option.defaultValue false
+                IsDying = s |> Option.map (fun s -> match s.TryGetProperty("isDying") with | true, v -> v.GetBoolean() | _ -> false) |> Option.defaultValue false
+                HasActed = s |> Option.map (fun s -> match s.TryGetProperty("hasActed") with | true, v -> v.GetBoolean() | _ -> false) |> Option.defaultValue false
+                Skills = skills
+                Movement =
+                    match root.TryGetProperty("movement") with
+                    | true, m ->
+                        Some {
+                            Costs = match m.TryGetProperty("costs") with
+                                    | true, arr -> [| for c in arr.EnumerateArray() -> c.GetInt32() |]
+                                    | _ -> [||]
+                            TurningCost = match m.TryGetProperty("turningCost") with | true, v -> v.GetInt32() | _ -> 0
+                            LowestMovementCost = match m.TryGetProperty("lowestMovementCost") with | true, v -> v.GetInt32() | _ -> 0
+                            IsFlying = match m.TryGetProperty("isFlying") with | true, v -> v.GetBoolean() | _ -> false
+                        }
+                    | _ -> None
+            }
+            ctx.Store.Write(turnEndActor, actorStatus)
+            // Update actor position atomically (ConcurrentDictionary — no read-modify-write race)
+            let opponents = ctx.Store.ReadOrDefault(knownOpponents, [])
+            let actorPos : TilePos = { X = tileX; Z = tileZ }
+            let vision = actorStatus.Vision
+            let inContact =
+                opponents |> List.exists (fun op ->
+                    let dx = op.X - actorPos.X
+                    let dz = op.Z - actorPos.Z
+                    dx * dx + dz * dz <= vision * vision)
+            actorPosDict.[actor] <- { Position = actorPos; HasActed = true; InContact = inContact }
+        with ex -> logWarn (sprintf "  failed to parse actor status: %s" ex.Message)
+
+        // Snapshot positions to store for nodes to read
+        let posSnapshot = actorPosDict |> Seq.fold (fun acc kv -> acc |> Map.add kv.Key kv.Value) Map.empty
+        ctx.Store.Write(actorPositions, posSnapshot)
+
         // Build minimal faction state for the walker
         let factionState : FactionState = {
             FactionIndex = faction; IsAlliedWithPlayer = false
@@ -246,27 +329,54 @@ let registerRoutes (app: WebApplication) (ctx: RouteContext) =
                 | None -> logWarn "  no active battle — dramatis personae not saved"
             | _ -> logWarn "  no dramatis_personae in payload"
         with ex -> logWarn (sprintf "  failed to save dramatis personae: %s" ex.Message)
-        // Register AI actors in the store for behavior nodes
+        // Register AI actors and compute initial modifiers from dramatis_personae
         try
             match root.TryGetProperty("dramatis_personae") with
             | true, dp ->
                 let actors = ResizeArray()
+                let mutable initModifiers = Map.empty
+                let mutable initPositions = Map.empty
                 for item in dp.EnumerateArray() do
                     let faction = item.GetProperty("faction").GetInt32()
-                    if faction <> 1 then actors.Add(item.GetProperty("actor").GetString())
+                    if faction <> 1 then
+                        let actorId = item.GetProperty("actor").GetString()
+                        actors.Add(actorId)
+                        // Parse fixed data for initial modifier computation
+                        let x = match item.TryGetProperty("x") with | true, v -> v.GetInt32() | _ -> 0
+                        let z = match item.TryGetProperty("z") with | true, v -> v.GetInt32() | _ -> 0
+                        let posState = { Position = { X = x; Z = z }; HasActed = false; InContact = false }
+                        initPositions <- initPositions |> Map.add actorId posState
+                        actorPosDict.[actorId] <- posState
+                        let apStart = match item.TryGetProperty("apStart") with | true, v -> v.GetInt32() | _ -> 100
+                        let cheapestAttack =
+                            match item.TryGetProperty("skills") with
+                            | true, arr ->
+                                let mutable minCost = System.Int32.MaxValue
+                                for sk in arr.EnumerateArray() do
+                                    let cost = match sk.TryGetProperty("apCost") with | true, v -> v.GetInt32() | _ -> 0
+                                    if cost > 0 && cost < minCost then minCost <- cost
+                                if minCost = System.Int32.MaxValue then 0 else minCost
+                            | _ -> 0
+                        let lowestMoveCost =
+                            match item.TryGetProperty("movement") with
+                            | true, m -> match m.TryGetProperty("lowestMovementCost") with | true, v -> v.GetInt32() | _ -> 16
+                            | _ -> 16
+                        let costPerTile = if lowestMoveCost > 0 then lowestMoveCost else 16
+                        let moveBudget = apStart - cheapestAttack
+                        let maxDist = if costPerTile > 0 then moveBudget / costPerTile else 3
+                        // Compute per-tile modifiers from starting position
+                        let tileMap = Nodes.RoamingBehaviour.computeTileModifiers { X = x; Z = z } maxDist
+                        initModifiers <- initModifiers |> Map.add actorId tileMap
+                        logEngine (sprintf "  %s at (%d,%d) ap=%d atk=%d cost=%d maxDist=%d → %d tiles"
+                            actorId x z apStart cheapestAttack costPerTile maxDist (Map.count tileMap))
+
                 ctx.Store.Write(aiActors, actors.ToArray())
-                logInfo (sprintf "Registered %d AI actors in store" actors.Count)
-                // Run OnTurnEnd nodes for round 1 so modifiers are ready before first AI turn
-                let initState : FactionState = {
-                    FactionIndex = FactionType.Player; IsAlliedWithPlayer = true
-                    Opponents = []; Actors = []; Round = 1
-                }
-                let result = Walker.run ctx.Registry ctx.Store OnTurnEnd Prefix initState logEngine
+                ctx.Store.Write(actorPositions, initPositions)
+                ctx.Store.Write(tileModifiers, initModifiers)
+                logInfo (sprintf "Registered %d AI actors, computed initial modifiers" actors.Count)
                 flushTileModifiers ctx.Store ctx.HttpClient ctx.CommandUrl
-                if result.NodesRun > 0 then
-                    logInfo (sprintf "Initial tile modifiers: %d nodes ran" result.NodesRun)
             | _ -> ()
-        with _ -> ()
+        with ex -> logWarn (sprintf "tactical-ready init error: %s" ex.Message)
         ctx.EventBus.Push(TacticalReady)
         return Results.Ok({| hook = "tactical-ready" |})
     })) |> ignore

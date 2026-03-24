@@ -1,35 +1,17 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Text.Json;
 
 namespace BOAM;
 
 /// <summary>
-/// Centralized store of per-actor tile score modifiers.
-/// The F# engine sends modifiers via the command server; PostProcessTileScores applies them.
-/// One combined modifier per actor — multiple sources combine in the engine before sending.
+/// Per-actor, per-tile utility modifiers. The F# engine sends tile maps via the command server;
+/// PostProcessTileScores applies them. Simple lookup — all logic lives in the engine.
 /// </summary>
 static class TileModifierStore
 {
-    /// <summary>
-    /// A tile modifier applied during PostProcessTileScores.
-    /// AddUtility: added to UtilityScore and UtilityScoreScaled.
-    /// MultCombined: multiplied against the combined score.
-    /// MinDistance: only apply to tiles at this distance or further from current tile.
-    /// MaxDistance: only apply to tiles at this distance or closer (0 = no limit).
-    /// </summary>
-    internal struct TileModifier
-    {
-        public float AddUtility;
-        public float MultCombined;
-        public float MinDistance;
-        public float MaxDistance;
-        public int TargetX;    // -1 = no target tile (apply to all in range)
-        public int TargetZ;
-        public bool SuppressAttack; // zero out all attack/skill behavior scores
-    }
-
-    private static readonly ConcurrentDictionary<string, TileModifier> _store = new();
+    private static readonly ConcurrentDictionary<string, Dictionary<(int x, int z), float>> _store = new();
     private static readonly System.Threading.ManualResetEventSlim _ready = new(true);
 
     /// <summary>Block until the engine signals modifiers are ready.</summary>
@@ -50,19 +32,9 @@ static class TileModifierStore
         _ready.Set();
     }
 
-    internal static void Set(string actorUuid, TileModifier modifier)
+    internal static bool TryGet(string actorUuid, out Dictionary<(int x, int z), float> tileMap)
     {
-        _store[actorUuid] = modifier;
-    }
-
-    internal static bool TryGet(string actorUuid, out TileModifier modifier)
-    {
-        return _store.TryGetValue(actorUuid, out modifier);
-    }
-
-    internal static void Remove(string actorUuid)
-    {
-        _store.TryRemove(actorUuid, out _);
+        return _store.TryGetValue(actorUuid, out tileMap);
     }
 
     internal static void Clear()
@@ -70,6 +42,10 @@ static class TileModifierStore
         _store.Clear();
     }
 
+    /// <summary>
+    /// Parse per-actor tile modifier map from JSON.
+    /// Format: {"actor":"uuid", "tiles":[{"x":1,"z":2,"u":150.0}, ...]}
+    /// </summary>
     internal static void SetFromJson(string json)
     {
         try
@@ -80,18 +56,19 @@ static class TileModifierStore
             var actor = root.GetProperty("actor").GetString();
             if (string.IsNullOrEmpty(actor)) return;
 
-            var mod = new TileModifier
+            var tileMap = new Dictionary<(int, int), float>();
+            if (root.TryGetProperty("tiles", out var tilesArr))
             {
-                AddUtility = root.TryGetProperty("add_utility", out var au) ? au.GetSingle() : 0f,
-                MultCombined = root.TryGetProperty("mult_combined", out var mc) ? mc.GetSingle() : 1f,
-                MinDistance = root.TryGetProperty("min_distance", out var mn) ? mn.GetSingle() : 0f,
-                MaxDistance = root.TryGetProperty("max_distance", out var mx) ? mx.GetSingle() : 0f,
-                TargetX = root.TryGetProperty("target_x", out var tx) ? tx.GetInt32() : -1,
-                TargetZ = root.TryGetProperty("target_z", out var tz) ? tz.GetInt32() : -1,
-                SuppressAttack = root.TryGetProperty("suppress_attack", out var sa) && sa.GetBoolean(),
-            };
+                foreach (var tile in tilesArr.EnumerateArray())
+                {
+                    int x = tile.GetProperty("x").GetInt32();
+                    int z = tile.GetProperty("z").GetInt32();
+                    float u = tile.GetProperty("u").GetSingle();
+                    tileMap[(x, z)] = u;
+                }
+            }
 
-            _store[actor] = mod;
+            _store[actor] = tileMap;
         }
         catch (Exception ex)
         {

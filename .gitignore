@@ -14,4 +14,4 @@ boam_tactical_engine/assets/
 .publish-engine/
 .publish-icons/
 /.claude/
-/docs/next/*.mkv
+*.mkv

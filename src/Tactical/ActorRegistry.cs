@@ -78,7 +78,7 @@ internal static class ActorRegistry
     internal static System.Collections.Generic.List<object> BuildDramatisPersonae(MelonLogger.Instance log)
     {
         var result = new System.Collections.Generic.List<object>();
-        var entries = new System.Collections.Generic.List<(int entityId, string template, int faction, string leader, int x, int z, bool isAlive)>();
+        var entries = new System.Collections.Generic.List<(int entityId, string template, int faction, string leader, int x, int z, bool isAlive, IntPtr pointer)>();
 
         try
         {
@@ -108,7 +108,7 @@ internal static class ActorRegistry
                 catch { }
 
                 entries.Add((info.EntityId, templateName, info.FactionIndex,
-                    leaderName.ToLowerInvariant(), pos?.x ?? 0, pos?.y ?? 0, info.IsAlive));
+                    leaderName.ToLowerInvariant(), pos?.x ?? 0, pos?.y ?? 0, info.IsAlive, actor.Pointer));
             }
         }
         catch (Exception ex)
@@ -142,6 +142,43 @@ internal static class ActorRegistry
                 newEntityToUuid[e.entityId] = uuid;
                 newUuidToEntity[uuid] = e.entityId;
 
+                // Gather fixed per-actor data (movement costs, AP, skills)
+                int apStart = 0;
+                var skillList = new System.Collections.Generic.List<object>();
+                var movementCosts = new System.Collections.Generic.List<int>();
+                int turningCost = 0, lowestMovementCost = 0;
+                bool isFlying = false;
+                try
+                {
+                    var actorObj = new Il2CppMenace.Tactical.Actor(e.pointer);
+                    apStart = actorObj.GetActionPointsAtTurnStart();
+                    var attacks = actorObj.GetAllAttacks();
+                    if (attacks != null)
+                        for (int si = 0; si < attacks.Count; si++)
+                        {
+                            var skill = attacks[si];
+                            if (skill != null)
+                                skillList.Add(new { name = skill.GetID() ?? "", apCost = skill.GetActionPointCost(),
+                                    minRange = skill.GetMinRange(), maxRange = skill.GetMaxRange() });
+                        }
+                }
+                catch { }
+                try
+                {
+                    var entityObj = new Il2CppMenace.Tactical.Entity(e.pointer);
+                    var movType = entityObj.GetTemplate()?.MovementType;
+                    if (movType != null)
+                    {
+                        if (movType.m_MovementCosts != null)
+                            for (int ci = 0; ci < movType.m_MovementCosts.Length; ci++)
+                                movementCosts.Add((int)movType.m_MovementCosts[ci]);
+                        turningCost = (int)movType.m_TurningCost;
+                        lowestMovementCost = movType.GetLowestMovementCost();
+                        isFlying = movType.Flying;
+                    }
+                }
+                catch { }
+
                 result.Add(new
                 {
                     actor = uuid,
@@ -150,7 +187,10 @@ internal static class ActorRegistry
                     leader = e.leader,
                     x = e.x,
                     z = e.z,
-                    isAlive = e.isAlive
+                    isAlive = e.isAlive,
+                    apStart,
+                    skills = skillList,
+                    movement = new { costs = movementCosts, turningCost, lowestMovementCost, isFlying }
                 });
             }
         }

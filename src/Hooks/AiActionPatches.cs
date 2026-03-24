@@ -20,6 +20,39 @@ static class AiActionPatches
         && factionId != (int)Menace.SDK.FactionType.PlayerAI;
 
     /// <summary>
+    /// Gathers movement cost table from the actor's MovementType template.
+    /// Spreads results into the payload dictionary.
+    /// </summary>
+    private static void GatherMovementData(Actor actor, Entity entity, string actorUuid,
+        System.Collections.Generic.Dictionary<string, object> payload)
+    {
+        try
+        {
+            var movType = entity.GetTemplate()?.MovementType;
+            if (movType != null)
+            {
+                var costs = new System.Collections.Generic.List<int>();
+                if (movType.m_MovementCosts != null)
+                {
+                    for (int i = 0; i < movType.m_MovementCosts.Length; i++)
+                        costs.Add((int)movType.m_MovementCosts[i]);
+                }
+                payload["movement"] = new
+                {
+                    costs,
+                    turningCost = (int)movType.m_TurningCost,
+                    lowestMovementCost = movType.GetLowestMovementCost(),
+                    isFlying = movType.Flying
+                };
+            }
+        }
+        catch (Exception ex)
+        {
+            BoamBridge.Logger.Warning($"[BOAM] MovementType read failed for {actorUuid}: {ex.Message}");
+        }
+    }
+
+    /// <summary>
     /// InvokeOnMovementFinished(Actor, Tile) — AI actor finished moving.
     /// </summary>
     public static void OnMovementFinished(Actor _actor, Tile _to)
@@ -125,14 +158,78 @@ static class AiActionPatches
 
             int round = bridge.Round;
 
-            // Notify engine of turn end (all factions)
-            var turnEndPayload = JsonSerializer.Serialize(new
+            // Gather actor status
+            var entity = new Il2CppMenace.Tactical.Entity(gameObj.Pointer);
+            var actor = new Il2CppMenace.Tactical.Actor(gameObj.Pointer);
+            int ap = 0, apStart = 0, hp = 0, hpMax = 0, armor = 0, armorMax = 0;
+            int vision = 0, concealment = 0;
+            float morale = 0, moraleMax = 0, suppression = 0;
+            bool isStunned = false, isDying = false, hasActed = false;
+            try { ap = actor.GetActionPoints(); } catch { }
+            try { apStart = actor.GetActionPointsAtTurnStart(); } catch { }
+            try { hp = entity.GetHitpoints(); } catch { }
+            try { hpMax = entity.GetHitpointsMax(); } catch { }
+            try { armor = entity.GetArmorDurability(); } catch { }
+            try { armorMax = entity.GetArmorDurabilityMax(); } catch { }
+            try { vision = Menace.SDK.LineOfSight.GetVision(gameObj); } catch { }
+            try { morale = actor.GetMorale(); } catch { }
+            try { moraleMax = actor.GetMoraleMax(); } catch { }
+            try { suppression = actor.GetSuppression(); } catch { }
+            try { isStunned = actor.IsStunned(); } catch { }
+            try { isDying = actor.IsDying(); } catch { }
+            try { hasActed = actor.HasActed(); } catch { }
+            try
             {
-                round,
-                faction = factionId,
-                actor = actorUuid,
-                tile = new { x = tileX, z = tileZ }
-            });
+                var props = entity.GetTemplate()?.Properties;
+                if (props != null) concealment = props.GetConcealment();
+            }
+            catch { }
+
+            // Gather skills
+            var skillList = new System.Collections.Generic.List<object>();
+            try
+            {
+                var attacks = actor.GetAllAttacks();
+                if (attacks != null)
+                {
+                    for (int i = 0; i < attacks.Count; i++)
+                    {
+                        var skill = attacks[i];
+                        if (skill == null) continue;
+                        skillList.Add(new
+                        {
+                            name = skill.GetID() ?? "",
+                            apCost = skill.GetActionPointCost(),
+                            minRange = skill.GetMinRange(),
+                            maxRange = skill.GetMaxRange(),
+                            idealRange = skill.GetIdealRange()
+                        });
+                    }
+                }
+            }
+            catch { }
+
+            // Build payload as dictionary so gatherers can spread fields into it
+            var turnEndData = new System.Collections.Generic.Dictionary<string, object>
+            {
+                ["round"] = round,
+                ["faction"] = factionId,
+                ["actor"] = actorUuid,
+                ["tile"] = new { x = tileX, z = tileZ },
+                ["status"] = new
+                {
+                    ap, apStart, hp, hpMax, armor, armorMax,
+                    vision, concealment,
+                    morale, moraleMax, suppression,
+                    isStunned, isDying, hasActed
+                },
+                ["skills"] = skillList
+            };
+
+            // Optional data gatherers spread their fields into the payload
+            GatherMovementData(actor, entity, actorUuid, turnEndData);
+
+            var turnEndPayload = JsonSerializer.Serialize(turnEndData);
             TileModifierStore.SetPending();
             ThreadPool.QueueUserWorkItem(_ => EngineClient.Post("/hook/on-turn-end", turnEndPayload));
 

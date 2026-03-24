@@ -1,3 +1,4 @@
+
 # BOAM — Bot On A Mission
 
 **v1.3.0** | [Documentation](https://yandrosthesane.github.io/menace-bot-on-a-mission-modpack) | [Changelog](docs/features/CHANGELOG.md)

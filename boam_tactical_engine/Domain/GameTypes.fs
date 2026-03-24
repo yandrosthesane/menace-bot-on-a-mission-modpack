@@ -56,13 +56,52 @@ type FactionState = {
     Round: int
 }
 
-/// A tile modifier sent to the bridge to influence AI movement scoring.
-type TileModifier = {
-    TargetX: int
-    TargetZ: int
-    AddUtility: float32
-    SuppressAttack: bool
+/// Skill info for an actor.
+type SkillInfo = {
+    Name: string
+    ApCost: int
+    MinRange: int
+    MaxRange: int
+    IdealRange: int
 }
+
+/// Movement cost data from the actor's MovementType template.
+type MovementData = {
+    Costs: int array          // AP cost per surface type (14 entries, indexed by SurfaceType)
+    TurningCost: int
+    LowestMovementCost: int
+    IsFlying: bool
+}
+
+/// Full actor status received at turn end.
+type ActorStatus = {
+    Actor: string
+    Faction: int
+    Position: TilePos
+    Ap: int
+    ApStart: int
+    Hp: int
+    HpMax: int
+    Armor: int
+    ArmorMax: int
+    Vision: int
+    Concealment: int
+    Morale: float32
+    MoraleMax: float32
+    Suppression: float32
+    IsStunned: bool
+    IsDying: bool
+    HasActed: bool
+    Skills: SkillInfo list
+    Movement: MovementData option
+}
+
+/// Tracked position, acted state, and contact state for pack behaviour.
+type ActorPosState = { Position: TilePos; HasActed: bool; InContact: bool }
+
+/// Per-tile utility modifiers for an actor, sent to the bridge.
+/// Key = tile position, Value = utility bonus to add.
+type TileModifierMap = Map<TilePos, float32>
 
 /// Tile score components as evaluated by the AI's ConsiderZones.
 type TileScoreInfo = {

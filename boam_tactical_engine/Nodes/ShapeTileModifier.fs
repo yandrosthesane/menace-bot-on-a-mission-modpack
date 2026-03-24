@@ -56,7 +56,8 @@ let node : NodeDef = {
             let modifiers =
                 [ for i in 0 .. count - 1 do
                     let (tx, tz) = targets.[i]
-                    actors.[i], { TargetX = tx; TargetZ = tz; AddUtility = 20000f; SuppressAttack = true } ]
+                    // Single-tile target: high utility on the target tile only
+                    actors.[i], (Map.ofList [ { X = tx; Z = tz }, 20000f ]) ]
                 |> Map.ofList
             ctx |> NodeContext.write tileModifiers modifiers
             ctx.Log (sprintf "shape %s → %d actors (round %d)" shapeNames.[idx] count round)
