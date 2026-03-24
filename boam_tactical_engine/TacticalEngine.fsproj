@@ -22,6 +22,8 @@
     <Compile Include="Boundary/ActionLog.fs" />
     <Compile Include="Boundary/HookPayload.fs" />
     <Compile Include="Boundary/EventBus.fs" />
+    <Compile Include="Boundary/MessagingClient.fs" />
+    <Compile Include="Boundary/Messaging.fs" />
 
     <!-- NodeSystem: behavior graph framework (state keys, store, nodes, walker) -->
     <Compile Include="NodeSystem/StateKey.fs" />

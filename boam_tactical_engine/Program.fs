@@ -231,6 +231,16 @@ let main argv =
 
     registerRoutes app routeCtx
 
+    // Symmetric protocol: /query + /command (coexists with old routes during migration)
+    let commandUrl = sprintf "http://127.0.0.1:%d" Config.Current.CommandPort
+    MessagingClient.init routeCtx.HttpClient commandUrl
+
+    // Register a test query handler to verify the protocol works
+    Messaging.addQueryHandler "status" (fun _ ->
+        Microsoft.AspNetCore.Http.Results.Ok({| engine = sprintf "BOAM Tactical Engine v%s" version; protocol = "query-command" |}) :> Microsoft.AspNetCore.Http.IResult)
+
+    Messaging.registerRoutes app
+
     let listenUrl = sprintf "http://127.0.0.1:%d" port
     logInfo (sprintf "Listening on %s" (cyan listenUrl))
     logInfo "Waiting for game plugin..."
