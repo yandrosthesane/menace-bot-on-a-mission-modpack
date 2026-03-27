@@ -57,7 +57,7 @@ static class Patch_Diagnostics
                     durationMs = actualMs
                 });
                 _pendingPlayerSkill = null;
-                System.Threading.ThreadPool.QueueUserWorkItem(_ => EngineClient.Post("/hook/skill-complete", payload));
+                System.Threading.ThreadPool.QueueUserWorkItem(_ => QueryCommandClient.Hook("skill-complete", payload));
             }
         }
         catch { }

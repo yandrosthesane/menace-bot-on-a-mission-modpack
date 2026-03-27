@@ -45,7 +45,8 @@ public class BoamBridge : IModpackPlugin
 
     /// <summary>Tactical scene ready AND engine is connected (for hooks that POST to the engine).</summary>
     public bool IsEngineReady => _ready && _engineAvailable;
-    private BoamCommandServer _commandServer;
+    private QueryCommandServer _commandServer;
+    private readonly System.Collections.Concurrent.ConcurrentQueue<BoamCommandServer.ActionCommand> _executeQueue = new();
     private float _nextCommandTime;
     private TacticalMap.TacticalMapOverlay _tacticalMap;
 
@@ -256,8 +257,34 @@ public class BoamBridge : IModpackPlugin
             Logger.Error($"[BOAM] Element hit patch failed: {ex.Message}");
         }
 
-        // Start command server for receiving actions from tactical engine
-        _commandServer = new BoamCommandServer(Logger);
+        // Start command server (symmetric protocol: /query + /command)
+        _commandServer = new QueryCommandServer(Logger, BoamCommandServer.Port);
+        // Register old command handlers as command types
+        _commandServer.AddCommandHandler("tile-modifier", root => {
+            TileModifierStore.SetFromJson(root.GetRawText());
+            return "{\"status\":\"ok\"}";
+        });
+        _commandServer.AddCommandHandler("tile-modifier-clear", _ => {
+            TileModifierStore.Clear();
+            return "{\"status\":\"cleared\"}";
+        });
+        _commandServer.AddCommandHandler("tile-modifier-ready", _ => {
+            TileModifierStore.SetReady();
+            return "{\"status\":\"ready\"}";
+        });
+        _commandServer.AddCommandHandler("execute", root => {
+            var action = root.TryGetProperty("action", out var a) ? a.GetString() ?? "" : "";
+            var x = root.TryGetProperty("x", out var xv) ? xv.GetInt32() : 0;
+            var z = root.TryGetProperty("z", out var zv) ? zv.GetInt32() : 0;
+            var skill = root.TryGetProperty("skill", out var sv) ? sv.GetString() ?? "" : "";
+            var actor = root.TryGetProperty("actor", out var av) ? av.GetString() ?? "" : "";
+            var delayMs = root.TryGetProperty("delay_ms", out var dv) ? dv.GetInt32() : 0;
+            _executeQueue.Enqueue(new BoamCommandServer.ActionCommand {
+                Action = action, X = x, Z = z, Skill = skill, Actor = actor, DelayMs = delayMs
+            });
+            Logger.Msg($"[BOAM] Command queued: {action} ({x},{z}) {skill}");
+            return JsonSerializer.Serialize(new { status = "queued", action, x, z, skill });
+        });
         _commandServer.Start();
 
         // Load modpack config (independent from engine)
@@ -287,7 +314,7 @@ public class BoamBridge : IModpackPlugin
         if (_engineAvailable && !string.IsNullOrEmpty(sceneName))
         {
             var scenePayload = JsonSerializer.Serialize(new { scene = sceneName });
-            ThreadPool.QueueUserWorkItem(_ => EngineClient.Post("/hook/scene-change", scenePayload));
+            ThreadPool.QueueUserWorkItem(_ => QueryCommandClient.Hook("scene-change", scenePayload));
         }
 
         _tacticalMap?.OnSceneLoaded(sceneName);
@@ -300,14 +327,14 @@ public class BoamBridge : IModpackPlugin
             // Tell the tactical engine about the battle session (dir already created at OnPreviewReady)
             var sessionDir = TacticalMap.TacticalMapState.BattleSessionDir ?? "";
             var startPayload = JsonSerializer.Serialize(new { sessionDir });
-            ThreadPool.QueueUserWorkItem(_ => EngineClient.Post("/hook/battle-start", startPayload));
+            ThreadPool.QueueUserWorkItem(_ => QueryCommandClient.Hook("battle-start", startPayload));
         }
         else
         {
             if (_inTactical)
             {
                 // End battle session when leaving tactical
-                ThreadPool.QueueUserWorkItem(_ => EngineClient.Post("/hook/battle-end", "{}"));
+                ThreadPool.QueueUserWorkItem(_ => QueryCommandClient.Hook("battle-end", "{}"));
                 TacticalMap.TacticalMapState.Reset();
             }
             _inTactical = false;
@@ -335,18 +362,15 @@ public class BoamBridge : IModpackPlugin
             if (_engineAvailable)
             {
                 var payload = JsonSerializer.Serialize(new { dramatis_personae = dp });
-                ThreadPool.QueueUserWorkItem(_ => EngineClient.Post("/hook/tactical-ready", payload));
+                ThreadPool.QueueUserWorkItem(_ => QueryCommandClient.Hook("tactical-ready", payload));
             }
         }
 
-        // Drain command server queue
-        if (_commandServer != null && UnityEngine.Time.time >= _nextCommandTime)
+        // Drain execute command queue
+        if (UnityEngine.Time.time >= _nextCommandTime && _executeQueue.TryDequeue(out var cmd))
         {
-            if (_commandServer.TryDequeue(out var cmd))
-            {
-                BoamCommandExecutor.Execute(cmd, Logger);
-                _nextCommandTime = UnityEngine.Time.time + (cmd.DelayMs / 1000f);
-            }
+            BoamCommandExecutor.Execute(cmd, Logger);
+            _nextCommandTime = UnityEngine.Time.time + (cmd.DelayMs / 1000f);
         }
     }
 
@@ -358,31 +382,33 @@ public class BoamBridge : IModpackPlugin
 
         for (int attempt = 1; attempt <= maxRetries; attempt++)
         {
+            if (_engineAvailable) return; // another thread already connected
+
             Logger.Msg($"[BOAM] Checking tactical engine (attempt {attempt}/{maxRetries})");
 
-            var json = EngineClient.Get("/status");
+            var json = QueryCommandClient.Query("status");
             if (json != null)
             {
-                try
-                {
-                    var doc = JsonSerializer.Deserialize<JsonElement>(json);
-                    var status = doc.GetProperty("status").GetString();
-                    Logger.Msg($"[BOAM] Tactical engine found (status: {status})");
+                Logger.Msg("[BOAM] Tactical engine connected");
 
-                    // Parse feature flags from engine
-                    if (doc.TryGetProperty("features", out var features))
+                // Fetch feature flags from separate endpoint
+                var featJson = QueryCommandClient.Query("features");
+                if (featJson != null)
+                {
+                    try
                     {
+                        var features = JsonSerializer.Deserialize<JsonElement>(featJson);
                         CriterionLogging = features.TryGetProperty("criterionLogging", out var cl) && cl.GetBoolean();
                         HeatmapsEnabled = features.TryGetProperty("heatmaps", out var hm) && hm.GetBoolean();
                         ActionLoggingEnabled = features.TryGetProperty("actionLogging", out var al) && al.GetBoolean();
                         AiLoggingEnabled = features.TryGetProperty("aiLogging", out var ai) && ai.GetBoolean();
                         Logger.Msg($"[BOAM] Features: criterion={CriterionLogging} heatmaps={HeatmapsEnabled} actions={ActionLoggingEnabled} ai={AiLoggingEnabled}");
                     }
-
-                    _engineAvailable = true;
-                    return;
+                    catch { }
                 }
-                catch { }
+
+                _engineAvailable = true;
+                return;
             }
 
             if (attempt < maxRetries)

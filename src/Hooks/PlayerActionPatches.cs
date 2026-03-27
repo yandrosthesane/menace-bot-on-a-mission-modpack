@@ -67,7 +67,7 @@ static class Patch_EndTurn
             });
 
             BoamBridge.Logger.Msg($"[BOAM] player-action {actorUuid}: endturn at ({tileX},{tileZ})");
-            EngineClient.Post("/hook/player-action", payload);
+            QueryCommandClient.Hook("player-action", payload);
         }
         catch (Exception ex)
         {
@@ -99,7 +99,7 @@ static class Patch_PreviewReady
             BoamBridge.Logger.Msg("[BOAM] Mission preview ready — capturing map data");
 
             // Always notify engine (even before IsReady — needed for navigation)
-            ThreadPool.QueueUserWorkItem(_ => EngineClient.Post("/hook/preview-ready", "{}"));
+            ThreadPool.QueueUserWorkItem(_ => QueryCommandClient.Hook("preview-ready", "{}"));
 
             // Write immediately — LaunchMission will re-capture if needed
             Patch_LaunchMission.CaptureMapData(__instance, _result);
@@ -277,7 +277,7 @@ static class Patch_ActiveActorChanged
             if (_activeActor == null)
             {
                 if (bridge.IsEngineReady)
-                    ThreadPool.QueueUserWorkItem(_ => EngineClient.Post("/hook/actor-changed",
+                    ThreadPool.QueueUserWorkItem(_ => QueryCommandClient.Hook("actor-changed",
                         JsonSerializer.Serialize(new { actor = "", faction = 0, x = 0, z = 0 })));
                 return;
             }
@@ -305,7 +305,7 @@ static class Patch_ActiveActorChanged
             });
 
             BoamBridge.Logger.Msg($"[BOAM] active-actor-changed: {actorUuid} r={round} at ({px},{pz})");
-            ThreadPool.QueueUserWorkItem(_ => EngineClient.Post("/hook/actor-changed", payload));
+            ThreadPool.QueueUserWorkItem(_ => QueryCommandClient.Hook("actor-changed", payload));
 
             // Log select primitive for player factions
             if (factionId == 1 || factionId == 2)
@@ -321,7 +321,7 @@ static class Patch_ActiveActorChanged
                     tile = new { x = px, z = pz }
                 });
                 BoamBridge.Logger.Msg($"[BOAM] player-action {actorUuid}: select");
-                ThreadPool.QueueUserWorkItem(_ => EngineClient.Post("/hook/player-action", selectPayload));
+                ThreadPool.QueueUserWorkItem(_ => QueryCommandClient.Hook("player-action", selectPayload));
             }
         }
         catch { }
@@ -375,7 +375,7 @@ static class Patch_ClickOnTile
             });
 
             BoamBridge.Logger.Msg($"[BOAM] player-action {actorUuid}: click ({tileX},{tileZ})");
-            EngineClient.Post("/hook/player-action", payload);
+            QueryCommandClient.Hook("player-action", payload);
         }
         catch { }
     }
@@ -426,7 +426,7 @@ static class Patch_SelectSkill
             Patch_Diagnostics.StartPlayerSkillTimer(actorUuid, skillName);
 
             BoamBridge.Logger.Msg($"[BOAM] player-action {actorUuid}: useskill {skillName}");
-            EngineClient.Post("/hook/player-action", payload);
+            QueryCommandClient.Hook("player-action", payload);
         }
         catch { }
     }

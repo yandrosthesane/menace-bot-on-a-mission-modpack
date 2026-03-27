@@ -84,7 +84,7 @@ static class AiActionPatches
             });
 
             BoamBridge.Logger.Msg($"[BOAM] ai-action {actorUuid}: ai_move ({tileX},{tileZ})");
-            ThreadPool.QueueUserWorkItem(_ => EngineClient.Post("/hook/ai-action", payload));
+            ThreadPool.QueueUserWorkItem(_ => QueryCommandClient.Hook("ai-action", payload));
         }
         catch (Exception ex)
         {
@@ -127,7 +127,7 @@ static class AiActionPatches
             });
 
             BoamBridge.Logger.Msg($"[BOAM] ai-action {actorUuid}: ai_useskill {skillName} ({tileX},{tileZ})");
-            ThreadPool.QueueUserWorkItem(_ => EngineClient.Post("/hook/ai-action", payload));
+            ThreadPool.QueueUserWorkItem(_ => QueryCommandClient.Hook("ai-action", payload));
         }
         catch (Exception ex)
         {
@@ -231,7 +231,7 @@ static class AiActionPatches
 
             var turnEndPayload = JsonSerializer.Serialize(turnEndData);
             TileModifierStore.SetPending();
-            ThreadPool.QueueUserWorkItem(_ => EngineClient.Post("/hook/on-turn-end", turnEndPayload));
+            ThreadPool.QueueUserWorkItem(_ => QueryCommandClient.Hook("on-turn-end", turnEndPayload));
 
             // AI action logging (AI factions only)
             if (IsAiFaction(factionId))
@@ -246,7 +246,7 @@ static class AiActionPatches
                     skillName = "",
                     tile = new { x = tileX, z = tileZ }
                 });
-                ThreadPool.QueueUserWorkItem(_ => EngineClient.Post("/hook/ai-action", payload));
+                ThreadPool.QueueUserWorkItem(_ => QueryCommandClient.Hook("ai-action", payload));
             }
         }
         catch (Exception ex)
@@ -353,7 +353,7 @@ static class AiActionPatches
             });
 
             BoamBridge.Logger.Msg($"[BOAM] element_hit {attackerUuid} → {targetUuid}[{elementIndex}]: {_damageAppliedToElement}dmg ehp={elementHpAfter} uhp={unitHp} sup={unitSuppression:F1} mor={unitMorale:F1} armor={unitArmorDurability}");
-            ThreadPool.QueueUserWorkItem(_ => EngineClient.Post("/hook/combat-outcome", payload));
+            ThreadPool.QueueUserWorkItem(_ => QueryCommandClient.Hook("combat-outcome", payload));
         }
         catch (Exception ex)
         {

@@ -22,6 +22,8 @@
       "src/Engine/CommandServer.cs",
       "src/Engine/CommandExecutor.cs",
       "src/Engine/TileModifierStore.cs",
+      "src/Engine/QueryCommandServer.cs",
+      "src/Engine/QueryCommandClient.cs",
       "src/Hooks/AiObservationPatches.cs",
       "src/Hooks/AiActionPatches.cs",
       "src/Hooks/PlayerActionPatches.cs",

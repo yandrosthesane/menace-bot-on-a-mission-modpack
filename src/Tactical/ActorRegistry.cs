@@ -166,7 +166,12 @@ internal static class ActorRegistry
                 try
                 {
                     var entityObj = new Il2CppMenace.Tactical.Entity(e.pointer);
-                    var movType = entityObj.GetTemplate()?.MovementType;
+                    var template = entityObj.GetTemplate();
+                    // GetActionPointsAtTurnStart() returns 0 for factions whose turn hasn't started yet;
+                    // fall back to the template's base AP
+                    if (apStart == 0 && template?.Properties != null)
+                        apStart = template.Properties.ActionPoints;
+                    var movType = template?.MovementType;
                     if (movType != null)
                     {
                         if (movType.m_MovementCosts != null)

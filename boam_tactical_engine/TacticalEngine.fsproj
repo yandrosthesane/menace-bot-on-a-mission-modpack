@@ -47,8 +47,10 @@
     <Compile Include="Nodes/RoamingBehaviour.fs" />
     <Compile Include="Nodes/PackBehaviour.fs" />
 
-    <!-- Composition root -->
+    <!-- Composition root (old routes, being migrated) -->
     <Compile Include="Routes.fs" />
+    <!-- Hook dispatch (new protocol — after Routes.fs for RouteContext access) -->
+    <Compile Include="Boundary/HookHandlers.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 

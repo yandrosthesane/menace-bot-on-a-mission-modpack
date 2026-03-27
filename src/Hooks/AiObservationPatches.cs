@@ -71,7 +71,7 @@ static class Patch_OnTurnStart
                 opponents = oppList
             });
 
-            var response = EngineClient.Post("/hook/on-turn-start", payload);
+            var response = QueryCommandClient.Hook("on-turn-start", payload);
             if (response != null)
             {
                 BoamBridge.Logger.Msg($"[BOAM] on-turn-start f{factionIdx} r{round}: engine OK ({response.Length}b, {oppList.Count} opponents)");
@@ -290,7 +290,7 @@ static class Patch_PostProcessTileScores
             var json = payload;
             ThreadPool.QueueUserWorkItem(_ =>
             {
-                var response = EngineClient.Post("/hook/tile-scores", json);
+                var response = QueryCommandClient.Hook("tile-scores", json);
                 if (response != null)
                     BoamBridge.Logger.Msg($"[BOAM] tile-scores f{factionId} {actorUuid}: {tileList.Count} tiles");
             });
@@ -339,7 +339,7 @@ static class Patch_MovementFinished
             });
 
             BoamBridge.Logger.Msg($"[BOAM] movement-finished {actorUuid} tile=({tileX},{tileZ})");
-            EngineClient.Post("/hook/movement-finished", payload);
+            QueryCommandClient.Hook("movement-finished", payload);
         }
         catch (Exception ex)
         {
@@ -494,7 +494,7 @@ static class Patch_AgentExecute
             });
 
             BoamBridge.Logger.Msg($"[BOAM] action-decision {actorUuid}: {chosenName}({chosenScore})");
-            EngineClient.Post("/hook/action-decision", payload);
+            QueryCommandClient.Hook("action-decision", payload);
         }
         catch (Exception ex)
         {

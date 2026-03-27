@@ -13,11 +13,12 @@ PORT=7660
 LOG_DIR="$SCRIPT_DIR/logs"
 LOG_FILE="$LOG_DIR/tactical_engine.log"
 
-# Stop any existing instance
+# Stop any existing instance — try HTTP shutdown, then kill by process name
 if curl -s --max-time 1 "http://127.0.0.1:$PORT/status" > /dev/null 2>&1; then
     curl -s -X POST "http://127.0.0.1:$PORT/shutdown" > /dev/null 2>&1
     sleep 1
 fi
+pkill -f "$ENGINE_DIR/TacticalEngine" 2>/dev/null && sleep 0.5
 
 if [ ! -f "$ENGINE_BIN" ]; then
     echo "BOAM: TacticalEngine not found at $ENGINE_BIN"
