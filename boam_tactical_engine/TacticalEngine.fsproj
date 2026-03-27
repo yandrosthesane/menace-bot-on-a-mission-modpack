@@ -44,6 +44,7 @@
     <!-- Nodes -->
     <Compile Include="Nodes/Keys.fs" />
     <Compile Include="Nodes/RoamingBehaviour.fs" />
+    <Compile Include="Nodes/RepositionBehaviour.fs" />
     <Compile Include="Nodes/PackBehaviour.fs" />
 
     <!-- System/utility routes + RouteContext -->

@@ -1,7 +1,6 @@
-/// PackBehaviour node — encourages AI units to form small packs.
-/// Computes density-based pack scores: attraction toward a few allies, repulsion from large clumps.
-/// Allies that already acted this round (anchored) have stronger influence.
-/// Runs after RoamingBehaviour, merges pack scores into existing tile modifier maps.
+/// PackBehaviour node — encourages AI units to move toward allies, especially engaged ones.
+/// Uses directional scoring: tiles that improve pack density vs current position score higher.
+/// Runs after RoamingBehaviour + RepositionBehaviour, adds pack direction on top.
 module BOAM.TacticalEngine.Nodes.PackBehaviour
 
 open BOAM.TacticalEngine.GameTypes
@@ -10,22 +9,21 @@ open BOAM.TacticalEngine.Node
 open BOAM.TacticalEngine.Keys
 
 // Pack scoring parameters
-let private radius = 10f           // Influence range per ally (tiles)
-let private peak = 2.5f            // Ideal density — sweet spot
-let private attraction = 80f       // Utility per density unit below peak
+let private radius = 20f           // Influence range per ally (tiles)
+let private peak = 4.0f            // Ideal density — sweet spot (encourages groups of 4-5)
+let private attraction = 560f      // Utility per density unit below peak
 let private crowdPenalty = 120f    // Penalty per density unit above peak
 let private anchoredWeight = 1.0f  // Influence multiplier for allies that already acted
 let private unactedWeight = 0.3f   // Influence multiplier for allies that haven't acted
 let private contactBonus = 1.5f    // Extra influence for engaged allies (inRange && inContact)
 
-/// Compute pack score for a single tile given all ally positions.
-/// Each ally is (position, hasActed, engaged) where engaged = inRange && inContact.
-let private packScoreAtTile (tileX: int) (tileZ: int) (allies: (TilePos * bool * bool) list) =
+/// Compute raw pack density at a point given ally positions.
+let private packDensityAt (x: int) (z: int) (allies: (TilePos * bool * bool) list) =
     let mutable density = 0f
     let mutable hasEngaged = false
     for (pos, hasActed, engaged) in allies do
-        let dx = float32 (tileX - pos.X)
-        let dz = float32 (tileZ - pos.Z)
+        let dx = float32 (x - pos.X)
+        let dz = float32 (z - pos.Z)
         let dist = sqrt (dx * dx + dz * dz)
         if dist < radius then
             let influence = (1f - dist / radius)
@@ -51,8 +49,7 @@ let node : NodeDef = {
         match actorOpt with
         | None -> ()
         | Some a ->
-            // Build ally list: same-faction actors only (excludes player units and other factions)
-            // Engaged = personally in range AND faction has detected the opponent
+            // Build ally list: same-faction actors only
             let allies =
                 positions
                 |> Map.toList
@@ -64,21 +61,24 @@ let node : NodeDef = {
             if allies.IsEmpty then
                 ctx.Log (sprintf "%s: no allies for pack scoring (%d others filtered by faction)" a.Actor totalOthers)
             else
-                // Get existing tile map for this actor (from roaming or empty)
                 let actorTiles = existing |> Map.tryFind a.Actor |> Option.defaultValue Map.empty
 
                 if Map.isEmpty actorTiles then
-                    ctx.Log (sprintf "%s: no tiles to score (no roaming map)" a.Actor)
+                    ctx.Log (sprintf "%s: no tiles to score (no tile map)" a.Actor)
                 else
-                    // Add pack scores to each tile in the actor's existing map
+                    // Density at current position — baseline to compare against
+                    let currentDensity = packDensityAt a.Position.X a.Position.Z allies
+
                     let mutable minScore = System.Single.MaxValue
                     let mutable maxScore = System.Single.MinValue
                     let updatedTiles =
                         actorTiles |> Map.map (fun pos existingUtility ->
-                            let ps = packScoreAtTile pos.X pos.Z allies
-                            if ps < minScore then minScore <- ps
-                            if ps > maxScore then maxScore <- ps
-                            existingUtility + ps)
+                            let tileDensity = packDensityAt pos.X pos.Z allies
+                            // Directional: only add positive improvement over current position
+                            let improvement = max 0f (tileDensity - currentDensity)
+                            if improvement < minScore then minScore <- improvement
+                            if improvement > maxScore then maxScore <- improvement
+                            existingUtility + improvement)
 
                     let acted = allies |> List.filter (fun (_, a, _) -> a) |> List.length
                     let engaged = allies |> List.filter (fun (_, _, e) -> e) |> List.length

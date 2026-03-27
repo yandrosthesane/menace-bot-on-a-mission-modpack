@@ -133,6 +133,7 @@ let main argv =
     let store = StateStore()
 
     registry.Register([Nodes.RoamingBehaviour.node])
+    registry.Register([Nodes.RepositionBehaviour.node])
     registry.Register([Nodes.PackBehaviour.node])
 
     logInfo "Engine initialized"

@@ -13,7 +13,7 @@ open BOAM.TacticalEngine.Keys
 
 let private baseUtility = 100f
 let private mapSize = 42 // max tactical map dimension
-let private engagementRadius = 10f // same as pack radius — skip roaming if any ally within this range is engaged
+let private engagementRadius = 20f // skip roaming if any ally within this range is engaged
 
 /// Compute per-tile utility for an actor: utility scales with distance, gated by AP budget.
 let computeTileModifiers (pos: TilePos) (maxDist: int) : TileModifierMap =
@@ -52,8 +52,11 @@ let node : NodeDef = {
             match actorOpt with
             | Some a ->
                 if isNearEngagement a positions then
-                    ctx.Log (sprintf "%s at (%d,%d): SKIP — near engagement, clearing roaming" a.Actor a.Position.X a.Position.Z)
-                    existing |> Map.remove a.Actor
+                    ctx.Log (sprintf "%s at (%d,%d): SKIP — near engagement, zeroing roaming" a.Actor a.Position.X a.Position.Z)
+                    let moveBudget = a.ApStart - a.CheapestAttack
+                    let maxDist = if a.CostPerTile > 0 then moveBudget / a.CostPerTile else 3
+                    let zeroTiles = computeTileModifiers a.Position maxDist |> Map.map (fun _ _ -> 0f)
+                    existing |> Map.add a.Actor zeroTiles
                 else
                     let moveBudget = a.ApStart - a.CheapestAttack
                     let maxDist = if a.CostPerTile > 0 then moveBudget / a.CostPerTile else 3
