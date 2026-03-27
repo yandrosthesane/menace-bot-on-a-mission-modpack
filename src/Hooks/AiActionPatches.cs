@@ -23,35 +23,6 @@ static class AiActionPatches
     /// Gathers movement cost table from the actor's MovementType template.
     /// Spreads results into the payload dictionary.
     /// </summary>
-    private static void GatherMovementData(Actor actor, Entity entity, string actorUuid,
-        System.Collections.Generic.Dictionary<string, object> payload)
-    {
-        try
-        {
-            var movType = entity.GetTemplate()?.MovementType;
-            if (movType != null)
-            {
-                var costs = new System.Collections.Generic.List<int>();
-                if (movType.m_MovementCosts != null)
-                {
-                    for (int i = 0; i < movType.m_MovementCosts.Length; i++)
-                        costs.Add((int)movType.m_MovementCosts[i]);
-                }
-                payload["movement"] = new
-                {
-                    costs,
-                    turningCost = (int)movType.m_TurningCost,
-                    lowestMovementCost = movType.GetLowestMovementCost(),
-                    isFlying = movType.Flying
-                };
-            }
-        }
-        catch (Exception ex)
-        {
-            BoamBridge.Logger.Warning($"[BOAM] MovementType read failed for {actorUuid}: {ex.Message}");
-        }
-    }
-
     /// <summary>
     /// InvokeOnMovementFinished(Actor, Tile) — AI actor finished moving.
     /// </summary>
@@ -185,31 +156,8 @@ static class AiActionPatches
             }
             catch { }
 
-            // Gather skills
-            var skillList = new System.Collections.Generic.List<object>();
-            try
-            {
-                var attacks = actor.GetAllAttacks();
-                if (attacks != null)
-                {
-                    for (int i = 0; i < attacks.Count; i++)
-                    {
-                        var skill = attacks[i];
-                        if (skill == null) continue;
-                        skillList.Add(new
-                        {
-                            name = skill.GetID() ?? "",
-                            apCost = skill.GetActionPointCost(),
-                            minRange = skill.GetMinRange(),
-                            maxRange = skill.GetMaxRange(),
-                            idealRange = skill.GetIdealRange()
-                        });
-                    }
-                }
-            }
-            catch { }
-
-            // Build payload as dictionary so gatherers can spread fields into it
+            // Build turn-end payload — dynamic state + transform-derived values.
+            // Skills and movement are static (from template) and stored at tactical-ready.
             var turnEndData = new System.Collections.Generic.Dictionary<string, object>
             {
                 ["round"] = round,
@@ -222,12 +170,12 @@ static class AiActionPatches
                     vision, concealment,
                     morale, moraleMax, suppression,
                     isStunned, isDying, hasActed
-                },
-                ["skills"] = skillList
+                }
             };
 
-            // Optional data gatherers spread their fields into the payload
-            GatherMovementData(actor, entity, actorUuid, turnEndData);
+            // Transforms: enrich payload with derived values from live game objects
+            SyncTransforms.ComputeContactState(gameObj, vision, factionId, turnEndData);
+            SyncTransforms.ComputeMovementBudget(actor, entity, turnEndData);
 
             var turnEndPayload = JsonSerializer.Serialize(turnEndData);
             TileModifierStore.SetPending();

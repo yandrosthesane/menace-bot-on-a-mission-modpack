@@ -19,3 +19,9 @@ let actorPositions : StateKey<Map<string, ActorPosState>> = perFaction "actor-po
 /// Per-actor tile modifier maps, computed by behavior nodes. PerFaction.
 /// Outer map: actor UUID → inner map of tile position → utility bonus.
 let tileModifiers : StateKey<Map<string, TileModifierMap>> = perFaction "tile-modifiers"
+
+/// Static per-actor data (skills, movement) from templates, set at tactical-ready.
+let actorStaticData : StateKey<Map<string, ActorStaticData>> = perSession "actor-static-data"
+
+/// Last FactionState from on-turn-start, carried forward for turn-end walker context.
+let lastFactionState : StateKey<FactionState> = perFaction "last-faction-state"

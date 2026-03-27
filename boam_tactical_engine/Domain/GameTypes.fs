@@ -94,10 +94,19 @@ type ActorStatus = {
     HasActed: bool
     Skills: SkillInfo list
     Movement: MovementData option
+    // Transform-derived fields (computed C#-side from live game state)
+    CheapestAttack: int
+    CostPerTile: int
+}
+
+/// Static per-actor data from the entity template, gathered once at tactical-ready.
+type ActorStaticData = {
+    Skills: SkillInfo list
+    Movement: MovementData option
 }
 
 /// Tracked position, acted state, and contact state for pack behaviour.
-type ActorPosState = { Position: TilePos; HasActed: bool; InContact: bool }
+type ActorPosState = { Position: TilePos; Faction: int; HasActed: bool; InContact: bool }
 
 /// Per-tile utility modifiers for an actor, sent to the bridge.
 /// Key = tile position, Value = utility bonus to add.

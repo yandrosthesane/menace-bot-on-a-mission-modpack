@@ -40,24 +40,13 @@ let node : NodeDef = {
         let modifiers =
             match actorOpt with
             | Some a ->
-                let cheapestAttack =
-                    match a.Skills with
-                    | [] -> 0
-                    | skills -> skills |> List.map (fun s -> s.ApCost) |> List.min
-
-                let costPerTile =
-                    match a.Movement with
-                    | Some m when m.LowestMovementCost > 0 -> m.LowestMovementCost
-                    | _ -> 16 // fallback
-
-                let movementBudget = a.ApStart - cheapestAttack
-                let maxDist = if costPerTile > 0 then movementBudget / costPerTile else 3
-
+                let moveBudget = a.ApStart - a.CheapestAttack
+                let maxDist = if a.CostPerTile > 0 then moveBudget / a.CostPerTile else 3
                 let tileMap = computeTileModifiers a.Position maxDist
 
                 ctx.Log (sprintf "%s at (%d,%d) AP=%d/%d cheapAtk=%d cost/tile=%d budget=%d maxDist=%d → %d tiles"
                     a.Actor a.Position.X a.Position.Z
-                    a.Ap a.ApStart cheapestAttack costPerTile movementBudget maxDist (Map.count tileMap))
+                    a.Ap a.ApStart a.CheapestAttack a.CostPerTile moveBudget maxDist (Map.count tileMap))
 
                 existing |> Map.add a.Actor tileMap
 

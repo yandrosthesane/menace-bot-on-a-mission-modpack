@@ -1,13 +1,14 @@
 /// In-memory key-value store for cross-node state.
-/// Values are boxed (obj) at runtime; type safety is enforced by StateKey<'t> at call sites.
+/// Thread-safe via ConcurrentDictionary — HTTP handlers dispatch concurrently.
+/// Type safety is enforced by StateKey<'t> at call sites.
 module BOAM.TacticalEngine.StateStore
 
-open System.Collections.Generic
+open System.Collections.Concurrent
 open BOAM.TacticalEngine.StateKey
 
 type StateStore() =
-    let store = Dictionary<string, obj>()
-    let lifetimes = Dictionary<string, Lifetime>()
+    let store = ConcurrentDictionary<string, obj>()
+    let lifetimes = ConcurrentDictionary<string, Lifetime>()
 
     /// Read a typed value. Returns None if the key hasn't been written.
     member _.Read<'t>(key: StateKey<'t>) : 't option =
@@ -37,8 +38,8 @@ type StateStore() =
             |> Seq.map (fun kv -> kv.Key)
             |> Seq.toList
         for k in toRemove do
-            store.Remove(k) |> ignore
-            lifetimes.Remove(k) |> ignore
+            store.TryRemove(k) |> ignore
+            lifetimes.TryRemove(k) |> ignore
 
     /// Clear everything.
     member _.ClearAll() =

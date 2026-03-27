@@ -42,10 +42,7 @@ let private toRenderDecision (p: ActionDecisionPayload) : RenderDecision =
       Alternatives = p.Alternatives |> List.map (fun a -> { BehaviorId = a.BehaviorId; Name = a.Name; Score = a.Score } : HeatmapTypes.BehaviorScore)
       AttackCandidates = p.AttackCandidates |> List.map (fun c -> { Position = toPos c.Position; Score = c.Score } : AttackOption) }
 
-// --- Mutable state (will be cleaned up in Phase 3) ---
-
 let mutable private currentRound = 0
-let private actorPosDict = System.Collections.Concurrent.ConcurrentDictionary<string, ActorPosState>()
 
 // --- Flush tile modifiers via new messaging protocol ---
 
@@ -83,25 +80,19 @@ let private handleOnTurnStart (ctx: RouteContext) (root: JsonElement) =
     currentRound <- factionState.Round
     let opponentPositions = factionState.Opponents |> List.map (fun o -> o.Position)
     ctx.Store.Write(knownOpponents, opponentPositions)
-    for kv in actorPosDict do
-        actorPosDict.[kv.Key] <- { kv.Value with HasActed = false }
+    ctx.Store.Write(lastFactionState, factionState)
+    // Reset HasActed for all actors at faction turn start
+    let positions = ctx.Store.ReadOrDefault(actorPositions, Map.empty)
+    let reset = positions |> Map.map (fun _ s -> { s with HasActed = false })
+    ctx.Store.Write(actorPositions, reset)
     ctx.EventBus.Push(TurnStart(factionState.FactionIndex, factionState.Round))
     let result = Walker.run ctx.Registry ctx.Store OnTurnStart Prefix factionState logEngine
     logHook (sprintf "  walk: %d ran, %d skipped, %.1fms" result.NodesRun result.NodesSkipped result.ElapsedMs)
     Results.Ok({| hook = "on-turn-start"; status = "ok"; nodesRun = result.NodesRun |}) :> IResult
 
-let private parseActorStatus (root: JsonElement) actor faction tileX tileZ =
+let private parseActorStatus (root: JsonElement) actor faction tileX tileZ (staticData: Map<string, ActorStaticData>) =
     let s = match root.TryGetProperty("status") with | true, v -> Some v | _ -> None
-    let skills =
-        match root.TryGetProperty("skills") with
-        | true, arr ->
-            [ for sk in arr.EnumerateArray() ->
-                { Name = match sk.TryGetProperty("name") with | true, v -> v.GetString() | _ -> ""
-                  ApCost = match sk.TryGetProperty("apCost") with | true, v -> v.GetInt32() | _ -> 0
-                  MinRange = match sk.TryGetProperty("minRange") with | true, v -> v.GetInt32() | _ -> 0
-                  MaxRange = match sk.TryGetProperty("maxRange") with | true, v -> v.GetInt32() | _ -> 0
-                  IdealRange = match sk.TryGetProperty("idealRange") with | true, v -> v.GetInt32() | _ -> 0 } ]
-        | _ -> []
+    let storedStatic = staticData |> Map.tryFind actor
     let getInt (key: string) = s |> Option.map (fun (s: JsonElement) -> match s.TryGetProperty(key) with | true, v -> v.GetInt32() | _ -> 0) |> Option.defaultValue 0
     let getFloat (key: string) = s |> Option.map (fun (s: JsonElement) -> match s.TryGetProperty(key) with | true, v -> v.GetSingle() | _ -> 0f) |> Option.defaultValue 0f
     let getBool (key: string) = s |> Option.map (fun (s: JsonElement) -> match s.TryGetProperty(key) with | true, v -> v.GetBoolean() | _ -> false) |> Option.defaultValue false
@@ -112,15 +103,10 @@ let private parseActorStatus (root: JsonElement) actor faction tileX tileZ =
       Vision = getInt "vision"; Concealment = getInt "concealment"
       Morale = getFloat "morale"; MoraleMax = getFloat "moraleMax"; Suppression = getFloat "suppression"
       IsStunned = getBool "isStunned"; IsDying = getBool "isDying"; HasActed = getBool "hasActed"
-      Skills = skills
-      Movement =
-        match root.TryGetProperty("movement") with
-        | true, m ->
-            Some { Costs = match m.TryGetProperty("costs") with | true, arr -> [| for c in arr.EnumerateArray() -> c.GetInt32() |] | _ -> [||]
-                   TurningCost = match m.TryGetProperty("turningCost") with | true, v -> v.GetInt32() | _ -> 0
-                   LowestMovementCost = match m.TryGetProperty("lowestMovementCost") with | true, v -> v.GetInt32() | _ -> 0
-                   IsFlying = match m.TryGetProperty("isFlying") with | true, v -> v.GetBoolean() | _ -> false }
-        | _ -> None }
+      Skills = storedStatic |> Option.map (fun d -> d.Skills) |> Option.defaultValue []
+      Movement = storedStatic |> Option.bind (fun d -> d.Movement)
+      CheapestAttack = match root.TryGetProperty("cheapestAttack") with | true, v -> v.GetInt32() | _ -> 0
+      CostPerTile = match root.TryGetProperty("costPerTile") with | true, v -> v.GetInt32() | _ -> 16 }
 
 let private handleOnTurnEnd (ctx: RouteContext) (root: JsonElement) =
     let round = match root.TryGetProperty("round") with | true, v -> v.GetInt32() | _ -> currentRound
@@ -131,25 +117,22 @@ let private handleOnTurnEnd (ctx: RouteContext) (root: JsonElement) =
     logHook (sprintf "on-turn-end  faction=%d  round=%d  actor=%s  tile=(%d,%d)" faction round actor tileX tileZ)
 
     try
-        let actorStatus = parseActorStatus root actor faction tileX tileZ
+        let staticData = ctx.Store.ReadOrDefault(actorStaticData, Map.empty)
+        let actorStatus = parseActorStatus root actor faction tileX tileZ staticData
         ctx.Store.Write(turnEndActor, actorStatus)
-        let opponents = ctx.Store.ReadOrDefault(knownOpponents, [])
-        let actorPos : TilePos = { X = tileX; Z = tileZ }
-        let inContact =
-            opponents |> List.exists (fun op ->
-                let dx = op.X - actorPos.X
-                let dz = op.Z - actorPos.Z
-                dx * dx + dz * dz <= actorStatus.Vision * actorStatus.Vision)
-        actorPosDict.[actor] <- { Position = actorPos; HasActed = true; InContact = inContact }
+        // Read pre-computed contact state from C# transform (falls back to false)
+        let inContact = match root.TryGetProperty("inContact") with | true, v -> v.GetBoolean() | _ -> false
+        let positions = ctx.Store.ReadOrDefault(actorPositions, Map.empty)
+        let updated = positions |> Map.add actor { Position = { X = tileX; Z = tileZ }; Faction = faction; HasActed = true; InContact = inContact }
+        ctx.Store.Write(actorPositions, updated)
+        logHook (sprintf "  store: %d actors in positions (actor=%s f=%d contact=%b)" (Map.count updated) actor faction inContact)
     with ex -> logWarn (sprintf "  failed to parse actor status: %s" ex.Message)
 
-    let posSnapshot = actorPosDict |> Seq.fold (fun acc kv -> acc |> Map.add kv.Key kv.Value) Map.empty
-    ctx.Store.Write(actorPositions, posSnapshot)
-
-    let factionState : FactionState = {
-        FactionIndex = faction; IsAlliedWithPlayer = false
-        Opponents = []; Actors = []; Round = round
-    }
+    // Use the last real FactionState from turn-start, falling back to a minimal one
+    let hasStoredState = ctx.Store.Read(lastFactionState).IsSome
+    let factionState =
+        ctx.Store.ReadOrDefault(lastFactionState, { FactionIndex = faction; IsAlliedWithPlayer = false; Opponents = []; Actors = []; Round = round })
+    logHook (sprintf "  turn-end factionState: %s (opponents=%d)" (if hasStoredState then "from turn-start" else "FALLBACK") (List.length factionState.Opponents))
     let result = Walker.run ctx.Registry ctx.Store OnTurnEnd Prefix factionState logEngine
     if result.NodesRun > 0 then
         logHook (sprintf "  walk: %d ran, %d skipped, %.1fms" result.NodesRun result.NodesSkipped result.ElapsedMs)
@@ -223,6 +206,7 @@ let private handleTacticalReady (ctx: RouteContext) (root: JsonElement) =
             let actors = ResizeArray()
             let mutable initModifiers = Map.empty
             let mutable initPositions = Map.empty
+            let mutable staticDataMap = Map.empty
             for item in dp.EnumerateArray() do
                 let faction = item.GetProperty("faction").GetInt32()
                 if faction <> 1 then
@@ -230,24 +214,33 @@ let private handleTacticalReady (ctx: RouteContext) (root: JsonElement) =
                     actors.Add(actorId)
                     let x = match item.TryGetProperty("x") with | true, v -> v.GetInt32() | _ -> 0
                     let z = match item.TryGetProperty("z") with | true, v -> v.GetInt32() | _ -> 0
-                    let posState = { Position = { X = x; Z = z }; HasActed = false; InContact = false }
+                    let posState = { Position = { X = x; Z = z }; Faction = faction; HasActed = false; InContact = false }
                     initPositions <- initPositions |> Map.add actorId posState
-                    actorPosDict.[actorId] <- posState
                     let apStart = match item.TryGetProperty("apStart") with | true, v -> v.GetInt32() | _ -> 100
-                    let cheapestAttack =
+                    // Parse skills
+                    let skills =
                         match item.TryGetProperty("skills") with
                         | true, arr ->
-                            let mutable minCost = Int32.MaxValue
-                            for sk in arr.EnumerateArray() do
-                                let cost = match sk.TryGetProperty("apCost") with | true, v -> v.GetInt32() | _ -> 0
-                                if cost > 0 && cost < minCost then minCost <- cost
-                            if minCost = Int32.MaxValue then 0 else minCost
-                        | _ -> 0
-                    let lowestMoveCost =
+                            [ for sk in arr.EnumerateArray() ->
+                                { Name = match sk.TryGetProperty("name") with | true, v -> v.GetString() | _ -> ""
+                                  ApCost = match sk.TryGetProperty("apCost") with | true, v -> v.GetInt32() | _ -> 0
+                                  MinRange = match sk.TryGetProperty("minRange") with | true, v -> v.GetInt32() | _ -> 0
+                                  MaxRange = match sk.TryGetProperty("maxRange") with | true, v -> v.GetInt32() | _ -> 0
+                                  IdealRange = match sk.TryGetProperty("idealRange") with | true, v -> v.GetInt32() | _ -> 0 } ]
+                        | _ -> []
+                    let cheapestAttack = skills |> List.choose (fun s -> if s.ApCost > 0 then Some s.ApCost else None) |> function [] -> 0 | xs -> List.min xs
+                    // Parse movement
+                    let movement =
                         match item.TryGetProperty("movement") with
-                        | true, m -> match m.TryGetProperty("lowestMovementCost") with | true, v -> v.GetInt32() | _ -> 16
-                        | _ -> 16
-                    let costPerTile = if lowestMoveCost > 0 then lowestMoveCost else 16
+                        | true, m ->
+                            Some { Costs = match m.TryGetProperty("costs") with | true, arr -> [| for c in arr.EnumerateArray() -> c.GetInt32() |] | _ -> [||]
+                                   TurningCost = match m.TryGetProperty("turningCost") with | true, v -> v.GetInt32() | _ -> 0
+                                   LowestMovementCost = match m.TryGetProperty("lowestMovementCost") with | true, v -> v.GetInt32() | _ -> 0
+                                   IsFlying = match m.TryGetProperty("isFlying") with | true, v -> v.GetBoolean() | _ -> false }
+                        | _ -> None
+                    // Store static data per actor
+                    staticDataMap <- staticDataMap |> Map.add actorId { Skills = skills; Movement = movement }
+                    let costPerTile = match movement with Some m when m.LowestMovementCost > 0 -> m.LowestMovementCost | _ -> 16
                     let moveBudget = apStart - cheapestAttack
                     let maxDist = if costPerTile > 0 then moveBudget / costPerTile else 3
                     let tileMap = Nodes.RoamingBehaviour.computeTileModifiers { X = x; Z = z } maxDist
@@ -257,6 +250,7 @@ let private handleTacticalReady (ctx: RouteContext) (root: JsonElement) =
 
             ctx.Store.Write(aiActors, actors.ToArray())
             ctx.Store.Write(actorPositions, initPositions)
+            ctx.Store.Write(actorStaticData, staticDataMap)
             ctx.Store.Write(tileModifiers, initModifiers)
             logInfo (sprintf "Registered %d AI actors, computed initial modifiers" actors.Count)
             flushTileModifiersViaMessaging ctx.Store
@@ -288,7 +282,7 @@ let private handleBattleEnd (ctx: RouteContext) (_root: JsonElement) =
     if Config.Current.Heatmaps then
         RenderJobCollector.flushAll ActionLog.currentBattleDir ctx.BoamModDir ctx.IconBaseDir
     currentRound <- 0
-    actorPosDict.Clear()
+    ctx.Store.ClearAll()
     ActionLog.endBattle ()
     logHook "battle-end"
     ctx.EventBus.Push(BattleEnded)

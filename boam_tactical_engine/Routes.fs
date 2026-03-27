@@ -1,5 +1,5 @@
-/// HTTP route handlers for the tactical engine.
-/// Each route is registered via registerRoutes, called from Program.fs.
+/// System and utility routes for the tactical engine.
+/// Game hook traffic is handled by HookHandlers via the symmetric Messaging protocol.
 module BOAM.TacticalEngine.Routes
 
 open System
@@ -7,42 +7,14 @@ open System.Text.Json
 open Microsoft.AspNetCore.Builder
 open Microsoft.AspNetCore.Http
 open BOAM.TacticalEngine.Config
-open BOAM.TacticalEngine.GameTypes
-open BOAM.TacticalEngine.BoundaryTypes
-open BOAM.TacticalEngine.Node
-open BOAM.TacticalEngine.Walker
 open BOAM.TacticalEngine.HookPayload
-open BOAM.TacticalEngine.ActionLog
-open BOAM.TacticalEngine.RenderJobCollector
 open BOAM.TacticalEngine.HeatmapRenderer
+open BOAM.TacticalEngine.HeatmapTypes
 open BOAM.TacticalEngine.EventBus
 open BOAM.TacticalEngine.Logging
-open BOAM.TacticalEngine.HeatmapTypes
-open BOAM.TacticalEngine.Keys
-
-// --- Boundary → Heatmaps mapping ---
-
-let private toPos (p: TilePos) : Pos = { X = p.X; Z = p.Z }
-let private toPosOpt (p: TilePos option) : Pos option = p |> Option.map toPos
-
-let private toTileScoreInput (p: TileScoresPayload) : TileScoreInput =
-    { Round = p.Round; Faction = p.Faction; Actor = p.Actor
-      ActorPosition = toPosOpt p.ActorPosition
-      Tiles = p.Tiles |> List.map (fun t -> { X = t.X; Z = t.Z; Combined = t.Combined } : TileScore)
-      Units = p.Units |> List.map (fun u -> { Faction = u.Faction; X = u.Position.X; Z = u.Position.Z; Actor = u.Actor; Name = u.Name; Leader = u.Leader } : RenderUnit)
-      VisionRange = p.VisionRange }
-
-let private toRenderDecision (p: ActionDecisionPayload) : RenderDecision =
-    { Round = p.Round; Actor = p.Actor
-      Chosen = { BehaviorId = p.Chosen.BehaviorId; Name = p.Chosen.Name; Score = p.Chosen.Score }
-      Target = match p.Target with
-               | BoundaryTypes.TileTarget (pos, ap) -> BehaviorTarget.TileTarget (toPos pos, ap)
-               | BoundaryTypes.NoTarget -> BehaviorTarget.NoTarget
-      Alternatives = p.Alternatives |> List.map (fun a -> { BehaviorId = a.BehaviorId; Name = a.Name; Score = a.Score } : HeatmapTypes.BehaviorScore)
-      AttackCandidates = p.AttackCandidates |> List.map (fun c -> { Position = toPos c.Position; Score = c.Score } : AttackOption) }
 
 /// Read JSON body from an HTTP request.
-let private readJson (req: HttpRequest) = task {
+let readJson (req: HttpRequest) = task {
     use reader = new IO.StreamReader(req.Body)
     let! body = reader.ReadToEndAsync()
     return JsonDocument.Parse(body).RootElement
@@ -62,46 +34,6 @@ type RouteContext = {
     BattleReportsDir: string
     OnTitleRoute: string option
 }
-
-/// Track current round for attaching movement data to render jobs.
-let mutable private currentRound = 0
-
-/// Thread-safe actor position tracking. Updated atomically per-actor at turn-end.
-/// Snapshotted to the StateStore before each walker run.
-let private actorPosDict = System.Collections.Concurrent.ConcurrentDictionary<string, ActorPosState>()
-
-/// Send per-tile modifiers from the store to the bridge, then signal ready.
-/// One POST per actor containing all tile modifiers as a JSON array.
-let private flushTileModifiers (store: StateStore.StateStore) (httpClient: Net.Http.HttpClient) (commandUrl: string) =
-    try
-        // Clear previous modifiers
-        httpClient.PostAsync(sprintf "%s/tile-modifier/clear" commandUrl, new Net.Http.StringContent("")).Result |> ignore
-
-        // Read computed modifiers from store
-        let modifiers = store.ReadOrDefault(tileModifiers, Map.empty)
-        let mutable sent = 0
-        let mutable totalTiles = 0
-        for kv in modifiers do
-            let actor = kv.Key
-            let tileMap = kv.Value
-            if not (Map.isEmpty tileMap) then
-                let tilesJson =
-                    tileMap |> Map.toSeq |> Seq.map (fun (pos, utility) ->
-                        sprintf """{"x":%d,"z":%d,"u":%g}""" pos.X pos.Z utility)
-                    |> String.concat ","
-                let json = sprintf """{"actor":"%s","tiles":[%s]}""" actor tilesJson
-                try
-                    let content = new Net.Http.StringContent(json, Text.Encoding.UTF8, "application/json")
-                    httpClient.PostAsync(sprintf "%s/tile-modifier" commandUrl, content).Result |> ignore
-                    sent <- sent + 1
-                    totalTiles <- totalTiles + Map.count tileMap
-                with _ -> ()
-        if sent > 0 then logInfo (sprintf "Flushed %d actors (%d total tiles) to bridge" sent totalTiles)
-    with ex -> logWarn (sprintf "flushTileModifiers error: %s" ex.Message)
-
-    // Signal ready
-    try httpClient.PostAsync(sprintf "%s/tile-modifier/ready" commandUrl, new Net.Http.StringContent("")).Result |> ignore
-    with _ -> ()
 
 let registerRoutes (app: WebApplication) (ctx: RouteContext) =
 
@@ -128,352 +60,6 @@ let registerRoutes (app: WebApplication) (ctx: RouteContext) =
                 Environment.Exit 0 } |> Async.Start
         Results.Ok({| status = "shutting down" |})
     )) |> ignore
-
-    // --- Game hooks ---
-
-    app.MapPost("/hook/on-turn-start", Func<HttpRequest, Threading.Tasks.Task<IResult>>(fun req -> task {
-        let! root = readJson req
-        let factionState = parseOnTurnStart root
-        logHook (sprintf "on-turn-start  faction=%d  opponents=%d  round=%d"
-            factionState.FactionIndex (List.length factionState.Opponents) factionState.Round)
-        // Flush previous round's render jobs before processing
-        if Config.Current.Heatmaps then
-            RenderJobCollector.onRoundChange ActionLog.currentBattleDir factionState.Round ctx.BoamModDir ctx.IconBaseDir
-        currentRound <- factionState.Round
-        // Store opponent positions for contact detection
-        let opponentPositions = factionState.Opponents |> List.map (fun o -> o.Position)
-        ctx.Store.Write(knownOpponents, opponentPositions)
-        // Reset HasActed for all actors at faction turn start (atomic per-key)
-        for kv in actorPosDict do
-            actorPosDict.[kv.Key] <- { kv.Value with HasActed = false }
-        ctx.EventBus.Push(TurnStart(factionState.FactionIndex, factionState.Round))
-        let result = Walker.run ctx.Registry ctx.Store OnTurnStart Prefix factionState logEngine
-        logHook (sprintf "  walk: %d ran, %d skipped, %.1fms" result.NodesRun result.NodesSkipped result.ElapsedMs)
-        return Results.Ok({| hook = "on-turn-start"; status = "ok"; nodesRun = result.NodesRun; nodesSkipped = result.NodesSkipped; elapsedMs = result.ElapsedMs; faction = factionState.FactionIndex |})
-    })) |> ignore
-
-    app.MapPost("/hook/on-turn-end", Func<HttpRequest, Threading.Tasks.Task<IResult>>(fun req -> task {
-        let! root = readJson req
-        let round = match root.TryGetProperty("round") with | true, v -> v.GetInt32() | _ -> currentRound
-        let faction = match root.TryGetProperty("faction") with | true, v -> v.GetInt32() | _ -> 0
-        let actor = match root.TryGetProperty("actor") with | true, v -> v.GetString() | _ -> ""
-        let tileX = match root.TryGetProperty("tile") with | true, t -> match t.TryGetProperty("x") with | true, v -> v.GetInt32() | _ -> 0 | _ -> 0
-        let tileZ = match root.TryGetProperty("tile") with | true, t -> match t.TryGetProperty("z") with | true, v -> v.GetInt32() | _ -> 0 | _ -> 0
-        logHook (sprintf "on-turn-end  faction=%d  round=%d  actor=%s  tile=(%d,%d)" faction round actor tileX tileZ)
-
-        // Parse actor status and write to store
-        try
-            let s = match root.TryGetProperty("status") with | true, v -> Some v | _ -> None
-            let skills =
-                match root.TryGetProperty("skills") with
-                | true, arr ->
-                    [ for sk in arr.EnumerateArray() ->
-                        { Name = match sk.TryGetProperty("name") with | true, v -> v.GetString() | _ -> ""
-                          ApCost = match sk.TryGetProperty("apCost") with | true, v -> v.GetInt32() | _ -> 0
-                          MinRange = match sk.TryGetProperty("minRange") with | true, v -> v.GetInt32() | _ -> 0
-                          MaxRange = match sk.TryGetProperty("maxRange") with | true, v -> v.GetInt32() | _ -> 0
-                          IdealRange = match sk.TryGetProperty("idealRange") with | true, v -> v.GetInt32() | _ -> 0 } ]
-                | _ -> []
-            let actorStatus : ActorStatus = {
-                Actor = actor
-                Faction = faction
-                Position = { X = tileX; Z = tileZ }
-                Ap = s |> Option.map (fun s -> match s.TryGetProperty("ap") with | true, v -> v.GetInt32() | _ -> 0) |> Option.defaultValue 0
-                ApStart = s |> Option.map (fun s -> match s.TryGetProperty("apStart") with | true, v -> v.GetInt32() | _ -> 0) |> Option.defaultValue 0
-                Hp = s |> Option.map (fun s -> match s.TryGetProperty("hp") with | true, v -> v.GetInt32() | _ -> 0) |> Option.defaultValue 0
-                HpMax = s |> Option.map (fun s -> match s.TryGetProperty("hpMax") with | true, v -> v.GetInt32() | _ -> 0) |> Option.defaultValue 0
-                Armor = s |> Option.map (fun s -> match s.TryGetProperty("armor") with | true, v -> v.GetInt32() | _ -> 0) |> Option.defaultValue 0
-                ArmorMax = s |> Option.map (fun s -> match s.TryGetProperty("armorMax") with | true, v -> v.GetInt32() | _ -> 0) |> Option.defaultValue 0
-                Vision = s |> Option.map (fun s -> match s.TryGetProperty("vision") with | true, v -> v.GetInt32() | _ -> 0) |> Option.defaultValue 0
-                Concealment = s |> Option.map (fun s -> match s.TryGetProperty("concealment") with | true, v -> v.GetInt32() | _ -> 0) |> Option.defaultValue 0
-                Morale = s |> Option.map (fun s -> match s.TryGetProperty("morale") with | true, v -> v.GetSingle() | _ -> 0f) |> Option.defaultValue 0f
-                MoraleMax = s |> Option.map (fun s -> match s.TryGetProperty("moraleMax") with | true, v -> v.GetSingle() | _ -> 0f) |> Option.defaultValue 0f
-                Suppression = s |> Option.map (fun s -> match s.TryGetProperty("suppression") with | true, v -> v.GetSingle() | _ -> 0f) |> Option.defaultValue 0f
-                IsStunned = s |> Option.map (fun s -> match s.TryGetProperty("isStunned") with | true, v -> v.GetBoolean() | _ -> false) |> Option.defaultValue false
-                IsDying = s |> Option.map (fun s -> match s.TryGetProperty("isDying") with | true, v -> v.GetBoolean() | _ -> false) |> Option.defaultValue false
-                HasActed = s |> Option.map (fun s -> match s.TryGetProperty("hasActed") with | true, v -> v.GetBoolean() | _ -> false) |> Option.defaultValue false
-                Skills = skills
-                Movement =
-                    match root.TryGetProperty("movement") with
-                    | true, m ->
-                        Some {
-                            Costs = match m.TryGetProperty("costs") with
-                                    | true, arr -> [| for c in arr.EnumerateArray() -> c.GetInt32() |]
-                                    | _ -> [||]
-                            TurningCost = match m.TryGetProperty("turningCost") with | true, v -> v.GetInt32() | _ -> 0
-                            LowestMovementCost = match m.TryGetProperty("lowestMovementCost") with | true, v -> v.GetInt32() | _ -> 0
-                            IsFlying = match m.TryGetProperty("isFlying") with | true, v -> v.GetBoolean() | _ -> false
-                        }
-                    | _ -> None
-            }
-            ctx.Store.Write(turnEndActor, actorStatus)
-            // Update actor position atomically (ConcurrentDictionary — no read-modify-write race)
-            let opponents = ctx.Store.ReadOrDefault(knownOpponents, [])
-            let actorPos : TilePos = { X = tileX; Z = tileZ }
-            let vision = actorStatus.Vision
-            let inContact =
-                opponents |> List.exists (fun op ->
-                    let dx = op.X - actorPos.X
-                    let dz = op.Z - actorPos.Z
-                    dx * dx + dz * dz <= vision * vision)
-            actorPosDict.[actor] <- { Position = actorPos; HasActed = true; InContact = inContact }
-        with ex -> logWarn (sprintf "  failed to parse actor status: %s" ex.Message)
-
-        // Snapshot positions to store for nodes to read
-        let posSnapshot = actorPosDict |> Seq.fold (fun acc kv -> acc |> Map.add kv.Key kv.Value) Map.empty
-        ctx.Store.Write(actorPositions, posSnapshot)
-
-        // Build minimal faction state for the walker
-        let factionState : FactionState = {
-            FactionIndex = faction; IsAlliedWithPlayer = false
-            Opponents = []; Actors = []; Round = round
-        }
-        // Run OnTurnEnd nodes — they compute tile modifiers and write to store
-        let result = Walker.run ctx.Registry ctx.Store OnTurnEnd Prefix factionState logEngine
-        if result.NodesRun > 0 then
-            logHook (sprintf "  walk: %d ran, %d skipped, %.1fms" result.NodesRun result.NodesSkipped result.ElapsedMs)
-        // Flush computed modifiers to the bridge
-        flushTileModifiers ctx.Store ctx.HttpClient ctx.CommandUrl
-        return Results.Ok({| hook = "on-turn-end"; status = "ok"; nodesRun = result.NodesRun |})
-    })) |> ignore
-
-    app.MapPost("/hook/tile-scores", Func<HttpRequest, Threading.Tasks.Task<IResult>>(fun req -> task {
-        let! root = readJson req
-        let payload = parseTileScores root
-        logHook (sprintf "tile-scores  round=%d  faction=%d  actor=%s  tiles=%d  units=%d  vision=%d"
-            payload.Round payload.Faction payload.Actor (List.length payload.Tiles) (List.length payload.Units) payload.VisionRange)
-        if List.isEmpty payload.Tiles then
-            return Results.Ok({| hook = "tile-scores"; status = "ok"; message = "no tile data" |})
-        else
-            // Criterion logging — separate file from heatmaps and round_log
-            if Config.Current.CriterionLogging then
-                match ActionLog.currentBattleDir() with
-                | Some dir ->
-                    let entry = JsonSerializer.Serialize({|
-                        round = payload.Round
-                        faction = payload.Faction
-                        actor = payload.Actor
-                        tileCount = List.length payload.Tiles
-                        tiles = payload.Tiles |> List.map (fun t -> {|
-                            x = t.X; z = t.Z
-                            combined = t.Combined
-                            utility = t.Utility
-                            utilityScaled = t.UtilityScaled
-                            safety = t.Safety
-                            safetyScaled = t.SafetyScaled
-                            distance = t.Distance
-                            distanceToCurrent = t.DistanceToCurrent
-                            apCost = t.APCost
-                            isVisible = t.IsVisible
-                            utilityByAttacks = t.UtilityByAttacks
-                        |})
-                    |})
-                    IO.File.AppendAllText(IO.Path.Combine(dir, "criterion_scores.jsonl"), entry + "\n")
-                | None -> ()
-
-            // Accumulate for deferred render job output
-            if Config.Current.Heatmaps then
-                RenderJobCollector.accumulate (toTileScoreInput payload)
-
-            return Results.Ok({| hook = "tile-scores"; status = "ok"; message = "ok" |})
-    })) |> ignore
-
-    app.MapPost("/hook/movement-finished", Func<HttpRequest, Threading.Tasks.Task<IResult>>(fun req -> task {
-        let! root = readJson req
-        let payload = parseMovementFinished root
-        logHook (sprintf "movement-finished  actor=%s  tile=(%d,%d)" payload.Actor payload.Tile.X payload.Tile.Z)
-        ctx.EventBus.Push(MovementFinished(payload.Actor, payload.Tile.X, payload.Tile.Z))
-        // Attach move destination to accumulated render job data
-        if Config.Current.Heatmaps then
-            RenderJobCollector.attachMoveDestination payload.Actor currentRound (toPos payload.Tile)
-        return Results.Ok({| hook = "movement-finished"; status = "ok"; actor = payload.Actor |})
-    })) |> ignore
-
-    app.MapPost("/hook/scene-change", Func<HttpRequest, Threading.Tasks.Task<IResult>>(fun req -> task {
-        let! root = readJson req
-        let scene = match root.TryGetProperty("scene") with | true, v -> v.GetString() |> Option.ofObj |> Option.defaultValue "" | _ -> ""
-        logHook (sprintf "scene-change  scene=%s" scene)
-        ctx.EventBus.Push(SceneChanged scene)
-        match ctx.OnTitleRoute with
-        | Some route when scene = "Title" ->
-            logInfo (sprintf "Title scene detected — executing on-title route: %s" route)
-            task {
-                try
-                    do! Threading.Tasks.Task.Delay(3000)
-                    let url = sprintf "http://127.0.0.1:%d%s" Config.Current.Port route
-                    let! resp = ctx.HttpClient.PostAsync(url, new Net.Http.StringContent(""))
-                    logInfo (sprintf "  on-title route %s → %d" route (int resp.StatusCode))
-                with ex -> logWarn (sprintf "  on-title failed: %s" ex.Message)
-            } |> ignore
-        | _ -> ()
-        return Results.Ok({| hook = "scene-change"; scene = scene |})
-    })) |> ignore
-
-    app.MapPost("/hook/preview-ready", Func<IResult>(fun () ->
-        logHook "preview-ready"
-        ctx.EventBus.Push(PreviewReady)
-        Results.Ok({| hook = "preview-ready" |})
-    )) |> ignore
-
-    app.MapPost("/hook/tactical-ready", Func<HttpRequest, Threading.Tasks.Task<IResult>>(fun req -> task {
-        let! root = readJson req
-        logHook "tactical-ready"
-        try
-            match root.TryGetProperty("dramatis_personae") with
-            | true, dp ->
-                let dpJson = dp.GetRawText()
-                match currentBattleDir() with
-                | Some dir ->
-                    IO.File.WriteAllText(IO.Path.Combine(dir, "dramatis_personae.json"), (dpJson: string))
-                    logEngine (sprintf "  dramatis personae written: %d actors" (dp.GetArrayLength()))
-                | None -> logWarn "  no active battle — dramatis personae not saved"
-            | _ -> logWarn "  no dramatis_personae in payload"
-        with ex -> logWarn (sprintf "  failed to save dramatis personae: %s" ex.Message)
-        // Register AI actors and compute initial modifiers from dramatis_personae
-        try
-            match root.TryGetProperty("dramatis_personae") with
-            | true, dp ->
-                let actors = ResizeArray()
-                let mutable initModifiers = Map.empty
-                let mutable initPositions = Map.empty
-                for item in dp.EnumerateArray() do
-                    let faction = item.GetProperty("faction").GetInt32()
-                    if faction <> 1 then
-                        let actorId = item.GetProperty("actor").GetString()
-                        actors.Add(actorId)
-                        // Parse fixed data for initial modifier computation
-                        let x = match item.TryGetProperty("x") with | true, v -> v.GetInt32() | _ -> 0
-                        let z = match item.TryGetProperty("z") with | true, v -> v.GetInt32() | _ -> 0
-                        let posState = { Position = { X = x; Z = z }; HasActed = false; InContact = false }
-                        initPositions <- initPositions |> Map.add actorId posState
-                        actorPosDict.[actorId] <- posState
-                        let apStart = match item.TryGetProperty("apStart") with | true, v -> v.GetInt32() | _ -> 100
-                        let cheapestAttack =
-                            match item.TryGetProperty("skills") with
-                            | true, arr ->
-                                let mutable minCost = System.Int32.MaxValue
-                                for sk in arr.EnumerateArray() do
-                                    let cost = match sk.TryGetProperty("apCost") with | true, v -> v.GetInt32() | _ -> 0
-                                    if cost > 0 && cost < minCost then minCost <- cost
-                                if minCost = System.Int32.MaxValue then 0 else minCost
-                            | _ -> 0
-                        let lowestMoveCost =
-                            match item.TryGetProperty("movement") with
-                            | true, m -> match m.TryGetProperty("lowestMovementCost") with | true, v -> v.GetInt32() | _ -> 16
-                            | _ -> 16
-                        let costPerTile = if lowestMoveCost > 0 then lowestMoveCost else 16
-                        let moveBudget = apStart - cheapestAttack
-                        let maxDist = if costPerTile > 0 then moveBudget / costPerTile else 3
-                        // Compute per-tile modifiers from starting position
-                        let tileMap = Nodes.RoamingBehaviour.computeTileModifiers { X = x; Z = z } maxDist
-                        initModifiers <- initModifiers |> Map.add actorId tileMap
-                        logEngine (sprintf "  %s at (%d,%d) ap=%d atk=%d cost=%d maxDist=%d → %d tiles"
-                            actorId x z apStart cheapestAttack costPerTile maxDist (Map.count tileMap))
-
-                ctx.Store.Write(aiActors, actors.ToArray())
-                ctx.Store.Write(actorPositions, initPositions)
-                ctx.Store.Write(tileModifiers, initModifiers)
-                logInfo (sprintf "Registered %d AI actors, computed initial modifiers" actors.Count)
-                flushTileModifiers ctx.Store ctx.HttpClient ctx.CommandUrl
-            | _ -> ()
-        with ex -> logWarn (sprintf "tactical-ready init error: %s" ex.Message)
-        ctx.EventBus.Push(TacticalReady)
-        return Results.Ok({| hook = "tactical-ready" |})
-    })) |> ignore
-
-    app.MapPost("/hook/actor-changed", Func<HttpRequest, Threading.Tasks.Task<IResult>>(fun req -> task {
-        let! root = readJson req
-        let actor = match root.TryGetProperty("actor") with | true, v -> v.GetString() |> Option.ofObj |> Option.defaultValue "" | _ -> ""
-        let faction = match root.TryGetProperty("faction") with | true, v -> v.GetInt32() | _ -> 0
-        let round = match root.TryGetProperty("round") with | true, v -> v.GetInt32() | _ -> 0
-        let x = match root.TryGetProperty("x") with | true, v -> v.GetInt32() | _ -> 0
-        let z = match root.TryGetProperty("z") with | true, v -> v.GetInt32() | _ -> 0
-        logHook (sprintf "actor-changed  %s f=%d r=%d (%d,%d)" actor faction round x z)
-        ctx.EventBus.Push(ActiveActorChanged(actor, faction, round, x, z))
-        return Results.Ok({| hook = "actor-changed"; actor = actor |})
-    })) |> ignore
-
-    app.MapPost("/hook/battle-start", Func<HttpRequest, Threading.Tasks.Task<IResult>>(fun req -> task {
-        let! root = readJson req
-        let payload = parseBattleStart root
-        let dir = ActionLog.startBattle ctx.BattleReportsDir payload.SessionDir
-        // Write BOAM version file
-        let versionJson = sprintf """{"engine":"%s","version":"%s","timestamp":"%s"}""" "BOAM Tactical Engine" ctx.Version (DateTime.UtcNow.ToString("o"))
-        IO.File.WriteAllText(IO.Path.Combine(dir, "boam_version.json"), versionJson)
-        logHook (sprintf "battle-start  session=%s" (IO.Path.GetFileName(dir)))
-        ctx.EventBus.Push(BattleStarted)
-        return Results.Ok({| hook = "battle-start"; status = "ok"; battleDir = dir |})
-    })) |> ignore
-
-    app.MapPost("/hook/battle-end", Func<IResult>(fun () ->
-        // Flush any remaining render jobs for the last round
-        if Config.Current.Heatmaps then
-            RenderJobCollector.flushAll ActionLog.currentBattleDir ctx.BoamModDir ctx.IconBaseDir
-        currentRound <- 0
-        ActionLog.endBattle ()
-        logHook "battle-end"
-        ctx.EventBus.Push(BattleEnded)
-        Results.Ok({| hook = "battle-end"; status = "ok" |})
-    )) |> ignore
-
-    app.MapPost("/hook/action-decision", Func<HttpRequest, Threading.Tasks.Task<IResult>>(fun req -> task {
-        let! root = readJson req
-        let payload = parseActionDecision root
-        logHook (sprintf "action-decision  round=%d  faction=%d  actor=%s  chosen=%s(%d)  alts=%d  candidates=%d"
-            payload.Round payload.Faction payload.Actor payload.Chosen.Name payload.Chosen.Score
-            (List.length payload.Alternatives) (List.length payload.AttackCandidates))
-        if Config.Current.ActionLogging && Config.Current.AiLogging then
-            ActionLog.logActionDecision payload
-        if Config.Current.Heatmaps then
-            RenderJobCollector.attachDecision (toRenderDecision payload)
-        // Decision-level watchdog disabled — replaced by action-level watchdog in /hook/ai-action.
-        // Decision queue desyncs due to Agent.Execute polling iteration count differences,
-        // producing false positives. Action-level comparison is the correct granularity.
-        return Results.Ok({| hook = "action-decision"; status = "ok" |})
-    })) |> ignore
-
-    app.MapPost("/hook/combat-outcome", Func<HttpRequest, Threading.Tasks.Task<IResult>>(fun req -> task {
-        let! root = readJson req
-        let payload = parseElementHit root
-        logHook (sprintf "element-hit  round=%d  %s → %s[%d]  skill=%s  dmg=%d  hp=%d  alive=%b"
-            payload.Round payload.Attacker payload.Target payload.ElementIndex payload.Skill
-            payload.Damage payload.ElementHpAfter payload.ElementAlive)
-        if Config.Current.ActionLogging then
-            ActionLog.logElementHit payload
-        return Results.Ok({| hook = "combat-outcome"; status = "ok" |})
-    })) |> ignore
-
-    app.MapPost("/hook/ai-action", Func<HttpRequest, Threading.Tasks.Task<IResult>>(fun req -> task {
-        let! root = readJson req
-        let payload = parseAiAction root
-        logHook (sprintf "ai-action  round=%d  actor=%s  type=%s  skill=%s  tile=(%d,%d)"
-            payload.Round payload.Actor payload.ActionType payload.SkillName payload.Tile.X payload.Tile.Z)
-        if Config.Current.ActionLogging then
-            ActionLog.logAiAction payload
-        return Results.Ok({| hook = "ai-action"; status = "ok" |})
-    })) |> ignore
-
-    app.MapPost("/hook/player-action", Func<HttpRequest, Threading.Tasks.Task<IResult>>(fun req -> task {
-        let! root = readJson req
-        let payload = parsePlayerAction root
-        logHook (sprintf "player-action  round=%d  actor=%s  type=%s  tile=(%d,%d)"
-            payload.Round payload.Actor payload.ActionType payload.Tile.X payload.Tile.Z)
-        if Config.Current.ActionLogging then
-            ActionLog.logPlayerAction payload
-        ctx.EventBus.Push(PlayerAction(payload.Round, payload.Actor, payload.ActionType, payload.Tile.X, payload.Tile.Z, payload.SkillName))
-        return Results.Ok({| hook = "player-action"; status = "ok" |})
-    })) |> ignore
-
-    app.MapPost("/hook/skill-complete", Func<HttpRequest, Threading.Tasks.Task<IResult>>(fun req -> task {
-        let! root = readJson req
-        let durationMs = HookPayload.tryInt root "durationMs" 0
-        let skill = HookPayload.tryStr root "skill" ""
-        let actor = HookPayload.tryStr root "actor" ""
-        logHook (sprintf "skill-complete  actor=%s  skill=%s  duration=%dms" actor skill durationMs)
-        if Config.Current.ActionLogging then
-            ActionLog.amendLastPlayerActionDuration actor durationMs
-        return Results.Ok({| hook = "skill-complete"; status = "ok" |})
-    })) |> ignore
 
     // --- Navigation ---
 
@@ -509,7 +95,6 @@ let registerRoutes (app: WebApplication) (ctx: RouteContext) =
             let heatmapDir = IO.Path.Combine(battleDir, "heatmaps")
             IO.Directory.CreateDirectory(heatmapDir) |> ignore
 
-            // Match job files against glob pattern
             let allFiles = IO.Directory.GetFiles(jobDir, "*.json") |> Array.sort
             let matchesPattern (fileName: string) =
                 let name = IO.Path.GetFileNameWithoutExtension(fileName)
@@ -544,6 +129,8 @@ let registerRoutes (app: WebApplication) (ctx: RouteContext) =
                           Name = HookPayload.tryStr el "name" ""
                           Leader = HookPayload.tryStr el "leader" "" } : RenderUnit)
 
+                    let toPos (p: GameTypes.TilePos) : Pos = { X = p.X; Z = p.Z }
+                    let toPosOpt (p: GameTypes.TilePos option) : Pos option = p |> Option.map toPos
                     let actorPos = HookPayload.parseOptionalTilePos job "actorPosition" |> toPosOpt
                     let moveDest = HookPayload.parseOptionalTilePos job "moveDestination" |> toPosOpt
                     let faction = HookPayload.tryInt job "faction" 0

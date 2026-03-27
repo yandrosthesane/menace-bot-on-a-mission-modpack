@@ -43,13 +43,12 @@
 
     <!-- Nodes -->
     <Compile Include="Nodes/Keys.fs" />
-    <Compile Include="Nodes/ShapeTileModifier.fs" />
     <Compile Include="Nodes/RoamingBehaviour.fs" />
     <Compile Include="Nodes/PackBehaviour.fs" />
 
-    <!-- Composition root (old routes, being migrated) -->
+    <!-- System/utility routes + RouteContext -->
     <Compile Include="Routes.fs" />
-    <!-- Hook dispatch (new protocol — after Routes.fs for RouteContext access) -->
+    <!-- Hook dispatch via symmetric protocol -->
     <Compile Include="Boundary/HookHandlers.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>

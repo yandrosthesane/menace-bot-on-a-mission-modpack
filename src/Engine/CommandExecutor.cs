@@ -63,7 +63,7 @@ public static class BoamCommandExecutor
     }
 
     /// Execute a single command. Must be called from the main thread.
-    public static void Execute(BoamCommandServer.ActionCommand cmd, MelonLogger.Instance log)
+    public static void Execute(BridgeServer.ActionCommand cmd, MelonLogger.Instance log)
     {
         try
         {

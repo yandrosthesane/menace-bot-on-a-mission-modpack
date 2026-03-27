@@ -8,10 +8,25 @@ using MelonLoader;
 
 namespace BOAM;
 
+/// <summary>Port for the C# command server (engine → game direction).</summary>
+public static class BridgeServer
+{
+    public const int Port = 7661;
+
+    public struct ActionCommand
+    {
+        public string Action;    // "click", "useskill", "endturn", "select"
+        public int X;
+        public int Z;
+        public string Skill;     // for useskill
+        public string Actor;     // stable UUID — used for actor-gating
+        public int DelayMs;      // delay in ms before executing the NEXT command
+    }
+}
+
 /// <summary>
 /// Symmetric protocol server: POST /query (read-only) and POST /command (side effects).
 /// Dispatches by {"type": "..."} in payload. Handlers registered via AddQueryHandler / AddCommandHandler.
-/// Coexists with the old BoamCommandServer during migration.
 /// </summary>
 public class QueryCommandServer
 {

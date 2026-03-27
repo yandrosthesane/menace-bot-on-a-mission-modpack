@@ -132,21 +132,6 @@ let main argv =
     let registry = Registry()
     let store = StateStore()
 
-    let testNode : NodeDef = {
-        Name = "test-opponent-summary"
-        Hook = OnTurnStart
-        Timing = Prefix
-        Reads = []
-        Writes = []
-        Run = fun ctx ->
-            let known = ctx.Faction.Opponents |> List.filter (fun o -> o.IsKnown)
-            let alive = ctx.Faction.Opponents |> List.filter (fun o -> o.IsAlive)
-            ctx.Log (sprintf "faction %d: %d opponents (%d known, %d alive)"
-                ctx.Faction.FactionIndex (List.length ctx.Faction.Opponents)
-                (List.length known) (List.length alive))
-    }
-    registry.Register([testNode])
-    // registry.Register([Nodes.ShapeTileModifier.node])
     registry.Register([Nodes.RoamingBehaviour.node])
     registry.Register([Nodes.PackBehaviour.node])
 

@@ -167,40 +167,58 @@ Benefits:
 
 ## Implementation Order
 
+### Phase 1: Symmetric Protocol — DONE
+
+New files alongside existing code, zero risk.
+
+- C#: `QueryCommandServer.cs` — POST /query + POST /command, dispatch by `{"type": "..."}`
+- C#: `QueryCommandClient.cs` — client for C# → F# queries/commands
+- F#: `Messaging.fs` — POST /query + POST /command handlers, dispatch by type
+- F#: `MessagingClient.fs` — client for F# → C# commands (tile modifiers, ready signaling)
+
+Also fixed during this phase:
+- Engine check race condition — multiple `CheckEngine` threads from concurrent scene loads; added early-exit when `_engineAvailable` is already set
+- Split `/query` "status" (heartbeat) from `/query` "features" (feature flags)
+- Template AP fallback — `GetActionPointsAtTurnStart()` returns 0 for wildlife before their first turn; reads `EntityTemplate.Properties.ActionPoints` as fallback
+- `boam-launch.sh` — added `pkill` fallback for killing stale engine processes
+
+### Phase 2: Migrate & Cleanup — DONE
+
+All traffic migrated to symmetric protocol, old code removed.
+
+- All 15 hook routes migrated from `/hook/*` to `POST /command {"type":"hook","hook":"..."}`
+- Tile modifier flush migrated to `MessagingClient.commandRaw`
+- F# `HookHandlers.fs` dispatches all hooks via `Messaging`
+- Removed from Routes.fs: all `/hook/*` routes, `flushTileModifiers`, `actorPosDict`, `currentRound`, mapping functions (570 → 140 lines)
+- Removed C# `EngineClient.cs` (old sync client, zero callers)
+- Removed C# `CommandServer.cs` (old `BoamCommandServer` HTTP listener); moved `Port` + `ActionCommand` to `BridgeServer` in `QueryCommandServer.cs`
+- Routes.fs retained: `/status` GET, `/shutdown` POST, `/navigate/tactical`, `/render/battle/{name}`
+
+### Phase 3: Foundation Cleanup — DONE
+
+Data model fixes that eliminate workarounds.
+
+- **StateStore thread safety (Issue 4)**: `Dictionary` → `ConcurrentDictionary`, `Remove` → `TryRemove`
+- **Eliminated actorPosDict (Issues 1, 9)**: all position state flows through the thread-safe StateStore; `ClearAll()` at battle-end
+- **Faction filtering (Issue 5)**: `ActorPosState` now carries `Faction: int`; pack node filters by `state.Faction = a.Faction` — player units no longer treated as wildlife allies
+- **Proper FactionState on turn-end (Issue 6)**: stored at turn-start via `lastFactionState` key, carried forward to turn-end walker — nodes see real opponent data instead of empty lists
+- **Dead code removal (Issues 10, 11, 15)**: removed `BehaviorOverridePatch.cs`, `ShapeTileModifier.fs`, inline test node from Program.fs
+
+### Phase 4: C# Sync Transforms — DONE
+
+C# owns data derivation from live game objects; F# owns domain decisions.
+
+- **`src/Transforms/SyncTransforms.cs`**: static methods that enrich hook payloads with derived values
+  - `ComputeContactState` — reads live vision + all entity positions, injects `inContact` bool
+  - `ComputeMovementBudget` — reads live AP/skills/movement, injects `cheapestAttack`, `costPerTile`
+- **Static data stored once**: skills and movement parsed at tactical-ready into `ActorStaticData` (per-session StateKey); turn-end no longer sends them in the payload
+- **F# reads pre-computed values**: `ActorStatus` carries `CheapestAttack`, `CostPerTile` from C# transforms; `inContact` read from payload
+- **Domain logic stays in F#**: `RoamingBehaviour` computes `maxDist = moveBudget / costPerTile` — node-specific decision, not a transform
+- Removed `GatherMovementData` and skills gathering from C# turn-end path
+- `modpack.json` updated: removed deleted files, added `SyncTransforms.cs`
+
+### Phase 5: Performance — TODO
+
 ```
-Phase 1: Symmetric Protocol (NEW FILES — don't modify existing)
-  ├── C#: new QueryCommandServer.cs — POST /query + POST /command, dispatch by {"type": "..."}
-  ├── C#: new QueryCommandClient.cs — client for F# → C# queries/commands
-  ├── F#: new Messaging.fs — POST /query + POST /command handlers, dispatch by type
-  ├── F#: new MessagingClient.fs — client for C# → F# queries/commands (replaces EngineClient usage)
-  ├── Both sides coexist with old routes — nothing removed yet
-
-Phase 2: Migrate Existing Traffic
-  ├── Migrate hooks one at a time from old routes to POST /command {"type":"hook", "hook":"..."}
-  ├── Migrate tile-modifier flush from old CommandServer routes to POST /command {"type":"tile-modifier"}
-  ├── Migrate ready signaling to new protocol
-  ├── Add TacticalReady hook point (Issues 2, 3, 7)
-  ├── Extract per-type parsing to dispatch handlers (Issue 13)
-  ├── F# pulls data via /query where needed (on-demand transforms)
-  ├── Once all traffic flows through new routes, remove old routes
-
-Phase 3: Foundation Cleanup
-  ├── StateStore thread safety (Issue 4)
-  ├── Eliminate actorPosDict (Issues 1, 9)
-  ├── Faction filtering (Issue 5)
-  ├── Proper FactionState on turn-end (Issue 6)
-  ├── Dead code removal (Issues 10, 11, 15)
-
-Phase 4: C# Transform Pipeline
-  ├── Create Transforms/ directory and pattern
-  ├── Unify skill + movement data gathering (Issues 8, 14)
-  ├── Move contact detection, AP-budget derivation to registered transforms
-  └── Hooks offer raw + enriched via transform middleware
-
-Phase 5: Performance
   └── Async flush / batch via single command (Issue 12)
 ```
-
-Phase 1 adds new files alongside existing code — zero risk, nothing breaks.
-Phase 2 migrates traffic incrementally — old and new coexist during transition.
-Phase 3-5 clean up once the new protocol is the only path.

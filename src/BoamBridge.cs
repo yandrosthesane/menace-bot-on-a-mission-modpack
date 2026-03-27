@@ -46,7 +46,7 @@ public class BoamBridge : IModpackPlugin
     /// <summary>Tactical scene ready AND engine is connected (for hooks that POST to the engine).</summary>
     public bool IsEngineReady => _ready && _engineAvailable;
     private QueryCommandServer _commandServer;
-    private readonly System.Collections.Concurrent.ConcurrentQueue<BoamCommandServer.ActionCommand> _executeQueue = new();
+    private readonly System.Collections.Concurrent.ConcurrentQueue<BridgeServer.ActionCommand> _executeQueue = new();
     private float _nextCommandTime;
     private TacticalMap.TacticalMapOverlay _tacticalMap;
 
@@ -258,7 +258,7 @@ public class BoamBridge : IModpackPlugin
         }
 
         // Start command server (symmetric protocol: /query + /command)
-        _commandServer = new QueryCommandServer(Logger, BoamCommandServer.Port);
+        _commandServer = new QueryCommandServer(Logger, BridgeServer.Port);
         // Register old command handlers as command types
         _commandServer.AddCommandHandler("tile-modifier", root => {
             TileModifierStore.SetFromJson(root.GetRawText());
@@ -279,7 +279,7 @@ public class BoamBridge : IModpackPlugin
             var skill = root.TryGetProperty("skill", out var sv) ? sv.GetString() ?? "" : "";
             var actor = root.TryGetProperty("actor", out var av) ? av.GetString() ?? "" : "";
             var delayMs = root.TryGetProperty("delay_ms", out var dv) ? dv.GetInt32() : 0;
-            _executeQueue.Enqueue(new BoamCommandServer.ActionCommand {
+            _executeQueue.Enqueue(new BridgeServer.ActionCommand {
                 Action = action, X = x, Z = z, Skill = skill, Actor = actor, DelayMs = delayMs
             });
             Logger.Msg($"[BOAM] Command queued: {action} ({x},{z}) {skill}");

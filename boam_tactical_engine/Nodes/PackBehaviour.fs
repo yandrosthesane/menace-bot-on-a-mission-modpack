@@ -48,16 +48,17 @@ let node : NodeDef = {
         match actorOpt with
         | None -> ()
         | Some a ->
-            // Build ally list: all other actors' positions + acted state + contact state
+            // Build ally list: same-faction actors only (excludes player units and other factions)
             let allies =
                 positions
                 |> Map.toList
                 |> List.choose (fun (id, state) ->
-                    if id <> a.Actor then Some (state.Position, state.HasActed, state.InContact)
+                    if id <> a.Actor && state.Faction = a.Faction then Some (state.Position, state.HasActed, state.InContact)
                     else None)
 
+            let totalOthers = positions |> Map.count |> fun n -> n - 1
             if allies.IsEmpty then
-                ctx.Log (sprintf "%s: no allies for pack scoring" a.Actor)
+                ctx.Log (sprintf "%s: no allies for pack scoring (%d others filtered by faction)" a.Actor totalOthers)
             else
                 // Get existing tile map for this actor (from roaming or empty)
                 let actorTiles = existing |> Map.tryFind a.Actor |> Option.defaultValue Map.empty

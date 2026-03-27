@@ -6,7 +6,6 @@ namespace BOAM;
 /// <summary>
 /// Symmetric protocol client: sends POST /query and POST /command to the F# engine.
 /// Uses WebClient (sync) to avoid async deadlocks under Wine CLR.
-/// Coexists with EngineClient during migration.
 /// </summary>
 internal static class QueryCommandClient
 {
