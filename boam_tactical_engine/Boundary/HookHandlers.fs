@@ -120,12 +120,13 @@ let private handleOnTurnEnd (ctx: RouteContext) (root: JsonElement) =
         let staticData = ctx.Store.ReadOrDefault(actorStaticData, Map.empty)
         let actorStatus = parseActorStatus root actor faction tileX tileZ staticData
         ctx.Store.Write(turnEndActor, actorStatus)
-        // Read pre-computed contact state from C# transform (falls back to false)
+        // Read pre-computed contact state from C# transforms
+        let inRange = match root.TryGetProperty("inRange") with | true, v -> v.GetBoolean() | _ -> false
         let inContact = match root.TryGetProperty("inContact") with | true, v -> v.GetBoolean() | _ -> false
         let positions = ctx.Store.ReadOrDefault(actorPositions, Map.empty)
-        let updated = positions |> Map.add actor { Position = { X = tileX; Z = tileZ }; Faction = faction; HasActed = true; InContact = inContact }
+        let updated = positions |> Map.add actor { Position = { X = tileX; Z = tileZ }; Faction = faction; HasActed = true; InRange = inRange; InContact = inContact }
         ctx.Store.Write(actorPositions, updated)
-        logHook (sprintf "  store: %d actors in positions (actor=%s f=%d contact=%b)" (Map.count updated) actor faction inContact)
+        logHook (sprintf "  store: %d actors (actor=%s f=%d range=%b contact=%b)" (Map.count updated) actor faction inRange inContact)
     with ex -> logWarn (sprintf "  failed to parse actor status: %s" ex.Message)
 
     // Use the last real FactionState from turn-start, falling back to a minimal one
@@ -214,7 +215,7 @@ let private handleTacticalReady (ctx: RouteContext) (root: JsonElement) =
                     actors.Add(actorId)
                     let x = match item.TryGetProperty("x") with | true, v -> v.GetInt32() | _ -> 0
                     let z = match item.TryGetProperty("z") with | true, v -> v.GetInt32() | _ -> 0
-                    let posState = { Position = { X = x; Z = z }; Faction = faction; HasActed = false; InContact = false }
+                    let posState = { Position = { X = x; Z = z }; Faction = faction; HasActed = false; InRange = false; InContact = false }
                     initPositions <- initPositions |> Map.add actorId posState
                     let apStart = match item.TryGetProperty("apStart") with | true, v -> v.GetInt32() | _ -> 100
                     // Parse skills

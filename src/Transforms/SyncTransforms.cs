@@ -21,7 +21,8 @@ internal static class SyncTransforms
         try
         {
             var (actorX, actorZ) = ActorRegistry.GetPos(gameObj);
-            bool inContact = false;
+            bool inRange = false;
+            bool detected = false;
 
             var allActors = EntitySpawner.ListEntities(-1);
             if (allActors != null)
@@ -30,19 +31,34 @@ internal static class SyncTransforms
                 {
                     var info = EntitySpawner.GetEntityInfo(a);
                     if (info == null || !info.IsAlive || info.FactionIndex == factionId) continue;
-                    var pos = EntityMovement.GetPosition(a);
-                    if (pos == null) continue;
-                    int dx = (int)pos.Value.x - actorX;
-                    int dz = (int)pos.Value.y - actorZ;
-                    if (dx * dx + dz * dz <= vision * vision)
+
+                    // Raw: any opponent within vision radius
+                    if (!inRange)
                     {
-                        inContact = true;
-                        break;
+                        var pos = EntityMovement.GetPosition(a);
+                        if (pos != null)
+                        {
+                            int dx = (int)pos.Value.x - actorX;
+                            int dz = (int)pos.Value.y - actorZ;
+                            if (dx * dx + dz * dz <= vision * vision)
+                                inRange = true;
+                        }
                     }
+
+                    // Game detection: opponent actually detected by this faction (LOS + concealment)
+                    if (!detected)
+                    {
+                        var opponentActor = new Actor(a.Pointer);
+                        if (opponentActor.IsDetectedByFaction(factionId))
+                            detected = true;
+                    }
+
+                    if (inRange && detected) break;
                 }
             }
 
-            payload["inContact"] = inContact;
+            payload["inRange"] = inRange;
+            payload["inContact"] = detected;
         }
         catch (Exception ex)
         {

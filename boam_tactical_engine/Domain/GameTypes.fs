@@ -106,7 +106,7 @@ type ActorStaticData = {
 }
 
 /// Tracked position, acted state, and contact state for pack behaviour.
-type ActorPosState = { Position: TilePos; Faction: int; HasActed: bool; InContact: bool }
+type ActorPosState = { Position: TilePos; Faction: int; HasActed: bool; InRange: bool; InContact: bool }
 
 /// Per-tile utility modifiers for an actor, sent to the bridge.
 /// Key = tile position, Value = utility bonus to add.

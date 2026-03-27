@@ -10,28 +10,31 @@ open BOAM.TacticalEngine.Node
 open BOAM.TacticalEngine.Keys
 
 // Pack scoring parameters
-let private radius = 7f            // Influence range per ally (tiles)
+let private radius = 10f           // Influence range per ally (tiles)
 let private peak = 2.5f            // Ideal density — sweet spot
 let private attraction = 80f       // Utility per density unit below peak
 let private crowdPenalty = 120f    // Penalty per density unit above peak
 let private anchoredWeight = 1.0f  // Influence multiplier for allies that already acted
 let private unactedWeight = 0.3f   // Influence multiplier for allies that haven't acted
-let private contactBonus = 0.5f    // Extra influence for allies that can see an opponent
+let private contactBonus = 1.5f    // Extra influence for engaged allies (inRange && inContact)
 
 /// Compute pack score for a single tile given all ally positions.
-/// Each ally is (position, hasActed, inContact).
+/// Each ally is (position, hasActed, engaged) where engaged = inRange && inContact.
 let private packScoreAtTile (tileX: int) (tileZ: int) (allies: (TilePos * bool * bool) list) =
     let mutable density = 0f
-    for (pos, hasActed, inContact) in allies do
+    let mutable hasEngaged = false
+    for (pos, hasActed, engaged) in allies do
         let dx = float32 (tileX - pos.X)
         let dz = float32 (tileZ - pos.Z)
         let dist = sqrt (dx * dx + dz * dz)
         if dist < radius then
             let influence = (1f - dist / radius)
-            let weight = (if hasActed then anchoredWeight else unactedWeight) + (if inContact then contactBonus else 0f)
+            let weight = (if hasActed then anchoredWeight else unactedWeight) + (if engaged then contactBonus else 0f)
             density <- density + influence * weight
-    // Crowd curve: rises to peak, then drops
-    attraction * min density peak - crowdPenalty * max 0f (density - peak)
+            if engaged then hasEngaged <- true
+    // Crowd curve: rises to peak, then drops — but no crowd penalty near engaged allies
+    let penalty = if hasEngaged then 0f else crowdPenalty * max 0f (density - peak)
+    attraction * min density peak - penalty
 
 /// The node definition. Register this in the graph after RoamingBehaviour.
 let node : NodeDef = {
@@ -49,11 +52,12 @@ let node : NodeDef = {
         | None -> ()
         | Some a ->
             // Build ally list: same-faction actors only (excludes player units and other factions)
+            // Engaged = personally in range AND faction has detected the opponent
             let allies =
                 positions
                 |> Map.toList
                 |> List.choose (fun (id, state) ->
-                    if id <> a.Actor && state.Faction = a.Faction then Some (state.Position, state.HasActed, state.InContact)
+                    if id <> a.Actor && state.Faction = a.Faction then Some (state.Position, state.HasActed, state.InRange && state.InContact)
                     else None)
 
             let totalOthers = positions |> Map.count |> fun n -> n - 1
@@ -77,9 +81,9 @@ let node : NodeDef = {
                             existingUtility + ps)
 
                     let acted = allies |> List.filter (fun (_, a, _) -> a) |> List.length
-                    let contact = allies |> List.filter (fun (_, _, c) -> c) |> List.length
-                    ctx.Log (sprintf "%s: pack scored %d tiles, %d allies (%d acted, %d contact), score range %.0f..%.0f"
-                        a.Actor (Map.count updatedTiles) (List.length allies) acted contact minScore maxScore)
+                    let engaged = allies |> List.filter (fun (_, _, e) -> e) |> List.length
+                    ctx.Log (sprintf "%s: pack scored %d tiles, %d allies (%d acted, %d engaged), score range %.0f..%.0f"
+                        a.Actor (Map.count updatedTiles) (List.length allies) acted engaged minScore maxScore)
 
                     ctx |> NodeContext.write tileModifiers (existing |> Map.add a.Actor updatedTiles)
 }

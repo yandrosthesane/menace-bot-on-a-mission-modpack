@@ -1,6 +1,8 @@
 /// RoamingBehaviour node — encourages AI units to move when they have no detected opponents.
 /// Computes per-tile utility modifiers scaled by distance, gated by AP budget.
-/// Initial modifiers are computed at tactical-ready (see Routes.fs).
+/// SKIPS when the actor is engaged (inRange && inContact) or any same-faction ally within
+/// pack radius is engaged — pack behaviour handles movement toward threats instead.
+/// Initial modifiers are computed at tactical-ready.
 /// On each turn-end: recomputes for the actor whose turn just ended (updated position).
 module BOAM.TacticalEngine.Nodes.RoamingBehaviour
 
@@ -11,6 +13,7 @@ open BOAM.TacticalEngine.Keys
 
 let private baseUtility = 100f
 let private mapSize = 42 // max tactical map dimension
+let private engagementRadius = 10f // same as pack radius — skip roaming if any ally within this range is engaged
 
 /// Compute per-tile utility for an actor: utility scales with distance, gated by AP budget.
 let computeTileModifiers (pos: TilePos) (maxDist: int) : TileModifierMap =
@@ -25,30 +28,42 @@ let computeTileModifiers (pos: TilePos) (maxDist: int) : TileModifierMap =
                 tiles <- tiles |> Map.add { X = x; Z = z } utility
     tiles
 
+/// Check if this actor or any same-faction ally within radius is engaged.
+let private isNearEngagement (actor: ActorStatus) (positions: Map<string, ActorPosState>) =
+    positions |> Map.exists (fun _ state ->
+        state.Faction = actor.Faction && state.InRange && state.InContact &&
+        (let dx = float32 (state.Position.X - actor.Position.X)
+         let dz = float32 (state.Position.Z - actor.Position.Z)
+         sqrt (dx * dx + dz * dz) <= engagementRadius))
+
 /// The node definition. Register this in the graph.
 let node : NodeDef = {
     Name = "roaming-behaviour"
     Hook = OnTurnEnd
     Timing = Prefix
-    Reads = [ "turn-end-actor"; "tile-modifiers" ]
+    Reads = [ "turn-end-actor"; "tile-modifiers"; "actor-positions" ]
     Writes = [ "tile-modifiers" ]
     Run = fun ctx ->
         let existing = ctx |> NodeContext.readOrDefault tileModifiers Map.empty
+        let positions = ctx |> NodeContext.readOrDefault actorPositions Map.empty
 
-        // Recompute for the actor whose turn just ended (new position after moving)
         let actorOpt = ctx |> NodeContext.read turnEndActor
         let modifiers =
             match actorOpt with
             | Some a ->
-                let moveBudget = a.ApStart - a.CheapestAttack
-                let maxDist = if a.CostPerTile > 0 then moveBudget / a.CostPerTile else 3
-                let tileMap = computeTileModifiers a.Position maxDist
+                if isNearEngagement a positions then
+                    ctx.Log (sprintf "%s at (%d,%d): SKIP — near engagement, clearing roaming" a.Actor a.Position.X a.Position.Z)
+                    existing |> Map.remove a.Actor
+                else
+                    let moveBudget = a.ApStart - a.CheapestAttack
+                    let maxDist = if a.CostPerTile > 0 then moveBudget / a.CostPerTile else 3
+                    let tileMap = computeTileModifiers a.Position maxDist
 
-                ctx.Log (sprintf "%s at (%d,%d) AP=%d/%d cheapAtk=%d cost/tile=%d budget=%d maxDist=%d → %d tiles"
-                    a.Actor a.Position.X a.Position.Z
-                    a.Ap a.ApStart a.CheapestAttack a.CostPerTile moveBudget maxDist (Map.count tileMap))
+                    ctx.Log (sprintf "%s at (%d,%d) AP=%d/%d cheapAtk=%d cost/tile=%d budget=%d maxDist=%d → %d tiles"
+                        a.Actor a.Position.X a.Position.Z
+                        a.Ap a.ApStart a.CheapestAttack a.CostPerTile moveBudget maxDist (Map.count tileMap))
 
-                existing |> Map.add a.Actor tileMap
+                    existing |> Map.add a.Actor tileMap
 
             | None -> existing
 
