@@ -2,19 +2,29 @@
 
 // BOAM documentation — Quartz style overrides
 
-// Widen the layout — give center content column more room
 body {
   max-width: 1920px;
   margin: 0 auto;
   padding: 0 2rem;
 }
 
-// Override Quartz grid to give content ~60% instead of the default narrow center
 .page {
-  & > .center {
-    max-width: 900px;
-    flex: 1 1 900px;
+  max-width: 100% !important;
+}
+
+.page > #quartz-body {
+  grid-template-columns: 280px 1fr 280px !important;
+}
+
+@media (min-width: 800px) and (max-width: 1200px) {
+  .page > #quartz-body {
+    grid-template-columns: 280px 1fr !important;
   }
+}
+
+.page > #quartz-body .center,
+.page > #quartz-body footer {
+  max-width: 100% !important;
 }
 
 // Larger body text for readability
