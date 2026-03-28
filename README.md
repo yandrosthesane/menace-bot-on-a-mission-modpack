@@ -12,6 +12,7 @@ and records full battle sessions (player actions + AI decisions + combat outcome
 
 | Feature | Description |
 |---------|-------------|
+| [AI Behaviour](docs/features/README_BEHAVIOUR.md) | Configurable behaviour nodes that influence enemy AI movement — roaming, pack formation, combat repositioning |
 | [Tactical Minimap](docs/features/README_MINIMAP.md) | In-game IMGUI overlay showing unit positions on the captured map background |
 | [Heatmap Renderer](docs/features/README_HEATMAPS.md) | Offline heatmap generation from deferred render jobs — tile scores, decisions, movement |
 | [Action Logging](docs/features/README_BOAM_ENGINE.md) | Records player actions, AI decisions, and combat outcomes to JSONL battle logs |
@@ -48,6 +49,7 @@ Menace/
 │   ├── modpack.json               Mod manifest
 │   ├── configs/                   Mod default configs (reset on deploy)
 │   │   ├── engine.json5           Engine ports, rendering, heatmaps toggle
+│   │   ├── behaviour.json5       AI behaviour node chains and tuning presets
 │   │   ├── tactical_map.json5     Minimap keybindings, visual defaults
 │   │   ├── tactical_map_presets.json5  Display presets (sizes, styles, anchors)
 │   │   └── icon-config.json5      Icon generation source mappings
@@ -173,6 +175,7 @@ See [Icon Generator](docs/features/README_ICON_GENERATOR.md).
 ## Documentation
 
 - [Installation Guide](docs/features/README_INSTALL.md) — Setup, asset extraction, icon generation, shell shortcuts
+- [AI Behaviour](docs/features/README_BEHAVIOUR.md) — How behaviour nodes work, configuration, adding custom nodes
 - [Tactical Minimap](docs/features/README_MINIMAP.md) — In-game overlay controls, display presets, customization
 - [Heatmap Renderer](docs/features/README_HEATMAPS.md) — Render API, pattern matching, what each heatmap shows
 - [Configuration](docs/features/README_CONFIG.md) — Two-tier config system, versioning, all config options
