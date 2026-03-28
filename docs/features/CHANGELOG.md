@@ -6,65 +6,76 @@ order: 10
 
 ## v2.0.0
 
-### AI Behaviour System
+### AI behaviour system
 
-Three behaviour nodes modify enemy AI movement through per-tile utility injection:
+Per-tile score modifiers injected during the game's tile evaluation. Three behaviour nodes run in a configurable chain:
 
-- **Roaming** — idle units explore outward, suppressed when near engagement
-- **Reposition** — units move toward their ideal attack range from the closest known enemy. Melee swarm, ranged find firing positions.
-- **Pack** — units form groups and converge on engaged allies. Crowd penalty suppressed near combat.
+- Roaming — explore outward when idle, suppressed near engagement
+- Reposition — move toward closest known enemy at ideal attack range (scaled by 1/idealRange — melee gets strongest pull)
+- Pack — form groups, converge on engaged allies, crowd penalty suppressed near combat
 
-See [AI Behaviour System](README_BEHAVIOUR.md) and individual docs for [Roaming](behaviours/ROAMING.md), [Reposition](behaviours/REPOSITION.md), [Pack](behaviours/PACK.md).
+Pack init runs at battle start with a boost multiplier for aggressive initial formation.
 
-### Configurable Behaviour
+See [Influencing AI Behaviour](README_BEHAVIOUR.md) for the full architecture and per-node docs.
 
-All behaviour parameters are in `configs/behaviour.json5`:
+### Configurable behaviour (`behaviour.json5`)
 
-- **Hook chains** — define which nodes run on each game event, in what order. Remove a node to disable it.
-- **Named presets** — each behaviour has presets (default, aggressive, cautious, etc.) selectable by name.
-- **Adaptive score scaling** — modifiers scale relative to the game's own tile scores. Hardcoded defaults serve as a floor.
+- Hook chains — define which nodes run on each game event, in what order. Remove a node to disable it.
+- Named presets per behaviour — selectable via the `active` block
+- Node catalogue — nodes register by name, config drives which ones are wired to which hooks
+- Adaptive score scaling — modifiers use `max(default, gameMaxScore * fraction)` so they stay proportional to the game's own evaluation
 
 See [Adding Nodes](behaviours/ADDING_A_BEHAVIOR_NODE) for a guide to creating new behaviours.
 
-### Symmetric Protocol
+### Symmetric protocol
 
-C# bridge and F# engine communicate via a symmetric query/command protocol:
+C# bridge and F# engine communicate via two endpoints:
 
-- `POST /query` — read-only queries (status, features)
+- `POST /query` — read-only (status, features)
 - `POST /command` — side effects (hooks, tile modifiers)
 
 Both directions use `{"type": "..."}` dispatch. Replaces the previous 15+ individual HTTP routes.
 
-### Architecture Cleanup
+### Architecture
 
-- **Thread-safe StateStore** — `ConcurrentDictionary` eliminates race conditions
-- **Faction-aware pack scoring** — player units no longer treated as wildlife allies
-- **Static data pipeline** — skills and movement costs stored once at tactical-ready, not re-sent each turn
-- **C# sync transforms** — contact detection and movement budget computed from live game objects
-- **Batch tile modifier flush** — single POST replaces 28 sequential round-trips
-- **Config-driven node registration** — `behaviour.json5` controls which nodes run on which hooks
+- Thread-safe StateStore (ConcurrentDictionary)
+- OnTacticalReady hook point — nodes run their own init at battle start via the walker
+- Faction-aware pack scoring — player units no longer treated as wildlife allies
+- Static data pipeline — skills and movement costs stored once at tactical-ready
+- C# sync transforms — contact detection (`IsDetectedByFaction` + vision range) and movement budget computed from live game objects
+- Batch tile modifier flush — single POST replaces N sequential round-trips
+- Walker logs `>>` / `<<` markers per node for easy log parsing
+
+### Minimap
+
+- No-label display preset (`FontSize: 0` now correctly hides labels)
+- All presets now show all fields for easier customization
 
 ### Fixes
 
 - Engine connection race — multiple check threads no longer overwrite each other
-- Template AP fallback — `GetActionPointsAtTurnStart()` returns 0 for wildlife before their first turn; now reads from entity template
-- `boam-launch.sh` kills stale engine processes before starting a new one
-- `idealRange` now included in dramatis personae (was missing from tactical-ready payload)
+- Template AP fallback — reads from `EntityTemplate.Properties.ActionPoints` when `GetActionPointsAtTurnStart()` returns 0
+- `boam-launch.sh` kills stale engine processes before starting
+- `idealRange` included in dramatis personae
+- Contact detection uses game's `IsDetectedByFaction` instead of raw distance check
+
+### CI
+
+- Release workflow — push a version tag to build all archives and create a GitHub Release with changelog notes
+- Documentation workflow builds and deploys to GitHub Pages
 
 ### Removed
 
-- `BehaviorOverridePatch.cs` — dead Harmony patch
-- `ShapeTileModifier.fs` — test node
-- `EngineClient.cs` — replaced by QueryCommandClient
-- `CommandServer.cs` — replaced by QueryCommandServer
-- 15+ individual hook routes — replaced by symmetric protocol dispatch
+- `BehaviorOverridePatch.cs`, `ShapeTileModifier.fs`, `EngineClient.cs`, `CommandServer.cs`
+- Inline test node from Program.fs
+- 15+ individual hook routes
 
 ---
 
 ## v1.3.0
 
 ### Tile modifier system
-Engine-controlled tile score injection for directing AI unit movement. Supports target-tile mode (gradient toward a position), distance-gating mode (flat bonus in range), attack suppression, and forced idle on arrival. See [Tile Modifier System](../done/1_tile-modifier-system.md).
+Engine-controlled tile score injection for directing AI unit movement. Supports target-tile mode (gradient toward a position), distance-gating mode (flat bonus in range), attack suppression, and forced idle on arrival. See [Tile Modifier System](../tech/up_to_2.0/1_tile-modifier-system.md).
 
 ### Modpack config (`modpack.json5`)
 Independent config file for the C# bridge, separate from the engine's `engine.json5`. Loaded with the same two-tier resolution (user → default) and config version check. Currently gates `opponent_filter`.

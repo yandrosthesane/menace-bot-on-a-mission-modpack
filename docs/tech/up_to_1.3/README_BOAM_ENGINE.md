@@ -85,7 +85,7 @@ boam_tactical_engine/
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/render/battle/{name}` | POST | Render heatmaps from render jobs (see [Heatmap Renderer](../features/README_HEATMAPS.md)) |
+| `/render/battle/{name}` | POST | Render heatmaps from render jobs (see [Heatmap Renderer](../../features/README_HEATMAPS.md)) |
 
 ### System Endpoints
 
