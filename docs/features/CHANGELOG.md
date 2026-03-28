@@ -4,6 +4,10 @@ order: 10
 
 # Changelog
 
+## v2.0.2
+
+CI release fix iteration.
+
 ## v2.0.1
 
 CI release fix — release notes now correctly populate the GitHub Release description.
