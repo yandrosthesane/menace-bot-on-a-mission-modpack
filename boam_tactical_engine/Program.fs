@@ -132,6 +132,8 @@ let main argv =
     let registry = Registry()
     let store = StateStore()
 
+    registry.Register([Nodes.RoamingBehaviour.initNode])
+    registry.Register([Nodes.PackBehaviour.initNode])
     registry.Register([Nodes.RoamingBehaviour.node])
     registry.Register([Nodes.RepositionBehaviour.node])
     registry.Register([Nodes.PackBehaviour.node])

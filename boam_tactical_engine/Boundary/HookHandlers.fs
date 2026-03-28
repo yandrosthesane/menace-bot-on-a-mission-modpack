@@ -48,23 +48,24 @@ let mutable private currentRound = 0
 
 let flushTileModifiersViaMessaging (store: StateStore.StateStore) =
     try
-        MessagingClient.commandRaw """{"type":"tile-modifier-clear"}""" |> ignore
         let modifiers = store.ReadOrDefault(tileModifiers, Map.empty)
-        let mutable sent = 0
+        let mutable actorCount = 0
         let mutable totalTiles = 0
-        for kv in modifiers do
-            let actor = kv.Key
-            let tileMap = kv.Value
-            if not (Map.isEmpty tileMap) then
-                let tilesJson =
-                    tileMap |> Map.toSeq |> Seq.map (fun (pos, utility) ->
-                        sprintf """{"x":%d,"z":%d,"u":%g}""" pos.X pos.Z utility)
-                    |> String.concat ","
-                let json = sprintf """{"type":"tile-modifier","actor":"%s","tiles":[%s]}""" actor tilesJson
-                if MessagingClient.commandRaw json then
-                    sent <- sent + 1
+        let actorsJson =
+            modifiers |> Map.toSeq |> Seq.choose (fun (actor, tileMap) ->
+                if Map.isEmpty tileMap then None
+                else
+                    actorCount <- actorCount + 1
                     totalTiles <- totalTiles + Map.count tileMap
-        if sent > 0 then logInfo (sprintf "Flushed %d actors (%d total tiles) to bridge" sent totalTiles)
+                    let tilesJson =
+                        tileMap |> Map.toSeq |> Seq.map (fun (pos, utility) ->
+                            sprintf """{"x":%d,"z":%d,"u":%g}""" pos.X pos.Z utility)
+                        |> String.concat ","
+                    Some (sprintf """{"actor":"%s","tiles":[%s]}""" actor tilesJson))
+            |> String.concat ","
+        let json = sprintf """{"type":"tile-modifier-batch","actors":[%s]}""" actorsJson
+        if MessagingClient.commandRaw json then
+            if actorCount > 0 then logInfo (sprintf "Flushed %d actors (%d total tiles) to bridge" actorCount totalTiles)
     with ex -> logWarn (sprintf "flushTileModifiers error: %s" ex.Message)
     try MessagingClient.commandRaw """{"type":"tile-modifier-ready"}""" |> ignore
     with _ -> ()
@@ -166,6 +167,11 @@ let private handleTileScores (ctx: RouteContext) (root: JsonElement) =
             | None -> ()
         if Config.Current.Heatmaps then
             RenderJobCollector.accumulate (toTileScoreInput payload)
+        // Track max absolute Combined score per actor for scaling modifiers
+        let maxAbs = payload.Tiles |> List.map (fun t -> abs t.Combined) |> List.fold max 0f
+        if maxAbs > 0f then
+            let scales = ctx.Store.ReadOrDefault(gameScoreScale, Map.empty)
+            ctx.Store.Write(gameScoreScale, scales |> Map.add payload.Actor maxAbs)
         Results.Ok({| hook = "tile-scores"; status = "ok" |}) :> IResult
 
 let private handleMovementFinished (ctx: RouteContext) (root: JsonElement) =
@@ -240,20 +246,17 @@ let private handleTacticalReady (ctx: RouteContext) (root: JsonElement) =
                                    IsFlying = match m.TryGetProperty("isFlying") with | true, v -> v.GetBoolean() | _ -> false }
                         | _ -> None
                     // Store static data per actor
-                    staticDataMap <- staticDataMap |> Map.add actorId { Skills = skills; Movement = movement }
-                    let costPerTile = match movement with Some m when m.LowestMovementCost > 0 -> m.LowestMovementCost | _ -> 16
-                    let moveBudget = apStart - cheapestAttack
-                    let maxDist = if costPerTile > 0 then moveBudget / costPerTile else 3
-                    let tileMap = Nodes.RoamingBehaviour.computeTileModifiers { X = x; Z = z } maxDist
-                    initModifiers <- initModifiers |> Map.add actorId tileMap
-                    logEngine (sprintf "  %s at (%d,%d) ap=%d atk=%d cost=%d maxDist=%d → %d tiles"
-                        actorId x z apStart cheapestAttack costPerTile maxDist (Map.count tileMap))
+                    staticDataMap <- staticDataMap |> Map.add actorId { ApStart = apStart; Skills = skills; Movement = movement }
 
             ctx.Store.Write(aiActors, actors.ToArray())
             ctx.Store.Write(actorPositions, initPositions)
             ctx.Store.Write(actorStaticData, staticDataMap)
-            ctx.Store.Write(tileModifiers, initModifiers)
-            logInfo (sprintf "Registered %d AI actors, computed initial modifiers" actors.Count)
+            logInfo (sprintf "Registered %d AI actors" actors.Count)
+
+            // Run TacticalReady nodes (roaming init, etc.) — nodes compute initial modifiers
+            let factionState : FactionState = { FactionIndex = 0; IsAlliedWithPlayer = false; Opponents = []; Actors = []; Round = 0 }
+            let result = Walker.run ctx.Registry ctx.Store OnTacticalReady Prefix factionState logEngine
+            logHook (sprintf "  tactical-ready walk: %d ran, %d skipped, %.1fms" result.NodesRun result.NodesSkipped result.ElapsedMs)
             flushTileModifiersViaMessaging ctx.Store
         | _ -> ()
     with ex -> logWarn (sprintf "tactical-ready init error: %s" ex.Message)

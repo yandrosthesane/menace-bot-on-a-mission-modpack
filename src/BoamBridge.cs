@@ -264,6 +264,15 @@ public class BoamBridge : IModpackPlugin
             TileModifierStore.SetFromJson(root.GetRawText());
             return "{\"status\":\"ok\"}";
         });
+        _commandServer.AddCommandHandler("tile-modifier-batch", root => {
+            TileModifierStore.Clear();
+            if (root.TryGetProperty("actors", out var actors))
+            {
+                foreach (var actor in actors.EnumerateArray())
+                    TileModifierStore.SetFromJson(actor.GetRawText());
+            }
+            return "{\"status\":\"ok\"}";
+        });
         _commandServer.AddCommandHandler("tile-modifier-clear", _ => {
             TileModifierStore.Clear();
             return "{\"status\":\"cleared\"}";

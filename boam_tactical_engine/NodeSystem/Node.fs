@@ -13,6 +13,7 @@ type Timing =
 type HookPoint =
     | OnTurnStart
     | OnTurnEnd
+    | OnTacticalReady
     | OnRoundStart
     | ConsiderZones
     | SetTile

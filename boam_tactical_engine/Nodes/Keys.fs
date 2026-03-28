@@ -23,5 +23,8 @@ let tileModifiers : StateKey<Map<string, TileModifierMap>> = perFaction "tile-mo
 /// Static per-actor data (skills, movement) from templates, set at tactical-ready.
 let actorStaticData : StateKey<Map<string, ActorStaticData>> = perSession "actor-static-data"
 
+/// Per-actor max absolute Combined score from the game's tile evaluation. Updated each tile-scores hook.
+let gameScoreScale : StateKey<Map<string, float32>> = perSession "game-score-scale"
+
 /// Last FactionState from on-turn-start, carried forward for turn-end walker context.
 let lastFactionState : StateKey<FactionState> = perFaction "last-faction-state"

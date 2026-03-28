@@ -101,6 +101,7 @@ type ActorStatus = {
 
 /// Static per-actor data from the entity template, gathered once at tactical-ready.
 type ActorStaticData = {
+    ApStart: int
     Skills: SkillInfo list
     Movement: MovementData option
 }

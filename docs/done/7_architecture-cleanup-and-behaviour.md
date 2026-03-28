@@ -61,18 +61,47 @@ Runs after roaming and reposition. Adds ally-attraction scores on top.
 **Parameters**:
 - `radius = 20` — influence range per ally
 - `peak = 4.0` — ideal density (groups of 4-5)
-- `attraction = 560` — utility per density unit
+- `defaultAttraction = 560` — utility per density unit (floor)
+- `packFraction = 1.2` — pack influence as fraction of game max score
 - `crowdPenalty = 120` — penalty per density above peak (suppressed when any contributing ally is engaged)
 - `anchoredWeight = 1.0` (allies that already acted), `unactedWeight = 0.3`
 - `contactBonus = 1.5` — extra weight for engaged allies
 
 **No crowd penalty near engaged allies** — when converging on a threat, crowding is the point.
 
+### TacticalReady Walker
+
+The `OnTacticalReady` hook point runs all init nodes through the walker at battle start. No more inlined business logic in the handler — HookHandlers just parses/stores data, then invokes the walker.
+
+Init nodes:
+- `roaming-init` — computes initial roaming modifiers for all actors
+- `pack-init` — adds 3x boosted pack scores on top for aggressive initial pack formation
+
+### Adaptive Score Scaling
+
+All behaviour nodes scale their modifiers relative to the game's own tile evaluation scores:
+
+- `gameScoreScale` StateKey stores the max absolute Combined score per actor, updated each tile-scores hook
+- Each node computes: `max(defaultValue, gameMaxScore * fraction)`
+- Defaults are the floor — game scores only take effect when they produce higher values
+- First turn always uses defaults (no game scores yet)
+
+**Fractions**:
+- Roaming: `1.0x` game max score (explore nudge)
+- Reposition: `2.0x / idealRange` game max score (melee gets strong pull, ranged less)
+- Pack: `1.2x` game max score (ally attraction)
+
+**Why floor-based**: wildlife units have very low game scores (25-125). Pure scaling made modifiers too weak. The floor ensures a minimum influence level; game scaling only kicks in for units with strong game scores.
+
 ### Static Data Pipeline
 
-Skills and movement data are static per unit (from entity templates). Gathered once at tactical-ready, stored in `ActorStaticData` per-session StateKey. Turn-end payloads no longer send this data — the F# side fills `ActorStatus.Skills` and `ActorStatus.Movement` from the store.
+Skills and movement data are static per unit (from entity templates). Gathered once at tactical-ready, stored in `ActorStaticData` (with `ApStart`) per-session StateKey. Turn-end payloads no longer send this data — the F# side fills `ActorStatus.Skills` and `ActorStatus.Movement` from the store.
 
 C# `SyncTransforms.ComputeMovementBudget` reads live AP and skills at turn-end, injects `cheapestAttack` and `costPerTile` into the payload. The roaming/reposition nodes compute `maxDist` (domain decision) from these values.
+
+### Batch Tile Modifier Flush (Phase 5)
+
+Single `tile-modifier-batch` POST replaces N individual POSTs per actor. Clear is implicit — the batch handler clears before applying all actors. Reduces 28 HTTP round-trips to 1.
 
 ### What We Don't Control
 
@@ -87,3 +116,4 @@ C# `SyncTransforms.ComputeMovementBudget` reads live AP and skills at turn-end, 
 2. **Faction-level detection vs per-actor range** — `inContact` is faction-wide (any unit spotted the enemy), `inRange` is personal. Both needed.
 3. **Engagement radius = 20 tiles** — how far the engagement signal propagates to suppress roaming and activate reposition
 4. **All scoring is directional** — compare tile vs current position, only reward improvement. Prevents absolute scores from fighting each other.
+5. **Score scaling uses floor** — `max(default, gameScore * fraction)`. Hardcoded defaults are the minimum; game scores only increase influence.

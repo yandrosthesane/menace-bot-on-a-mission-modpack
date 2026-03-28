@@ -8,7 +8,8 @@ open BOAM.TacticalEngine.NodeContext
 open BOAM.TacticalEngine.Node
 open BOAM.TacticalEngine.Keys
 
-let private baseUtility = 200f
+let private defaultMaxUtility = 600f
+let private repositionFraction = 2.0f  // reposition influence as fraction of game max score (melee at range 1)
 let private mapSize = 42
 
 /// Find the closest known opponent to this actor's position.
@@ -26,47 +27,50 @@ let private closestOpponent (actorPos: TilePos) (opponents: TilePos list) =
 /// Compares each reachable tile's distance-to-target vs the actor's current distance-to-target.
 /// Melee (idealRange <= 1): any tile closer to target scores higher.
 /// Ranged (idealRange > 1): tiles that reduce distance to idealRange score higher.
-let computeRepositionTiles (actorPos: TilePos) (target: TilePos) (idealRange: int) (maxDist: int) : TileModifierMap =
+let computeRepositionTiles (actorPos: TilePos) (target: TilePos) (idealRange: int) (maxDist: int) (maxUtility: float32) : TileModifierMap =
     let idealF = float32 (max 1 idealRange)
+    // Melee (range 1) gets full utility; range 3 gets 1/3; range 5 gets 1/5
+    let rangeScale = maxUtility / idealF
     let currentDx = float32 (actorPos.X - target.X)
     let currentDz = float32 (actorPos.Z - target.Z)
     let currentDistToTarget = sqrt (currentDx * currentDx + currentDz * currentDz)
     let currentDeviation = abs (currentDistToTarget - idealF)
     let mutable tiles = Map.empty
-    for x in 0 .. mapSize - 1 do
-        for z in 0 .. mapSize - 1 do
-            let dx = float32 (x - actorPos.X)
-            let dz = float32 (z - actorPos.Z)
-            let distFromActor = sqrt (dx * dx + dz * dz)
-            if distFromActor >= 1f && distFromActor <= float32 maxDist then
-                let tdx = float32 (x - target.X)
-                let tdz = float32 (z - target.Z)
-                let distFromTarget = sqrt (tdx * tdx + tdz * tdz)
-                let tileDeviation = abs (distFromTarget - idealF)
-                // Score = how much closer to ideal range this tile gets us vs staying put
-                let improvement = currentDeviation - tileDeviation
-                if improvement > 0f then
-                    let utility = baseUtility * (improvement / currentDeviation)
-                    tiles <- tiles |> Map.add { X = x; Z = z } utility
-    tiles
+    if currentDeviation < 0.5f then tiles // already at ideal range
+    else
+        for x in 0 .. mapSize - 1 do
+            for z in 0 .. mapSize - 1 do
+                let dx = float32 (x - actorPos.X)
+                let dz = float32 (z - actorPos.Z)
+                let distFromActor = sqrt (dx * dx + dz * dz)
+                if distFromActor >= 1f && distFromActor <= float32 maxDist then
+                    let tdx = float32 (x - target.X)
+                    let tdz = float32 (z - target.Z)
+                    let distFromTarget = sqrt (tdx * tdx + tdz * tdz)
+                    let tileDeviation = abs (distFromTarget - idealF)
+                    let improvement = currentDeviation - tileDeviation
+                    if improvement > 0f then
+                        let utility = rangeScale * (improvement / currentDeviation)
+                        tiles <- tiles |> Map.add { X = x; Z = z } utility
+        tiles
 
 let node : NodeDef = {
     Name = "reposition-behaviour"
     Hook = OnTurnEnd
     Timing = Prefix
-    Reads = [ "turn-end-actor"; "tile-modifiers"; "actor-positions"; "known-opponents"; "actor-static-data" ]
+    Reads = [ "turn-end-actor"; "tile-modifiers"; "actor-positions"; "known-opponents"; "actor-static-data"; "game-score-scale" ]
     Writes = [ "tile-modifiers" ]
     Run = fun ctx ->
         let existing = ctx |> NodeContext.readOrDefault tileModifiers Map.empty
         let positions = ctx |> NodeContext.readOrDefault actorPositions Map.empty
         let opponents = ctx |> NodeContext.readOrDefault knownOpponents []
         let staticData = ctx |> NodeContext.readOrDefault actorStaticData Map.empty
+        let scales = ctx |> NodeContext.readOrDefault gameScoreScale Map.empty
 
         let actorOpt = ctx |> NodeContext.read turnEndActor
         match actorOpt with
         | None -> ()
         | Some a ->
-            // Only run when near engagement (same check as roaming skip)
             let nearEngagement =
                 positions |> Map.exists (fun _ state ->
                     state.Faction = a.Faction && state.InRange && state.InContact &&
@@ -75,8 +79,7 @@ let node : NodeDef = {
                      sqrt (dx * dx + dz * dz) <= 20f))
             if not nearEngagement then () else
 
-            let knownOpps = opponents |> List.filter (fun _ -> true) // all known from turn-start
-            match closestOpponent a.Position knownOpps with
+            match closestOpponent a.Position opponents with
             | None ->
                 ctx.Log (sprintf "%s: no known opponents for reposition" a.Actor)
             | Some target ->
@@ -87,10 +90,11 @@ let node : NodeDef = {
                     | None -> 1
                 let moveBudget = a.ApStart - a.CheapestAttack
                 let maxDist = if a.CostPerTile > 0 then moveBudget / a.CostPerTile else 3
-                let tileMap = computeRepositionTiles a.Position target idealRange maxDist
+                let maxUtil = match Map.tryFind a.Actor scales with Some s -> max defaultMaxUtility (s * repositionFraction) | None -> defaultMaxUtility
+                let tileMap = computeRepositionTiles a.Position target idealRange maxDist maxUtil
 
-                ctx.Log (sprintf "%s at (%d,%d) → target (%d,%d) idealRange=%d maxDist=%d → %d tiles"
-                    a.Actor a.Position.X a.Position.Z target.X target.Z idealRange maxDist (Map.count tileMap))
+                ctx.Log (sprintf "%s at (%d,%d) → target (%d,%d) idealRange=%d maxDist=%d maxUtil=%.0f → %d tiles"
+                    a.Actor a.Position.X a.Position.Z target.X target.Z idealRange maxDist maxUtil (Map.count tileMap))
 
                 // Write reposition tiles — these replace the zeroed roaming tiles
                 let actorTiles = existing |> Map.tryFind a.Actor |> Option.defaultValue Map.empty

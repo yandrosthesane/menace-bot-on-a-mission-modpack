@@ -48,83 +48,28 @@ Each transform registers on a hook type. When the hook fires:
 
 ## Issues
 
-### High — Architectural
+### Resolved
 
-#### 1. Dual Position State
-**Where:** Routes.fs — module-level `actorPosDict` (ConcurrentDictionary) + `actorPositions` StateStore key
-**Problem:** Two sources of truth. The dict is "live", snapshotted to the store before each walker run. Stale data between snapshots. Never clears between battles.
-**Fix:** Eliminate `actorPosDict`. Make StateStore thread-safe (Issue 4) and use it as the single source of truth.
+| # | Issue | Resolution |
+|---|-------|-----------|
+| 1 | Dual position state (actorPosDict + StateStore) | Eliminated actorPosDict, StateStore is single source of truth (Phase 3) |
+| 4 | StateStore not thread-safe | Dictionary → ConcurrentDictionary (Phase 3) |
+| 5 | Wrong-faction actors in pack scoring | Faction field on ActorPosState, pack filters by same faction (Phase 3) |
+| 6 | Fake FactionState on turn-end | lastFactionState stored at turn-start, carried forward (Phase 3) |
+| 8 | Skill data shape mismatch (idealRange) | Added idealRange to ActorRegistry.BuildDramatisPersonae (Phase 4) |
+| 9 | actorPosDict never cleared between battles | Resolved by Issue 1 — StateStore.ClearAll at battle-end (Phase 3) |
+| 10 | Dead code — BehaviorOverridePatch | Deleted (Phase 3) |
+| 11 | Dead code — ShapeTileModifier | Deleted from fsproj and disk (Phase 3) |
+| 13 | Monolithic on-turn-end handler | Contact detection moved to C# SyncTransform, turn-end handler streamlined (Phase 4) |
+| 14 | Duplicated movement data gathering | Eliminated — static data stored once at tactical-ready in ActorStaticData (Phase 4) |
+| 15 | Test node inline in Program.fs | Deleted (Phase 3) |
+| 2/3 | Business logic in tactical-ready handler | OnTacticalReady hook point + walker; roaming-init and pack-init nodes (Phase 5) |
+| 7 | Initial modifiers skip pack + reposition | Resolved by 2/3 — pack-init runs at tactical-ready with 3x boost |
+| 12 | Synchronous flush, one POST per actor | Single tile-modifier-batch POST replaces N individual calls (Phase 5) |
 
-#### 2. Business Logic in Routes.fs
-**Where:** Routes.fs tactical-ready handler (~45 lines computing AP budget, maxDist, calling `computeTileModifiers`)
-**Problem:** Roaming AP-budget math duplicated in Routes.fs and RoamingBehaviour.node.Run. Routes.fs is doing node work.
-**Fix:** Two parts:
-- Move AP-budget derivation to a C# transform (it reads game state)
-- Move initial modifier computation to nodes via a `TacticalReady` hook point
-- Routes.fs just parses, stores, walks
+### Remaining
 
-#### 3. Scalability — New Nodes Require Routes.fs Changes
-**Where:** Routes.fs tactical-ready handler inlines node-specific init
-**Problem:** Adding a new behaviour node with tactical-ready needs forces changes to Routes.fs.
-**Fix:** `TacticalReady` hook point. Each node owns its init via `Reads`/`Writes` and runs through the walker. Routes.fs invokes the walker, nothing more.
-
-#### 4. StateStore Not Thread-Safe
-**Where:** StateStore.fs uses `Dictionary<string, obj>`
-**Problem:** HTTP handlers dispatch concurrently. Plain Dictionary can corrupt. Root cause of the `actorPosDict` workaround.
-**Fix:** Replace `Dictionary` with `ConcurrentDictionary` inside StateStore.
-
-### Medium — Correctness
-
-#### 5. Wrong-Faction Actors in Pack Scoring
-**Where:** Routes.fs on-turn-end writes ALL actors' positions; pack node treats all entries as allies
-**Problem:** Player units appear as pack allies for wildlife.
-**Fix:** Include faction in `ActorPosState`. Pack node filters by same faction. Or: C# transform filters by faction before sending.
-
-#### 6. Fake FactionState on Turn-End
-**Where:** Routes.fs on-turn-end builds `FactionState` with `Opponents = []; Actors = []`
-**Problem:** Any node accessing `ctx.Faction.Opponents` gets empty data silently.
-**Fix:** Carry forward the last FactionState from turn-start (store it in a key), or make the walker not require FactionState when irrelevant.
-
-#### 7. Initial Modifiers Skip Pack Scoring
-**Where:** Routes.fs tactical-ready only calls RoamingBehaviour
-**Problem:** First round has no pack influence. Behavioral discontinuity.
-**Fix:** Resolved by Issue 3 — running the full walker at tactical-ready.
-
-#### 8. Skill Data Shape Mismatch
-**Where:** ActorRegistry.cs omits `idealRange`; AiActionPatches.cs includes it
-**Problem:** `SkillInfo.IdealRange` parses as 0 from tactical-ready.
-**Fix:** Shared C# skill-gathering helper. Or: C# transform produces consistent skill data for both paths.
-
-#### 9. actorPosDict Never Cleared Between Battles
-**Where:** Routes.fs module-level dict; battle-end handler doesn't clear it
-**Problem:** Phantom actors from previous battles in pack scoring.
-**Fix:** Resolved by Issue 1. StateStore clears via lifetime.
-
-### Low — Code Hygiene
-
-#### 10. Dead Code — BehaviorOverridePatch
-**Where:** BehaviorOverridePatch.cs — empty Prefix, unreachable ForceIdle
-**Fix:** Remove the file.
-
-#### 11. Dead Code — ShapeTileModifier
-**Where:** ShapeTileModifier.fs — commented out, still compiled
-**Fix:** Remove from fsproj and delete.
-
-#### 12. Synchronous .Result in Async Context
-**Where:** Routes.fs flushTileModifiers — blocking HTTP calls
-**Fix:** Make async, or batch into single POST.
-
-#### 13. Monolithic on-turn-end Handler
-**Where:** Routes.fs — ~80 lines of inline JSON parsing, contact detection, state management
-**Fix:** Extract parsing to `HookPayload.parseOnTurnEnd`. Move contact detection to a C# transform.
-
-#### 14. Duplicated Movement Data Gathering (C#)
-**Where:** AiActionPatches.GatherMovementData + ActorRegistry.BuildDramatisPersonae
-**Fix:** Shared helper or unified C# transform.
-
-#### 15. Test Node Inline in Program.fs
-**Where:** test-opponent-summary defined inline, always registered
-**Fix:** Move to Nodes/ directory, gate behind config.
+All issues resolved. See `docs/done/7_architecture-cleanup-and-behaviour.md` for full implementation details.
 
 ---
 
