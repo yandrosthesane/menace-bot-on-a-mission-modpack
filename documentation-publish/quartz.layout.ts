@@ -23,6 +23,15 @@ const explorerConfig = {
     }
     return true
   },
+  sortFn: (a: any, b: any) => {
+    // Sort by slug (which has numeric prefix) to maintain order after mapFn strips it
+    if ((!a.isFolder && !b.isFolder) || (a.isFolder && b.isFolder)) {
+      const slugA = a.slug ?? a.displayName ?? ""
+      const slugB = b.slug ?? b.displayName ?? ""
+      return slugA.localeCompare(slugB, undefined, { numeric: true, sensitivity: "base" })
+    }
+    return a.isFolder ? -1 : 1
+  },
   mapFn: (node: any) => {
     // Rename folder display names to hide nesting
     if (node.isFolder) {

@@ -1,9 +1,9 @@
 # BOAM — Bot On A Mission
 
-**v1.3.0** | [Documentation](https://yandrosthesane.github.io/menace-bot-on-a-mission-modpack) | [Changelog](docs/features/CHANGELOG.md)
+**v2.0.0** | [Documentation](https://yandrosthesane.github.io/menace-bot-on-a-mission-modpack) | [Changelog](docs/features/CHANGELOG.md)
 
-AI behavior analysis mod for Menace.
-Intercepts AI decision-making at runtime,
+AI behavior analysis and modification mod for Menace.
+Modifies enemy AI movement through configurable behaviour nodes (roaming, pack formation, combat repositioning),
 captures tactical data for offline heatmap rendering,
 provides a real-time in-game minimap overlay,
 and records full battle sessions (player actions + AI decisions + combat outcomes).
