@@ -24,13 +24,16 @@ let private closestOpponent (actorPos: TilePos) (opponents: TilePos list) =
     |> Option.map fst
 
 /// Compute tile scores: reward tiles that bring the actor closer to ideal range from target.
-let computeRepositionTiles (actorPos: TilePos) (target: TilePos) (idealRange: int) (maxDist: int) (maxUtility: float32) : TileModifierMap =
+/// approachBias (0–1): how much to favor near-side tiles over far-side tiles with equal improvement.
+/// 0 = no bias (pure ideal-range), 1 = full proximity weighting.
+let computeRepositionTiles (actorPos: TilePos) (target: TilePos) (idealRange: int) (maxDist: int) (maxUtility: float32) (approachBias: float32) : TileModifierMap =
     let idealF = float32 (max 1 idealRange)
     let rangeScale = maxUtility / idealF
     let currentDx = float32 (actorPos.X - target.X)
     let currentDz = float32 (actorPos.Z - target.Z)
     let currentDistToTarget = sqrt (currentDx * currentDx + currentDz * currentDz)
     let currentDeviation = abs (currentDistToTarget - idealF)
+    let maxDistF = float32 maxDist
     let mutable tiles = Map.empty
     if currentDeviation < 0.5f then tiles
     else
@@ -39,15 +42,17 @@ let computeRepositionTiles (actorPos: TilePos) (target: TilePos) (idealRange: in
                 let dx = float32 (x - actorPos.X)
                 let dz = float32 (z - actorPos.Z)
                 let distFromActor = sqrt (dx * dx + dz * dz)
-                if distFromActor >= 1f && distFromActor <= float32 maxDist then
+                if distFromActor >= 1f && distFromActor <= maxDistF then
                     let tdx = float32 (x - target.X)
                     let tdz = float32 (z - target.Z)
                     let distFromTarget = sqrt (tdx * tdx + tdz * tdz)
                     let tileDeviation = abs (distFromTarget - idealF)
                     let improvement = currentDeviation - tileDeviation
                     if improvement > 0f then
-                        let utility = rangeScale * (improvement / currentDeviation)
-                        tiles <- tiles |> Map.add { X = x; Z = z } utility
+                        let rangeComponent = rangeScale * (improvement / currentDeviation)
+                        let proximity = 1f - (distFromActor / maxDistF)
+                        let v = rangeComponent * (1f - approachBias + approachBias * proximity)
+                        tiles <- tiles |> Map.add { X = x; Z = z } (TileModifier.utilityByAttacks v)
         tiles
 
 let node : NodeDef = {
@@ -88,13 +93,13 @@ let node : NodeDef = {
                     | None -> 1
                 let moveBudget = a.ApStart - a.CheapestAttack
                 let maxDist = if a.CostPerTile > 0 then moveBudget / a.CostPerTile else 3
-                let maxUtil = match Map.tryFind a.Actor scales with Some s -> max c.MaxUtility (s * c.Fraction) | None -> c.MaxUtility
-                let tileMap = computeRepositionTiles a.Position target idealRange maxDist maxUtil
+                let maxUtil = match Map.tryFind a.Actor scales with Some s -> max c.MaxUtilityByAttacks (s * c.UtilityByAttacksFraction) | None -> c.MaxUtilityByAttacks
+                let tileMap = computeRepositionTiles a.Position target idealRange maxDist maxUtil c.ApproachBias
 
                 ctx.Log (sprintf "%s at (%d,%d) → target (%d,%d) idealRange=%d maxDist=%d maxUtil=%.0f → %d tiles"
                     a.Actor a.Position.X a.Position.Z target.X target.Z idealRange maxDist maxUtil (Map.count tileMap))
 
                 let actorTiles = existing |> Map.tryFind a.Actor |> Option.defaultValue Map.empty
-                let merged = tileMap |> Map.fold (fun acc k v -> Map.add k (v + (Map.tryFind k acc |> Option.defaultValue 0f)) acc) actorTiles
+                let merged = tileMap |> Map.fold (fun acc k v -> Map.add k (TileModifier.add v (Map.tryFind k acc |> Option.defaultValue TileModifier.zero)) acc) actorTiles
                 ctx |> NodeContext.write tileModifiers (existing |> Map.add a.Actor merged)
 }

@@ -58,8 +58,14 @@ let flushTileModifiersViaMessaging (store: StateStore.StateStore) =
                     actorCount <- actorCount + 1
                     totalTiles <- totalTiles + Map.count tileMap
                     let tilesJson =
-                        tileMap |> Map.toSeq |> Seq.map (fun (pos, utility) ->
-                            sprintf """{"x":%d,"z":%d,"u":%g}""" pos.X pos.Z utility)
+                        tileMap |> Map.toSeq |> Seq.map (fun (pos, m) ->
+                            let parts = ResizeArray()
+                            parts.Add(sprintf """"x":%d,"z":%d""" pos.X pos.Z)
+                            if m.Utility <> 0f then parts.Add(sprintf """"utility":%g""" m.Utility)
+                            if m.Safety <> 0f then parts.Add(sprintf """"safety":%g""" m.Safety)
+                            if m.Distance <> 0f then parts.Add(sprintf """"distance":%g""" m.Distance)
+                            if m.UtilityByAttacks <> 0f then parts.Add(sprintf """"utilityByAttacks":%g""" m.UtilityByAttacks)
+                            sprintf "{%s}" (String.concat "," (parts |> Seq.toList)))
                         |> String.concat ","
                     Some (sprintf """{"actor":"%s","tiles":[%s]}""" actor tilesJson))
             |> String.concat ","
@@ -214,10 +220,13 @@ let private handleTacticalReady (ctx: RouteContext) (root: JsonElement) =
             let mutable initModifiers = Map.empty
             let mutable initPositions = Map.empty
             let mutable staticDataMap = Map.empty
+            let mutable objectives = Set.empty
             for item in dp.EnumerateArray() do
                 let faction = item.GetProperty("faction").GetInt32()
+                let isObjective = match item.TryGetProperty("isObjective") with | true, v -> v.GetBoolean() | _ -> false
                 if faction <> 1 then
                     let actorId = item.GetProperty("actor").GetString()
+                    if isObjective then objectives <- objectives |> Set.add actorId
                     actors.Add(actorId)
                     let x = match item.TryGetProperty("x") with | true, v -> v.GetInt32() | _ -> 0
                     let z = match item.TryGetProperty("z") with | true, v -> v.GetInt32() | _ -> 0
@@ -251,7 +260,8 @@ let private handleTacticalReady (ctx: RouteContext) (root: JsonElement) =
             ctx.Store.Write(aiActors, actors.ToArray())
             ctx.Store.Write(actorPositions, initPositions)
             ctx.Store.Write(actorStaticData, staticDataMap)
-            logInfo (sprintf "Registered %d AI actors" actors.Count)
+            ctx.Store.Write(objectiveActors, objectives)
+            logInfo (sprintf "Registered %d AI actors (%d objectives)" actors.Count (Set.count objectives))
 
             // Run TacticalReady nodes (roaming init, etc.) — nodes compute initial modifiers
             let factionState : FactionState = { FactionIndex = 0; IsAlliedWithPlayer = false; Opponents = []; Actors = []; Round = 0 }

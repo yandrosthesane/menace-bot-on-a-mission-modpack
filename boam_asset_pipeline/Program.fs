@@ -129,6 +129,27 @@ let private resizeAndSave (srcPath: string) (outPath: string) (size: int) =
         img.Mutate(fun ctx -> ctx.Resize(size, size, KnownResamplers.Lanczos3) |> ignore)
     img.Save(outPath)
 
+/// Try to extract an embedded fallback icon for the given output path.
+/// Resource names use the pattern: static/icons/{output} with '/' replaced by '.'
+let private tryExtractFallback (outPath: string) (outputRelative: string) =
+    let asm = Reflection.Assembly.GetExecutingAssembly()
+    // .NET embeds with dots for path separators and preserves the filename
+    // e.g. static/icons/factions/wildlife.png → boam_icons.static.icons.factions.wildlife.png
+    let resourceSuffix = outputRelative.Replace('/', '.').Replace('\\', '.')
+    let resourceName =
+        asm.GetManifestResourceNames()
+        |> Array.tryFind (fun n -> n.EndsWith("." + resourceSuffix, StringComparison.OrdinalIgnoreCase))
+    match resourceName with
+    | Some name ->
+        use stream = asm.GetManifestResourceStream(name)
+        if stream <> null then
+            Directory.CreateDirectory(Path.GetDirectoryName(outPath)) |> ignore
+            use outFile = File.Create(outPath)
+            stream.CopyTo(outFile)
+            true
+        else false
+    | None -> false
+
 [<EntryPoint>]
 let main argv =
     let mutable force = false
@@ -201,8 +222,14 @@ let main argv =
             let outPath = Path.Combine(config.OutputBase, entry.Output)
 
             if not (File.Exists(srcPath)) then
-                printfn "  MISSING: %s" entry.Source
-                missing <- missing + 1
+                if (not (File.Exists(outPath)) || force) && tryExtractFallback outPath entry.Output then
+                    printfn "  FALLBACK: %s" entry.Output
+                    generated <- generated + 1
+                else
+                    if File.Exists(outPath) then skipped <- skipped + 1
+                    else
+                        printfn "  MISSING: %s" entry.Source
+                        missing <- missing + 1
             elif File.Exists(outPath) && not force then
                 skipped <- skipped + 1
             else

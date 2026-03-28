@@ -33,18 +33,25 @@ type TacticalEngineConfig = {
 
 type RoamingPreset = {
     BaseUtility: float32
-    Fraction: float32
+    UtilityFraction: float32
     EngagementRadius: float32
 }
 type RepositionPreset = {
-    MaxUtility: float32
-    Fraction: float32
+    MaxUtilityByAttacks: float32
+    UtilityByAttacksFraction: float32
+    ApproachBias: float32
+}
+type GuardPreset = {
+    Radius: float32
+    BaseSafety: float32
+    SafetyFraction: float32
+    Weight: float32
 }
 type PackPreset = {
     Radius: float32
     Peak: float32
-    Attraction: float32
-    Fraction: float32
+    BaseSafety: float32
+    SafetyFraction: float32
     CrowdPenalty: float32
     AnchoredWeight: float32
     UnactedWeight: float32
@@ -185,13 +192,16 @@ let Current = load ()
 // --- Behaviour presets (behaviour.json5) ---
 
 let private defaultRoaming : RoamingPreset = {
-    BaseUtility = 100f; Fraction = 1.0f; EngagementRadius = 20f
+    BaseUtility = 100f; UtilityFraction = 1.0f; EngagementRadius = 20f
 }
 let private defaultReposition : RepositionPreset = {
-    MaxUtility = 600f; Fraction = 2.0f
+    MaxUtilityByAttacks = 600f; UtilityByAttacksFraction = 2.0f; ApproachBias = 0.5f
+}
+let private defaultGuard : GuardPreset = {
+    Radius = 15f; BaseSafety = 400f; SafetyFraction = 1.5f; Weight = 2.0f
 }
 let private defaultPack : PackPreset = {
-    Radius = 20f; Peak = 4.0f; Attraction = 560f; Fraction = 1.2f
+    Radius = 20f; Peak = 4.0f; BaseSafety = 560f; SafetyFraction = 1.2f
     CrowdPenalty = 120f; AnchoredWeight = 1.0f; UnactedWeight = 0.3f
     ContactBonus = 1.5f; InitMultiplier = 3.0f
 }
@@ -201,20 +211,28 @@ let private tryFloat (el: JsonElement) (key: string) (fallback: float32) =
 
 let private parseRoaming (el: JsonElement) (defaults: RoamingPreset) : RoamingPreset = {
     BaseUtility = tryFloat el "baseUtility" defaults.BaseUtility
-    Fraction = tryFloat el "fraction" defaults.Fraction
+    UtilityFraction = tryFloat el "utilityFraction" defaults.UtilityFraction
     EngagementRadius = tryFloat el "engagementRadius" defaults.EngagementRadius
 }
 
+let private parseGuard (el: JsonElement) (defaults: GuardPreset) : GuardPreset = {
+    Radius = tryFloat el "radius" defaults.Radius
+    BaseSafety = tryFloat el "baseSafety" defaults.BaseSafety
+    SafetyFraction = tryFloat el "safetyFraction" defaults.SafetyFraction
+    Weight = tryFloat el "weight" defaults.Weight
+}
+
 let private parseReposition (el: JsonElement) (defaults: RepositionPreset) : RepositionPreset = {
-    MaxUtility = tryFloat el "maxUtility" defaults.MaxUtility
-    Fraction = tryFloat el "fraction" defaults.Fraction
+    MaxUtilityByAttacks = tryFloat el "maxUtilityByAttacks" defaults.MaxUtilityByAttacks
+    UtilityByAttacksFraction = tryFloat el "utilityByAttacksFraction" defaults.UtilityByAttacksFraction
+    ApproachBias = tryFloat el "approachBias" defaults.ApproachBias
 }
 
 let private parsePack (el: JsonElement) (defaults: PackPreset) : PackPreset = {
     Radius = tryFloat el "radius" defaults.Radius
     Peak = tryFloat el "peak" defaults.Peak
-    Attraction = tryFloat el "attraction" defaults.Attraction
-    Fraction = tryFloat el "fraction" defaults.Fraction
+    BaseSafety = tryFloat el "baseSafety" defaults.BaseSafety
+    SafetyFraction = tryFloat el "safetyFraction" defaults.SafetyFraction
     CrowdPenalty = tryFloat el "crowdPenalty" defaults.CrowdPenalty
     AnchoredWeight = tryFloat el "anchoredWeight" defaults.AnchoredWeight
     UnactedWeight = tryFloat el "unactedWeight" defaults.UnactedWeight
@@ -233,6 +251,7 @@ type BehaviourConfig = {
     Roaming: RoamingPreset
     Reposition: RepositionPreset
     Pack: PackPreset
+    Guard: GuardPreset
 }
 
 let mutable BehaviourSource : ConfigSource = { Path = ""; Label = ""; Version = 0 }
@@ -279,11 +298,11 @@ let private loadBehaviour () : BehaviourConfig =
 
     let defaultHooks = Map.ofList [
         "OnTacticalReady", ["roaming-init"; "pack-init"]
-        "OnTurnEnd", ["roaming-behaviour"; "reposition-behaviour"; "pack-behaviour"]
+        "OnTurnEnd", ["roaming-behaviour"; "reposition-behaviour"; "pack-behaviour"; "guard-behaviour"]
     ]
 
     if configPath = "" then
-        { Hooks = defaultHooks; Roaming = defaultRoaming; Reposition = defaultReposition; Pack = defaultPack }
+        { Hooks = defaultHooks; Roaming = defaultRoaming; Reposition = defaultReposition; Pack = defaultPack; Guard = defaultGuard }
     else
         let json = stripComments (File.ReadAllText(configPath))
         let doc = JsonDocument.Parse(json)
@@ -293,6 +312,7 @@ let private loadBehaviour () : BehaviourConfig =
         let activeRoaming = match root.TryGetProperty("active") with | true, a -> match a.TryGetProperty("roaming") with | true, v -> v.GetString() | _ -> "default" | _ -> "default"
         let activeReposition = match root.TryGetProperty("active") with | true, a -> match a.TryGetProperty("reposition") with | true, v -> v.GetString() | _ -> "default" | _ -> "default"
         let activePack = match root.TryGetProperty("active") with | true, a -> match a.TryGetProperty("pack") with | true, v -> v.GetString() | _ -> "default" | _ -> "default"
+        let activeGuard = match root.TryGetProperty("active") with | true, a -> match a.TryGetProperty("guard") with | true, v -> v.GetString() | _ -> "default" | _ -> "default"
 
         // Parse hook chains
         let hooks =
@@ -316,7 +336,12 @@ let private loadBehaviour () : BehaviourConfig =
             | true, presets -> pickPreset presets activePack (fun el -> parsePack el defaultPack) defaultPack
             | _ -> defaultPack
 
-        { Hooks = hooks; Roaming = roaming; Reposition = reposition; Pack = pack }
+        let guard =
+            match root.TryGetProperty("guard") with
+            | true, presets -> pickPreset presets activeGuard (fun el -> parseGuard el defaultGuard) defaultGuard
+            | _ -> defaultGuard
+
+        { Hooks = hooks; Roaming = roaming; Reposition = reposition; Pack = pack; Guard = guard }
 
 /// Singleton behaviour config.
 let Behaviour = loadBehaviour ()

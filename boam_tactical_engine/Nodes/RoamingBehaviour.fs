@@ -22,15 +22,15 @@ let computeTileModifiers (pos: TilePos) (maxDist: int) (baseUtility: float32) : 
             let dz = z - pos.Z
             let dist = sqrt (float32 (dx * dx + dz * dz))
             if dist >= 1f && dist <= float32 maxDist then
-                let utility = baseUtility * (dist / float32 maxDist)
-                tiles <- tiles |> Map.add { X = x; Z = z } utility
+                let v = baseUtility * (dist / float32 maxDist)
+                tiles <- tiles |> Map.add { X = x; Z = z } (TileModifier.utility v)
     tiles
 
 /// Get the base utility for an actor — max of config default and game-scaled value.
 let getBaseUtility (actorId: string) (scales: Map<string, float32>) =
     let c = cfg ()
     match Map.tryFind actorId scales with
-    | Some maxScore -> max c.BaseUtility (maxScore * c.Fraction)
+    | Some maxScore -> max c.BaseUtility (maxScore * c.UtilityFraction)
     | None -> c.BaseUtility
 
 /// Check if any same-faction ally within radius is engaged.
@@ -48,7 +48,7 @@ let private computeForActor (pos: TilePos) (faction: int) (apStart: int) (cheape
     let maxDist = if costPerTile > 0 then moveBudget / costPerTile else 3
     if isNearEngagement pos faction positions then
         log (sprintf "%s at (%d,%d): SKIP — near engagement, zeroing roaming" actorId pos.X pos.Z)
-        computeTileModifiers pos maxDist baseUtility |> Map.map (fun _ _ -> 0f)
+        computeTileModifiers pos maxDist baseUtility |> Map.map (fun _ _ -> TileModifier.zero)
     else
         let tileMap = computeTileModifiers pos maxDist baseUtility
         log (sprintf "%s at (%d,%d) AP=%d cheapAtk=%d cost/tile=%d budget=%d maxDist=%d base=%.0f → %d tiles"

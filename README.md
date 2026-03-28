@@ -1,6 +1,6 @@
 # BOAM — Bot On A Mission
 
-**v2.0.0** | [Documentation](https://yandrosthesane.github.io/menace-bot-on-a-mission-modpack) | [Changelog](docs/features/CHANGELOG.md)
+**v2.0.3** | [Documentation](https://yandrosthesane.github.io/menace-bot-on-a-mission-modpack) | [Changelog](docs/features/CHANGELOG.md)
 
 AI behavior analysis and modification mod for Menace.
 Modifies enemy AI movement through configurable behaviour nodes,

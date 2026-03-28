@@ -132,10 +132,12 @@ let main argv =
     else
         printfn "  Behaviour: %s" (dim "builtin defaults")
     let b = Config.Behaviour
-    printfn "    Roaming:    base=%.0f frac=%.1f engRadius=%.0f" b.Roaming.BaseUtility b.Roaming.Fraction b.Roaming.EngagementRadius
-    printfn "    Reposition: max=%.0f frac=%.1f" b.Reposition.MaxUtility b.Reposition.Fraction
-    printfn "    Pack:       r=%.0f peak=%.1f attr=%.0f frac=%.1f crowd=%.0f contact=%.1f init=%.1fx"
-        b.Pack.Radius b.Pack.Peak b.Pack.Attraction b.Pack.Fraction b.Pack.CrowdPenalty b.Pack.ContactBonus b.Pack.InitMultiplier
+    printfn "    Roaming:    base=%.0f utilFrac=%.1f engRadius=%.0f" b.Roaming.BaseUtility b.Roaming.UtilityFraction b.Roaming.EngagementRadius
+    printfn "    Reposition: maxUBA=%.0f ubaFrac=%.1f approach=%.1f" b.Reposition.MaxUtilityByAttacks b.Reposition.UtilityByAttacksFraction b.Reposition.ApproachBias
+    printfn "    Pack:       r=%.0f peak=%.1f safety=%.0f sFrac=%.1f crowd=%.0f contact=%.1f init=%.1fx"
+        b.Pack.Radius b.Pack.Peak b.Pack.BaseSafety b.Pack.SafetyFraction b.Pack.CrowdPenalty b.Pack.ContactBonus b.Pack.InitMultiplier
+    printfn "    Guard:      r=%.0f safety=%.0f sFrac=%.1f weight=%.1f"
+        b.Guard.Radius b.Guard.BaseSafety b.Guard.SafetyFraction b.Guard.Weight
     printfn "  %s" (dim "─────────────────────────────────")
     printfn ""
 
@@ -149,6 +151,7 @@ let main argv =
     Catalogue.register Nodes.RepositionBehaviour.node
     Catalogue.register Nodes.PackBehaviour.initNode
     Catalogue.register Nodes.PackBehaviour.node
+    Catalogue.register Nodes.GuardBehaviour.node
 
     // Config-driven registration: hooks section defines which nodes run on which hook, in order
     for kv in b.Hooks do

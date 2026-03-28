@@ -27,60 +27,82 @@
   "active": {
     "roaming": "default",
     "reposition": "default",
-    "pack": "default"
+    "pack": "default",
+    "guard": "default"
   },
 
-  // ── Roaming ──
+  // ── Roaming ── (targets Utility score)
   // Encourages idle units to explore outward. Disabled near engagement.
   //
-  // baseUtility    — default modifier strength (floor for game score scaling)
-  // fraction       — modifier as fraction of game max score (1.0 = match game scores)
+  // baseUtility      — default modifier strength (floor for game score scaling)
+  // utilityFraction  — modifier as fraction of game max score (1.0 = match game scores)
   // engagementRadius — tiles; suppress roaming when any same-faction engaged ally is within this range
   "roaming": {
     "default": {
-      "baseUtility": 100,
-      "fraction": 1.0,
+      "baseUtility": 10,
+      "utilityFraction": 1.0,
       "engagementRadius": 20
     }
   },
 
-  // ── Reposition ──
+  // ── Reposition ── (targets UtilityByAttacks score)
   // Moves units toward their ideal attack range from the closest known opponent.
   // Only active near engagement. Melee units get stronger pull (scaled by 1/idealRange).
   //
-  // maxUtility     — default modifier strength for melee (idealRange=1); ranged = maxUtility/idealRange
-  // fraction       — modifier as fraction of game max score (2.0 = 2x game scores for melee)
+  // maxUtilityByAttacks — default modifier strength for melee (idealRange=1); ranged = value/idealRange
+  // utilityByAttacksFraction — modifier as fraction of game max score
+  // approachBias       — 0.0–1.0; favor near-side tiles over far-side with equal improvement
+  //                      0 = pure ideal-range positioning, 1 = full proximity weighting
   "reposition": {
     "default": {
-      "maxUtility": 600,
-      "fraction": 2.0
+      "maxUtilityByAttacks": 300,
+      "utilityByAttacksFraction": 1.0,
+      "approachBias": 0.5
     }
   },
 
-  // ── Pack ──
+  // ── Pack ── (targets Safety score)
   // Pulls units toward allies. Directional scoring: tiles that improve pack density score higher.
   // Engaged allies (inRange && inContact) get extra weight. No crowd penalty near engaged allies.
   //
-  // radius         — influence range per ally (tiles)
-  // peak           — ideal density; above this, crowd penalty applies (unless engaged ally nearby)
-  // attraction     — default utility per density unit below peak (floor for game score scaling)
-  // fraction       — attraction as fraction of game max score
-  // crowdPenalty   — penalty per density unit above peak (suppressed near engaged allies)
-  // anchoredWeight — influence multiplier for allies that already acted this round
-  // unactedWeight  — influence multiplier for allies that haven't acted yet
-  // contactBonus   — extra influence weight for engaged allies (inRange && inContact)
-  // initMultiplier — boost factor for pack scores at tactical-ready (round 1 pack formation)
+  // radius          — influence range per ally (tiles)
+  // peak            — ideal density; above this, crowd penalty applies (unless engaged ally nearby)
+  // baseSafety      — default safety per density unit below peak (floor for game score scaling)
+  // safetyFraction  — baseSafety as fraction of game max score
+  // crowdPenalty    — penalty per density unit above peak (suppressed near engaged allies)
+  // anchoredWeight  — influence multiplier for allies that already acted this round
+  // unactedWeight   — influence multiplier for allies that haven't acted yet
+  // contactBonus    — extra influence weight for engaged allies (inRange && inContact)
+  // initMultiplier  — boost factor for pack scores at tactical-ready (round 1 pack formation)
   "pack": {
     "default": {
       "radius": 20,
       "peak": 4.0,
-      "attraction": 560,
-      "fraction": 1.2,
+      "baseSafety": 560,
+      "safetyFraction": 1.2,
       "crowdPenalty": 120,
       "anchoredWeight": 1.0,
       "unactedWeight": 0.3,
       "contactBonus": 1.5,
       "initMultiplier": 3.0
+    }
+  },
+
+  // ── Guard ── (targets Safety score)
+  // Draws same-faction units toward mission objective targets (VIPs / ELIMINATE markers).
+  // Only active when the mission has objective actors. Non-objective units get safety
+  // modifiers for tiles closer to objective allies.
+  //
+  // radius         — influence range from each objective actor (tiles)
+  // baseSafety     — default modifier strength (floor for game score scaling)
+  // safetyFraction — modifier as fraction of game max score
+  // weight         — influence multiplier per objective actor
+  "guard": {
+    "default": {
+      "radius": 15,
+      "baseSafety": 400,
+      "safetyFraction": 1.5,
+      "weight": 2.0
     }
   }
 }
