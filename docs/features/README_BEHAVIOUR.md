@@ -5,27 +5,73 @@ title: Influencing AI Behaviour
 
 # Influencing AI Behaviour
 
-BOAM's behaviour system modifies enemy AI movement by injecting per-tile utility scores during the game's tile evaluation phase. It does **not** replace the game's AI — it influences WHERE units move by adjusting tile attractiveness scores.
+BOAM modifies enemy AI movement by injecting per-tile score modifiers during the game's tile evaluation. It does not replace the game's AI — it adjusts tile scores so the game's own decision-making picks different tiles.
 
-## How It Works
+## How it works
 
-The game evaluates every reachable tile for each AI unit, scoring them on utility, safety, and distance. BOAM adds modifiers on top of these scores via `PostProcessTileScores`. The game then picks the highest-scoring tile as usual.
+```
+┌─────────────────── Game (C#) ───────────────────┐
+│                                                  │
+│  Actor turn ends                                 │
+│       │                                          │
+│       ▼                                          │
+│  Harmony hook (OnTurnEnd)                        │
+│       │                                          │
+│       ├─ Gather actor status (AP, HP, position)  │
+│       ├─ SyncTransforms (contact, movement)      │
+│       │                                          │
+│ ──────┼────────── POST /command ─────────────────│── boundary ──
+│       │                                          │
+└───────┼──────────────────────────────────────────┘
+        ▼
+┌─────────────────── Engine (F#) ──────────────────┐
+│                                                  │
+│  HookHandlers receives turn-end event            │
+│       │                                          │
+│       ├─ Store actor status + positions           │
+│       │                                          │
+│       ▼                                          │
+│  Walker runs registered node chain               │
+│       │                                          │
+│       ├─ 1. Roaming     ──► per-tile scores      │
+│       ├─ 2. Reposition  ──► per-tile scores      │
+│       ├─ 3. Pack        ──► per-tile scores      │
+│       │                                          │
+│       ▼                                          │
+│  Scores accumulated on same tile map             │
+│       │                                          │
+│ ──────┼───── POST /command (batch) ──────────────│── boundary ──
+│       │                                          │
+└───────┼──────────────────────────────────────────┘
+        ▼
+┌─────────────────── Game (C#) ───────────────────┐
+│                                                  │
+│  TileModifierStore receives per-tile modifiers   │
+│       │                                          │
+│       ▼                                          │
+│  Next AI evaluation: PostProcessTileScores       │
+│       │                                          │
+│       ├─ For each tile: score += modifier[(x,z)] │
+│       │                                          │
+│       ▼                                          │
+│  Game picks highest-scoring tile as usual         │
+│                                                  │
+└──────────────────────────────────────────────────┘
+```
 
-Three behaviour nodes run in sequence at each turn-end, each contributing to a per-tile utility map:
+The node chain is configurable. Each node reads from and writes to the same tile modifier map. Scores accumulate.
 
-1. **[Roaming](behaviours/ROAMING.md)** — explores outward when idle (disabled near engagement)
-2. **[Reposition](behaviours/REPOSITION.md)** — moves toward the closest known enemy at ideal attack range
-3. **[Pack](behaviours/PACK.md)** — pulls units toward allies, especially those in combat
-
-Scores from all three accumulate on the same tile map. The game sees one combined modifier per tile.
+- [Roaming](behaviours/ROAMING.md) — explore outward when idle, disabled near engagement
+- [Reposition](behaviours/REPOSITION.md) — move toward closest enemy at ideal attack range
+- [Pack](behaviours/PACK.md) — pull toward allies, converge on engaged ones
 
 ## Configuration
 
-All behaviour parameters are in `configs/behaviour.json5`. The file has three sections:
+All parameters live in `configs/behaviour.json5`.
 
-### Hook Chains
+### Hook chains
 
-Define which nodes run on each game event, and in what order:
+Which nodes run on each game event, in what order:
 
 ```json5
 "hooks": {
@@ -34,11 +80,11 @@ Define which nodes run on each game event, and in what order:
 }
 ```
 
-Remove a node from the list to disable it. Reorder to change execution priority.
+Remove a node from the list to disable it. Reorder to change priority.
 
-### Active Presets
+### Active presets
 
-Each behaviour has named presets. The `active` block selects which preset to use:
+Each behaviour has named presets. The `active` block selects which to use:
 
 ```json5
 "active": {
@@ -48,39 +94,16 @@ Each behaviour has named presets. The `active` block selects which preset to use
 }
 ```
 
-### Preset Definitions
+### Preset definitions
 
-Each behaviour section contains named presets with all tuning parameters. See the individual behaviour docs for parameter details.
+Each behaviour section contains named presets with all tuning parameters. See the individual docs for details.
 
-## Score Scaling
+## Limitations
 
-Modifiers scale relative to the game's own tile evaluation scores. Each behaviour has a `fraction` parameter:
+- The game's own scoring (safety, distance, attack utility) still runs alongside our modifiers
+- The game decides Move vs Attack vs Idle — we influence tile attractiveness, not action selection
+- The game may limit how many units engage a single target simultaneously
 
-```
-modifier = max(default, gameMaxScore * fraction)
-```
+## Adding new behaviours
 
-- The default value is a floor — guarantees a minimum influence level
-- When the game produces higher scores (e.g. for stronger units), the modifier scales up proportionally
-- This prevents hardcoded values from being too weak or too strong for different unit types
-
-## Engagement Detection
-
-Two signals determine if a unit is "engaged":
-
-- **inRange** — an opponent is within this actor's personal vision radius
-- **inContact** — the game's detection system has detected an opponent (accounts for line-of-sight, concealment)
-- **engaged** = `inRange AND inContact` — this specific unit personally sees a detected enemy
-
-Engagement status is computed by the C# bridge from live game objects and sent to the engine with each turn-end event.
-
-## What We Don't Control
-
-- The game's own tile evaluation (Safety, Distance, UtilityByAttacks) still runs
-- The game picks the behaviour type (Move, Attack, Idle) — we only influence tile attractiveness
-- The game may have built-in attack spreading that limits how many units engage a single target
-- Our modifiers affect WHERE a unit moves, not WHETHER it attacks
-
-## Adding New Behaviours
-
-See [Adding Nodes](behaviours/ADDING_NODES.md) for a step-by-step guide.
+See [Adding Nodes](behaviours/ADDING_NODES.md).

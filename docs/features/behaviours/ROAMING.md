@@ -2,65 +2,35 @@
 order: 1
 ---
 
-# Roaming Behaviour
+# Roaming
 
-Encourages idle AI units to explore outward. When no engagement is nearby, units spread out across the map rather than staying in place.
+Encourages idle units to explore outward. Disabled near engagement so reposition and pack can take over.
 
-**Nodes**: `roaming-init` (OnTacticalReady), `roaming-behaviour` (OnTurnEnd)
+Nodes: `roaming-init` (OnTacticalReady), `roaming-behaviour` (OnTurnEnd)
 
-## How It Works
+## Scoring
 
-For each reachable tile within the actor's movement range, roaming assigns a utility score proportional to distance from the current position. Further tiles score higher, encouraging units to move as far as their AP budget allows.
+Each reachable tile gets a score proportional to its distance from the actor's current position:
 
 ```
 utility = baseUtility * (distance / maxDistance)
 ```
 
-Where `maxDistance = (apStart - cheapestAttackCost) / costPerTile` — the actor moves as far as possible while keeping enough AP for one attack.
+`maxDistance` is derived from the actor's AP budget: `(apStart - cheapestAttackCost) / costPerTile`. The actor moves as far as it can while keeping enough AP for one attack.
 
-### Engagement Suppression
-
-When any same-faction ally within `engagementRadius` tiles is **engaged** (personally sees a detected enemy), roaming writes all tiles at utility 0 instead of distance-scaled scores. This clears the roaming signal so reposition and pack can drive movement without competing.
-
-Units outside the engagement radius continue roaming normally.
+When any same-faction ally within `engagementRadius` is engaged (personally sees a detected enemy), roaming writes all tiles at 0 instead. This clears the roaming signal so other nodes drive movement.
 
 ## Parameters
 
-All configurable in `behaviour.json5` under `"roaming"` presets.
+Configurable in `behaviour.json5` under `"roaming"` presets.
 
-### `baseUtility` (default: 100)
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `baseUtility` | 100 | Floor modifier strength. Used when game score scaling produces a lower value. |
+| `fraction` | 1.0 | Multiplier against the game's max Combined score. Actual base = `max(baseUtility, gameMax * fraction)`. |
+| `engagementRadius` | 20 | Distance in tiles. Roaming is suppressed when any engaged ally is within this radius. |
 
-The floor modifier strength. When game score scaling produces a lower value, this is used instead.
-
-**Effect of increasing**: units push more aggressively outward when roaming. Higher values can override the game's safety/distance scoring.
-
-**Effect of decreasing**: gentler roaming. Units follow the game's own preferences more, with a slight outward nudge.
-
-**Example**: at `baseUtility = 100` with `maxDist = 5`, the farthest tile gets +100, the nearest gets +20.
-
-### `fraction` (default: 1.0)
-
-Roaming influence as a fraction of the game's max Combined score for this actor.
-
-```
-actualBaseUtility = max(baseUtility, gameMaxScore * fraction)
-```
-
-**Effect of increasing**: roaming becomes stronger relative to the game's own scoring. At `fraction = 2.0`, roaming can double the game's strongest tile score.
-
-**Effect of decreasing**: roaming has less influence. At `fraction = 0.5`, roaming is at most half the game's max score.
-
-**Note**: wildlife units typically have low game scores (25-125). The floor (`baseUtility`) often dominates for them. The fraction matters more for units with higher game scores.
-
-### `engagementRadius` (default: 20)
-
-Distance in tiles. If any same-faction ally within this radius is engaged, roaming is suppressed for this actor (tiles zeroed out).
-
-**Effect of increasing**: more units stop roaming when engagement happens. At 30, nearly half the map reacts to a fight.
-
-**Effect of decreasing**: only units very close to the fight stop roaming. Far-away units continue exploring independently.
-
-**Interaction**: this radius is also used by the reposition node to decide when to activate. Both should use the same value for consistent behaviour.
+Increasing `baseUtility` or `fraction` makes exploration more aggressive. Increasing `engagementRadius` makes more units react to nearby fights.
 
 ## Presets
 
@@ -71,7 +41,3 @@ Distance in tiles. If any same-faction ally within this radius is engaged, roami
   "aggressive": { "baseUtility": 150, "fraction": 1.5, "engagementRadius": 15 }
 }
 ```
-
-- **default** — balanced exploration
-- **cautious** — slower spread, wider engagement reaction
-- **aggressive** — fast spread, narrow engagement window
