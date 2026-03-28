@@ -24,20 +24,21 @@ const explorerConfig = {
     return true
   },
   sortFn: (a: any, b: any) => {
-    // Sort by slug (which has numeric prefix) to maintain order after mapFn strips it
-    if ((!a.isFolder && !b.isFolder) || (a.isFolder && b.isFolder)) {
-      const slugA = a.slug ?? a.displayName ?? ""
-      const slugB = b.slug ?? b.displayName ?? ""
-      return slugA.localeCompare(slugB, undefined, { numeric: true, sensitivity: "base" })
-    }
-    return a.isFolder ? -1 : 1
+    // Pure slug sort — numeric prefixes control order for both files and folders
+    const slugA = a.slug ?? a.displayName ?? ""
+    const slugB = b.slug ?? b.displayName ?? ""
+    return slugA.localeCompare(slugB, undefined, { numeric: true, sensitivity: "base" })
   },
   mapFn: (node: any) => {
-    // Rename folder display names to hide nesting
     if (node.isFolder) {
       const name = node.displayName?.toLowerCase()
       if (name === "docs" || name === "features") {
         node.displayName = ""
+      } else {
+        // Strip numeric prefix from folder names (e.g. "04b_behaviours" → "Behaviours")
+        node.displayName = (node.displayName ?? "")
+          .replace(/^\d+\w*_/, "")
+          .replace(/\b\w/g, (c: string) => c.toUpperCase())
       }
     }
     if (!node.isFolder) {

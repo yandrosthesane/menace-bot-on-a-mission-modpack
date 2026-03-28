@@ -31,9 +31,13 @@ copy_with_order() {
     done
 }
 
-mkdir -p "$CONTENT_DIR/docs/features/behaviours"
+# Behaviours subfolder — prefixed 04b to sort between Behaviour (04) and Heatmaps (05)
+mkdir -p "$CONTENT_DIR/docs/features/04b_behaviours"
 copy_with_order "$REPO_ROOT/docs/features" "$CONTENT_DIR/docs/features"
-copy_with_order "$REPO_ROOT/docs/features/behaviours" "$CONTENT_DIR/docs/features/behaviours"
+copy_with_order "$REPO_ROOT/docs/features/behaviours" "$CONTENT_DIR/docs/features/04b_behaviours"
+
+# Fix links in copied files: behaviours/ → 04b_behaviours/
+find "$CONTENT_DIR" -name '*.md' -exec sed -i 's|behaviours/|04b_behaviours/|g' {} \;
 
 # Documentation images
 if [ -d "$REPO_ROOT/docs/images" ]; then
