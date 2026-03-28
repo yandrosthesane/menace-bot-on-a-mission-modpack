@@ -14,12 +14,26 @@ mkdir -p "$CONTENT_DIR/docs/features"
 # Landing page
 cp "$REPO_ROOT/README.md" "$CONTENT_DIR/index.md"
 
-# User-facing feature docs (recursive — includes subdirectories like behaviours/)
-find "$REPO_ROOT/docs/features" -name '*.md' | while read -r f; do
-    rel="${f#$REPO_ROOT/docs/features/}"
-    mkdir -p "$CONTENT_DIR/docs/features/$(dirname "$rel")"
-    cp "$f" "$CONTENT_DIR/docs/features/$rel"
-done
+# User-facing feature docs — copy with numeric prefixes for ordered navigation.
+# The order field from frontmatter is used as the prefix.
+copy_with_order() {
+    local src_dir="$1" dst_dir="$2"
+    find "$src_dir" -maxdepth 1 -name '*.md' | while read -r f; do
+        local base=$(basename "$f")
+        # Read order from frontmatter (line: "order: N")
+        local order=$(grep -m1 '^order:' "$f" | sed 's/order: *//')
+        if [ -n "$order" ]; then
+            local padded=$(printf "%02d" "$order")
+            cp "$f" "$dst_dir/${padded}_${base}"
+        else
+            cp "$f" "$dst_dir/$base"
+        fi
+    done
+}
+
+mkdir -p "$CONTENT_DIR/docs/features/behaviours"
+copy_with_order "$REPO_ROOT/docs/features" "$CONTENT_DIR/docs/features"
+copy_with_order "$REPO_ROOT/docs/features/behaviours" "$CONTENT_DIR/docs/features/behaviours"
 
 # Documentation images
 if [ -d "$REPO_ROOT/docs/images" ]; then

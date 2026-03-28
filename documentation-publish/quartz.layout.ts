@@ -23,16 +23,6 @@ const explorerConfig = {
     }
     return true
   },
-  sortFn: (a: any, b: any) => {
-    // Sort by frontmatter "order" field if present, then alphabetically
-    const orderA = a.file?.frontmatter?.order ?? 999
-    const orderB = b.file?.frontmatter?.order ?? 999
-    if (orderA !== orderB) return orderA - orderB
-    // Folders before files
-    if (a.isFolder && !b.isFolder) return -1
-    if (!a.isFolder && b.isFolder) return 1
-    return (a.displayName ?? "").localeCompare(b.displayName ?? "")
-  },
   mapFn: (node: any) => {
     // Rename folder display names to hide nesting
     if (node.isFolder) {
@@ -41,13 +31,15 @@ const explorerConfig = {
         node.displayName = ""
       }
     }
-    // Clean up README_ prefix from page names and title-case
-    if (!node.isFolder && node.displayName?.startsWith("README_")) {
-      node.displayName = node.displayName
-        .substring(7)
-        .replace(/_/g, " ")
-        .toLowerCase()
-        .replace(/\b\w/g, (c: string) => c.toUpperCase())
+    if (!node.isFolder) {
+      let name = node.displayName ?? ""
+      // Strip numeric prefix (e.g. "01_README_INSTALL" → "README_INSTALL")
+      name = name.replace(/^\d+_/, "")
+      // Strip README_ prefix and title-case
+      if (name.startsWith("README_")) {
+        name = name.substring(7).replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (c: string) => c.toUpperCase())
+      }
+      node.displayName = name
     }
   },
 }
