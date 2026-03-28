@@ -42,16 +42,22 @@ const explorerConfig = {
       }
     }
     if (!node.isFolder) {
-      let name = node.displayName ?? ""
-      // Strip numeric prefix (e.g. "01_README_INSTALL" → "README_INSTALL")
-      name = name.replace(/^\d+_/, "")
-      // Strip README_ prefix
-      if (name.startsWith("README_")) {
-        name = name.substring(7)
+      // Use frontmatter title if set (Quartz puts it in data.title)
+      const dataTitle = node.data?.title
+      if (dataTitle && !dataTitle.startsWith("README_") && !/^\d+_/.test(dataTitle)) {
+        node.displayName = dataTitle
+      } else {
+        let name = node.displayName ?? ""
+        // Strip numeric prefix (e.g. "01_README_INSTALL" → "README_INSTALL")
+        name = name.replace(/^\d+_/, "")
+        // Strip README_ prefix
+        if (name.startsWith("README_")) {
+          name = name.substring(7)
+        }
+        // Title-case: replace underscores with spaces, capitalize each word
+        name = name.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (c: string) => c.toUpperCase())
+        node.displayName = name
       }
-      // Title-case: replace underscores with spaces, capitalize each word
-      name = name.replace(/_/g, " ").toLowerCase().replace(/\b\w/g, (c: string) => c.toUpperCase())
-      node.displayName = name
     }
   },
 }
