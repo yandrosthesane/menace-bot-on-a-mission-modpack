@@ -16,7 +16,7 @@ Actor turn ends (near engagement)
     │   └─ None found → skip (no modifiers)
     │
     ├─ Look up actor's idealRange from skills
-    │   (smallest IdealRange across all attacks)
+    │   (smallest IdealRange across all attacks, read from game templates)
     │
     ├─ Already within 0.5 tiles of ideal range?
     │   │
@@ -26,9 +26,8 @@ Actor turn ends (near engagement)
         how much closer to ideal range does this tile get us
         vs staying in place?
 
-        Melee (idealRange=1) gets full utility
-        Ranged (idealRange=3) gets 1/3
-        Support (idealRange=5) gets 1/5
+        Utility is scaled by 1/idealRange — lower range = higher urgency
+        (a melee unit is useless at distance, a ranged unit can still contribute)
 
         ▼
 Tile scores merged into existing map (additive with roaming zeros + pack)
