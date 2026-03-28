@@ -14,9 +14,11 @@ mkdir -p "$CONTENT_DIR/docs/features"
 # Landing page
 cp "$REPO_ROOT/README.md" "$CONTENT_DIR/index.md"
 
-# User-facing feature docs
-for f in "$REPO_ROOT/docs/features/"*.md; do
-    [ -f "$f" ] && cp "$f" "$CONTENT_DIR/docs/features/"
+# User-facing feature docs (recursive — includes subdirectories like behaviours/)
+find "$REPO_ROOT/docs/features" -name '*.md' | while read -r f; do
+    rel="${f#$REPO_ROOT/docs/features/}"
+    mkdir -p "$CONTENT_DIR/docs/features/$(dirname "$rel")"
+    cp "$f" "$CONTENT_DIR/docs/features/$rel"
 done
 
 # Documentation images
