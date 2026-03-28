@@ -213,3 +213,11 @@ The bundled MelonLoader references are missing. To fix it:
    ```
    Create the `MelonLoader` folder inside `third_party\bundled\` if it doesn't exist.
 2. Re-run the deploy.
+
+## Modkit & Game build
+
+Tested on
+
+![last_modkit](/docs/images/last_modkit.png)
+
+![last_build](/docs/images/last_build.png)
