@@ -113,3 +113,17 @@ attraction = max(config.attraction, gameMaxScore * config.fraction)
   }
 }
 ```
+
+## Examples 
+
+Spawn - Round 1
+
+![pack_spawn.png](/docs/images/pack_spawn.png)
+
+Round 2
+
+![pack_round_2.png](/docs/images/pack_round_2.png)
+
+Round 3
+
+![pack_round_3.png](/docs/images/pack_round_3.png)
