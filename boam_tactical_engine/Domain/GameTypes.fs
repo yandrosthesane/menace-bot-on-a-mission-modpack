@@ -109,9 +109,29 @@ type ActorStaticData = {
 /// Tracked position, acted state, and contact state for pack behaviour.
 type ActorPosState = { Position: TilePos; Faction: int; HasActed: bool; InRange: bool; InContact: bool }
 
-/// Per-tile utility modifiers for an actor, sent to the bridge.
-/// Key = tile position, Value = utility bonus to add.
-type TileModifierMap = Map<TilePos, float32>
+/// Per-tile score modifiers for an actor, sent to the bridge.
+/// Each field targets a separate game score component independently.
+type TileModifier = {
+    Utility: float32
+    Safety: float32
+    Distance: float32
+    UtilityByAttacks: float32
+}
+
+module TileModifier =
+    let zero = { Utility = 0f; Safety = 0f; Distance = 0f; UtilityByAttacks = 0f }
+    let utility v = { zero with Utility = v }
+    let safety v = { zero with Safety = v }
+    let distance v = { zero with Distance = v }
+    let utilityByAttacks v = { zero with UtilityByAttacks = v }
+    let add a b = {
+        Utility = a.Utility + b.Utility
+        Safety = a.Safety + b.Safety
+        Distance = a.Distance + b.Distance
+        UtilityByAttacks = a.UtilityByAttacks + b.UtilityByAttacks
+    }
+
+type TileModifierMap = Map<TilePos, TileModifier>
 
 /// Tile score components as evaluated by the AI's ConsiderZones.
 type TileScoreInfo = {

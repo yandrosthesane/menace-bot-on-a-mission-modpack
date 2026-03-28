@@ -125,13 +125,26 @@ static class Patch_LaunchMission
             var instance = Patch_PreviewReady.CachedInstance ?? __instance;
             var result = Patch_PreviewReady.CachedResult;
 
+            // If OnPreviewReady never fired (e.g. loaded save), get result from Mission
             if (result == null)
             {
-                BoamBridge.Logger.Warning("[BOAM] LaunchMission — no cached preview result, cannot capture map");
+                BoamBridge.Logger.Msg("[BOAM] LaunchMission — no cached preview, reading from Mission.GetPreview()");
+                try
+                {
+                    var mission = __instance.GetMission();
+                    if (mission != null)
+                        result = mission.GetPreview();
+                }
+                catch (Exception ex2) { BoamBridge.Logger.Warning($"[BOAM] fallback preview read: {ex2.Message}"); }
+            }
+
+            if (result == null)
+            {
+                BoamBridge.Logger.Warning("[BOAM] LaunchMission — no preview result available, cannot capture map");
                 return;
             }
 
-            BoamBridge.Logger.Msg("[BOAM] LaunchMission — re-capturing map data before scene transition");
+            BoamBridge.Logger.Msg("[BOAM] LaunchMission — capturing map data before scene transition");
             CaptureMapData(instance, result);
 
             // Clear cache
@@ -159,20 +172,19 @@ static class Patch_LaunchMission
         int sizeZ = result?.SizeZ ?? 0;
         if (sizeX == 0 || sizeZ == 0) return;
 
-        // Battle reports go to UserData/BOAM/ (persistent, survives deploys)
+        // Write to fixed preview dir — copied to battle report at tactical-ready
         var persistentDir = Environment.GetEnvironmentVariable("BOAM_PERSISTENT_ASSETS");
         if (string.IsNullOrEmpty(persistentDir))
             persistentDir = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
                 "UserData", "BOAM");
 
-        var ts = DateTime.Now.ToString("yyyy_MM_dd_HH_mm");
-        var sessionDir = System.IO.Path.Combine(persistentDir, "battle_reports", $"battle_{ts}");
-        System.IO.Directory.CreateDirectory(sessionDir);
-        TacticalMap.TacticalMapState.BattleSessionDir = sessionDir;
+        var previewDir = System.IO.Path.Combine(persistentDir, "battle_preview");
+        System.IO.Directory.CreateDirectory(previewDir);
+        TacticalMap.TacticalMapState.PreviewDir = previewDir;
 
-        var bgPath = System.IO.Path.Combine(sessionDir, "mapbg.png");
-        var infoPath = System.IO.Path.Combine(sessionDir, "mapbg.info");
-        var dataPath = System.IO.Path.Combine(sessionDir, "mapdata.bin");
+        var bgPath = System.IO.Path.Combine(previewDir, "mapbg.png");
+        var infoPath = System.IO.Path.Combine(previewDir, "mapbg.info");
+        var dataPath = System.IO.Path.Combine(previewDir, "mapdata.bin");
 
         // Save captured PNG
         var pngBytes = UnityEngine.ImageConversion.EncodeToPNG(mapTexture);
@@ -251,7 +263,7 @@ static class Patch_LaunchMission
             }
             TacticalMap.TacticalMapState.TileDataArray = tileDataArray;
 
-            BoamBridge.Logger.Msg($"[BOAM] Map captured: {mapTexture.width}x{mapTexture.height} px, {sizeX}x{sizeZ} tiles, height [{heightMin:F1}..{heightMax:F1}] → {sessionDir}");
+            BoamBridge.Logger.Msg($"[BOAM] Map captured: {mapTexture.width}x{mapTexture.height} px, {sizeX}x{sizeZ} tiles, height [{heightMin:F1}..{heightMax:F1}] → {previewDir}");
             Toast.Show($"BOAM: Map captured ({sizeX}x{sizeZ} tiles)", 3f);
         }
         catch (Exception ex)

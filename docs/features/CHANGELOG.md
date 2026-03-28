@@ -4,6 +4,32 @@ order: 10
 
 # Changelog
 
+## v2.0.4
+
+### Tactical map reliability
+
+- Map capture now writes to a fixed `battle_preview/` staging directory at mission prep, then copies to the timestamped battle report at tactical-ready. Previously the map background was sometimes missing when the tactical scene loaded.
+- When the preview screen doesn't fire (e.g. continuing a save), the `LaunchMission` hook falls back to `Mission.GetPreview()` to capture the map data.
+- `battle-start` hook now fires after the map copy, so the engine always receives the correct battle report directory.
+
+### Score targeting
+
+- Behaviour modifiers now target independent game score components instead of all going through UtilityScore. Each tile modifier carries per-score fields (utility, safety, distance, utilityByAttacks) applied independently by the C# patch.
+- Roaming targets Utility, Reposition targets UtilityByAttacks, Pack targets Safety.
+- Config property names updated to reflect their target score (e.g. `baseSafety`, `safetyFraction`, `maxUtilityByAttacks`).
+
+### Reposition approach bias
+
+- New `approachBias` parameter (0.0-1.0) breaks the symmetric ring around targets. Near-side tiles score higher than far-side tiles with equal ideal-range improvement, so melee units approach from the front instead of orbiting around.
+
+### Guard VIP behaviour (new node, WIP — not active by default)
+
+- `guard-vip-behaviour` draws same-faction units toward mission objective targets (ELIMINATE markers). Detects KillUnit objectives via `TacticalManager.Get().GetMission().Objectives` and adds Safety modifiers for tiles closer to objective actors. Add `"guard-vip-behaviour"` to the `OnTurnEnd` hook chain in `behaviour.json5` to enable.
+
+## v2.0.3
+
+Fix: modpack had a test data patch for Darby
+
 ## v2.0.2
 
 CI release fix iteration.

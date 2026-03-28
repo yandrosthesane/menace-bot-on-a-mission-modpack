@@ -126,7 +126,13 @@ public class BoamBridge : IModpackPlugin
         try
         {
             var prepType2 = typeof(Il2CppMenace.UI.Strategy.MissionPrepUIScreen);
-            var launchMission = prepType2.GetMethod("LaunchMission", BindingFlags.NonPublic | BindingFlags.Instance);
+            var launchMission = prepType2.GetMethod("LaunchMission", BindingFlags.NonPublic | BindingFlags.Instance)
+                ?? prepType2.GetMethod("LaunchMission", BindingFlags.Public | BindingFlags.Instance);
+            if (launchMission == null)
+            {
+                foreach (var m in prepType2.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static))
+                    if (m.Name == "LaunchMission") { launchMission = m; break; }
+            }
             if (launchMission != null)
             {
                 harmony.Patch(launchMission,
@@ -333,10 +339,7 @@ public class BoamBridge : IModpackPlugin
             _inTactical = true;
             _initDelay = 60;
             _ready = false;
-            // Tell the tactical engine about the battle session (dir already created at OnPreviewReady)
-            var sessionDir = TacticalMap.TacticalMapState.BattleSessionDir ?? "";
-            var startPayload = JsonSerializer.Serialize(new { sessionDir });
-            ThreadPool.QueueUserWorkItem(_ => QueryCommandClient.Hook("battle-start", startPayload));
+            // battle-start hook fires later at tactical-ready, after preview data is copied
         }
         else
         {
@@ -366,8 +369,12 @@ public class BoamBridge : IModpackPlugin
             // BuildDramatisPersonae must run first — it registers actor UUIDs
             var dp = ActorRegistry.BuildDramatisPersonae(Logger);
             PopulateInitialUnits();
-            ReloadMapFromDisk();
+            ReloadMapFromDisk(); // copies preview → battle report, sets BattleSessionDir
             _tacticalMap?.OnTacticalReady();
+            // battle-start after ReloadMapFromDisk so BattleSessionDir is set
+            var sessionDir = TacticalMap.TacticalMapState.BattleSessionDir ?? "";
+            var startPayload = JsonSerializer.Serialize(new { sessionDir });
+            ThreadPool.QueueUserWorkItem(_ => QueryCommandClient.Hook("battle-start", startPayload));
             if (_engineAvailable)
             {
                 var payload = JsonSerializer.Serialize(new { dramatis_personae = dp });
@@ -431,16 +438,45 @@ public class BoamBridge : IModpackPlugin
     {
         try
         {
-            var sessionDir = TacticalMap.TacticalMapState.BattleSessionDir;
-            if (string.IsNullOrEmpty(sessionDir))
+            var previewDir = TacticalMap.TacticalMapState.PreviewDir;
+            if (string.IsNullOrEmpty(previewDir) || !System.IO.Directory.Exists(previewDir))
             {
-                Logger.Warning("[BOAM] TacticalMap — No battle session dir, cannot reload map");
+                Logger.Warning("[BOAM] TacticalMap — No preview dir, cannot reload map");
                 return;
             }
+
+            var previewBg = System.IO.Path.Combine(previewDir, "mapbg.png");
+            var previewInfo = System.IO.Path.Combine(previewDir, "mapbg.info");
+            var previewData = System.IO.Path.Combine(previewDir, "mapdata.bin");
+
+            if (!System.IO.File.Exists(previewBg))
+            {
+                Logger.Warning("[BOAM] TacticalMap — mapbg.png missing from preview dir");
+                return;
+            }
+
+            // Create the real battle report dir (timestamped)
+            var persistentDir = Environment.GetEnvironmentVariable("BOAM_PERSISTENT_ASSETS");
+            if (string.IsNullOrEmpty(persistentDir))
+                persistentDir = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "UserData", "BOAM");
+
+            var ts = DateTime.Now.ToString("yyyy_MM_dd_HH_mm");
+            var sessionDir = System.IO.Path.Combine(persistentDir, "battle_reports", $"battle_{ts}");
+            System.IO.Directory.CreateDirectory(sessionDir);
+            TacticalMap.TacticalMapState.BattleSessionDir = sessionDir;
+
+            // Copy preview files to battle report
             var bgPath = System.IO.Path.Combine(sessionDir, "mapbg.png");
             var infoPath = System.IO.Path.Combine(sessionDir, "mapbg.info");
             var dataPath = System.IO.Path.Combine(sessionDir, "mapdata.bin");
 
+            System.IO.File.Copy(previewBg, bgPath, true);
+            if (System.IO.File.Exists(previewInfo)) System.IO.File.Copy(previewInfo, infoPath, true);
+            if (System.IO.File.Exists(previewData)) System.IO.File.Copy(previewData, dataPath, true);
+
+            Logger.Msg($"[BOAM] TacticalMap — Copied preview data to {sessionDir}");
+
+            // Load into state
             var data = TacticalMap.MapDataLoader.Load(bgPath, infoPath, dataPath, Logger);
             if (data.BackgroundTexture != null)
             {
@@ -454,7 +490,7 @@ public class BoamBridge : IModpackPlugin
             }
             else
             {
-                Logger.Warning("[BOAM] TacticalMap — No map background on disk to reload");
+                Logger.Warning("[BOAM] TacticalMap — Failed to load map from copied files");
             }
         }
         catch (Exception ex)

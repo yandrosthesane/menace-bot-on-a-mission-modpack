@@ -23,8 +23,11 @@ internal static class TacticalMapState
     internal static TileData[] TileDataArray;
     internal static float HeightMin, HeightMax;
 
-    /// <summary>Battle session directory — created at OnPreviewReady, reused at battle-start.</summary>
+    /// <summary>Battle session directory — created at tactical-ready from preview data.</summary>
     internal static string BattleSessionDir;
+
+    /// <summary>Fixed preview directory — map data written here at preview-ready, copied to battle report at tactical-ready.</summary>
+    internal static string PreviewDir;
 
     // --- Unit positions (updated by hooks) ---
 

@@ -37,10 +37,14 @@ static class TileModifierPatch
                 var score = kvp.Value;
                 if (tile == null || score == null) continue;
 
-                if (tileMap.TryGetValue((tile.GetX(), tile.GetZ()), out var bonus))
+                if (tileMap.TryGetValue((tile.GetX(), tile.GetZ()), out var mod))
                 {
-                    score.UtilityScore += bonus;
-                    score.UtilityScoreScaled += bonus;
+                    score.UtilityScore += mod.Utility;
+                    score.UtilityScoreScaled += mod.Utility;
+                    score.SafetyScore += mod.Safety;
+                    score.SafetyScoreScaled += mod.Safety;
+                    score.DistanceScore += mod.Distance;
+                    score.UtilityByAttacksScore += mod.UtilityByAttacks;
                     applied++;
                 }
             }

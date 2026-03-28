@@ -53,12 +53,12 @@ let initNode : NodeDef = {
                 if not allies.IsEmpty then
                     let actorTiles = modifiers |> Map.tryFind actorId |> Option.defaultValue Map.empty
                     if not (Map.isEmpty actorTiles) then
-                        let currentDensity = packDensityAt c.Attraction posState.Position.X posState.Position.Z allies
+                        let currentDensity = packDensityAt c.BaseSafety posState.Position.X posState.Position.Z allies
                         let updatedTiles =
-                            actorTiles |> Map.map (fun pos existingUtility ->
-                                let tileDensity = packDensityAt c.Attraction pos.X pos.Z allies
+                            actorTiles |> Map.map (fun pos existing ->
+                                let tileDensity = packDensityAt c.BaseSafety pos.X pos.Z allies
                                 let improvement = max 0f (tileDensity - currentDensity) * c.InitMultiplier
-                                existingUtility + improvement)
+                                TileModifier.add existing (TileModifier.safety improvement))
                         modifiers <- modifiers |> Map.add actorId updatedTiles
 
         ctx |> NodeContext.write tileModifiers modifiers
@@ -98,18 +98,18 @@ let node : NodeDef = {
                 if Map.isEmpty actorTiles then
                     ctx.Log (sprintf "%s: no tiles to score (no tile map)" a.Actor)
                 else
-                    let actorAttraction = match Map.tryFind a.Actor scales with Some s -> max c.Attraction (s * c.Fraction) | None -> c.Attraction
+                    let actorAttraction = match Map.tryFind a.Actor scales with Some s -> max c.BaseSafety (s * c.SafetyFraction) | None -> c.BaseSafety
                     let currentDensity = packDensityAt actorAttraction a.Position.X a.Position.Z allies
 
                     let mutable minScore = System.Single.MaxValue
                     let mutable maxScore = System.Single.MinValue
                     let updatedTiles =
-                        actorTiles |> Map.map (fun pos existingUtility ->
+                        actorTiles |> Map.map (fun pos existing ->
                             let tileDensity = packDensityAt actorAttraction pos.X pos.Z allies
                             let improvement = max 0f (tileDensity - currentDensity)
                             if improvement < minScore then minScore <- improvement
                             if improvement > maxScore then maxScore <- improvement
-                            existingUtility + improvement)
+                            TileModifier.add existing (TileModifier.utility improvement))
 
                     let acted = allies |> List.filter (fun (_, a, _) -> a) |> List.length
                     let engaged = allies |> List.filter (fun (_, _, e) -> e) |> List.length

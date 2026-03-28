@@ -166,3 +166,7 @@ UserData/BOAM/icons/
 ```
 
 The engine and minimap overlay load icons by filename — drop a PNG with the right name and restart the game.
+
+## Troubleshooting
+
+If icons are missing or the generator reports errors, download the debug icon generator (in the tactical engine) from the [vDebugAssets release](https://github.com/yandrosthesane/menace-bot-on-a-mission-modpack/releases/tag/vDebugAssets) and run it with `--force`. This build includes fallback strategies.
