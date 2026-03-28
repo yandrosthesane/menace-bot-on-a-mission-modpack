@@ -28,12 +28,12 @@ jobs:
         run: bash release.sh
 
       - name: Extract changelog for this version
-        id: changelog
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          # Extract the section for this version from CHANGELOG.md
-          awk "/^## v${VERSION}$/,/^## v[0-9]/" docs/features/CHANGELOG.md | head -n -1 | tail -n +2 > /tmp/release_notes.md
+          # Extract content between this version header and the next one
+          sed -n "/^## v${VERSION}$/,/^## v/p" docs/features/CHANGELOG.md | sed '1d;$d' > /tmp/release_notes.md
           echo "Found $(wc -l < /tmp/release_notes.md) lines of release notes"
+          cat /tmp/release_notes.md
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
