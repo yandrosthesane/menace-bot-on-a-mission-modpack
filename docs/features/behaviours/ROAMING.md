@@ -55,8 +55,6 @@ baseUtility = max(config.baseUtility, gameMaxScore * config.fraction)
 
 ```json5
 "roaming": {
-  "default":    { "baseUtility": 100, "fraction": 1.0, "engagementRadius": 20 },
-  "cautious":   { "baseUtility": 50,  "fraction": 0.5, "engagementRadius": 30 },
-  "aggressive": { "baseUtility": 150, "fraction": 1.5, "engagementRadius": 15 }
+  "default":    { "baseUtility": 100, "fraction": 1.0, "engagementRadius": 20 }
 }
 ```

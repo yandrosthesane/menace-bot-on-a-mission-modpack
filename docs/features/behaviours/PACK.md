@@ -110,16 +110,6 @@ attraction = max(config.attraction, gameMaxScore * config.fraction)
     "radius": 20, "peak": 4.0, "attraction": 560, "fraction": 1.2,
     "crowdPenalty": 120, "anchoredWeight": 1.0, "unactedWeight": 0.3,
     "contactBonus": 1.5, "initMultiplier": 3.0
-  },
-  "tight": {
-    "radius": 12, "peak": 3.0, "attraction": 700, "fraction": 1.5,
-    "crowdPenalty": 150, "anchoredWeight": 1.0, "unactedWeight": 0.5,
-    "contactBonus": 2.0, "initMultiplier": 4.0
-  },
-  "loose": {
-    "radius": 25, "peak": 5.0, "attraction": 400, "fraction": 0.8,
-    "crowdPenalty": 80, "anchoredWeight": 1.0, "unactedWeight": 0.2,
-    "contactBonus": 1.0, "initMultiplier": 2.0
   }
 }
 ```

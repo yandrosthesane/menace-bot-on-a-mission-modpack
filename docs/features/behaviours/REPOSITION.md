@@ -68,8 +68,6 @@ maxUtility = max(config.maxUtility, gameMaxScore * config.fraction)
 
 ```json5
 "reposition": {
-  "default":    { "maxUtility": 600, "fraction": 2.0 },
-  "aggressive": { "maxUtility": 900, "fraction": 3.0 },
-  "passive":    { "maxUtility": 300, "fraction": 1.0 }
+  "default":    { "maxUtility": 600, "fraction": 2.0 }
 }
 ```
