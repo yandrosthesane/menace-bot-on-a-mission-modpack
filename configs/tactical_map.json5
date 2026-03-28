@@ -27,7 +27,7 @@
   // "MapStyleKey": "K",       // cycle map background style independently
   // "EntityStyleKey": "J",    // cycle entity style independently
   // "AnchorKey": "H",         // cycle screen anchor position
-  // "FogOfWarKey": "N",       // toggle fog of war (hides undetected enemies)
+  "FogOfWarKey": "N",       // toggle fog of war (hides undetected enemies)
   // "LabelKey": "I",          // toggle unit name labels on/off
 
   // ── Defaults ──
@@ -46,5 +46,5 @@
   "Padding": 4,                // padding inside panel border (px)
   "LabelFontSize": 12,          // fallback font size if EntityStyle has no FontSize
   "HeaderFontSize": 13,        // header text font size (px)
-  "ToastFontSize": 16          // toast notification font size (px)
+  "ToastFontSize": 24          // toast notification font size (px)
 }

@@ -4,6 +4,8 @@ order: 4
 
 # Adding a new behaviour node
 
+I do not expect this to be used (and it will probably change) but if you're motivated...
+
 ## 1. Create the node file
 
 Create `boam_tactical_engine/Nodes/YourBehaviour.fs`:
@@ -61,7 +63,7 @@ In `configs/behaviour.json5`, add the node to a hook chain:
 
 Order in the list = execution order.
 
-## Available hook points
+## Available hook points for now
 
 | Hook | When | Typical use |
 |------|------|-------------|
@@ -81,8 +83,5 @@ Order in the list = execution order.
 | `known-opponents` | `TilePos list` | Known opponent positions |
 | `game-score-scale` | `Map<string, float32>` | Max game Combined score per actor |
 
-## Tips
-
-- Use directional scoring: compare tile vs current position, only add positive improvements
-- Scale with game scores: `max(default, gameMaxScore * fraction)`
+## Initialization
 - If your behaviour needs init at battle start, create a separate `initNode` on `OnTacticalReady`

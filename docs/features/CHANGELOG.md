@@ -24,7 +24,7 @@ All behaviour parameters are in `configs/behaviour.json5`:
 - **Named presets** — each behaviour has presets (default, aggressive, cautious, etc.) selectable by name.
 - **Adaptive score scaling** — modifiers scale relative to the game's own tile scores. Hardcoded defaults serve as a floor.
 
-See [Adding Nodes](behaviours/ADDING_NODES.md) for a guide to creating new behaviours.
+See [Adding Nodes](behaviours/ADDING_A_BEHAVIOR_NODE) for a guide to creating new behaviours.
 
 ### Symmetric Protocol
 

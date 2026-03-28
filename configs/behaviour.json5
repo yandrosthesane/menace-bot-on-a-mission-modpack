@@ -41,16 +41,6 @@
       "baseUtility": 100,
       "fraction": 1.0,
       "engagementRadius": 20
-    },
-    "cautious": {
-      "baseUtility": 50,
-      "fraction": 0.5,
-      "engagementRadius": 30
-    },
-    "aggressive": {
-      "baseUtility": 150,
-      "fraction": 1.5,
-      "engagementRadius": 15
     }
   },
 
@@ -64,14 +54,6 @@
     "default": {
       "maxUtility": 600,
       "fraction": 2.0
-    },
-    "aggressive": {
-      "maxUtility": 900,
-      "fraction": 3.0
-    },
-    "passive": {
-      "maxUtility": 300,
-      "fraction": 1.0
     }
   },
 
@@ -99,28 +81,6 @@
       "unactedWeight": 0.3,
       "contactBonus": 1.5,
       "initMultiplier": 3.0
-    },
-    "tight": {
-      "radius": 12,
-      "peak": 3.0,
-      "attraction": 700,
-      "fraction": 1.5,
-      "crowdPenalty": 150,
-      "anchoredWeight": 1.0,
-      "unactedWeight": 0.5,
-      "contactBonus": 2.0,
-      "initMultiplier": 4.0
-    },
-    "loose": {
-      "radius": 25,
-      "peak": 5.0,
-      "attraction": 400,
-      "fraction": 0.8,
-      "crowdPenalty": 80,
-      "anchoredWeight": 1.0,
-      "unactedWeight": 0.2,
-      "contactBonus": 1.0,
-      "initMultiplier": 2.0
     }
   }
 }

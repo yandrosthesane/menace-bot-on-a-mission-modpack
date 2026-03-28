@@ -106,4 +106,4 @@ Each behaviour section contains named presets with all tuning parameters. See th
 
 ## Adding new behaviours
 
-See [Adding Nodes](behaviours/ADDING_NODES.md).
+See [Adding Nodes](behaviours/ADDING_A_BEHAVIOR_NODE).
