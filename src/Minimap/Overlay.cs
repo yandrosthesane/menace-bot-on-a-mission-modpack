@@ -307,7 +307,7 @@ internal class TacticalMapOverlay
                 }
                 GUI.Box(new Rect(unitLeft, unitTop, iconSz, iconSz), "", style);
 
-                if (_showLabels)
+                if (_showLabels && _labelStyle.fontSize > 0)
                 {
                     // Cached label
                     if (!_actorLabelCache.TryGetValue(unit.Actor, out var label))
@@ -477,7 +477,7 @@ internal class TacticalMapOverlay
 
         _labelStyle = new GUIStyle(GUI.skin.label)
         {
-            fontSize = entityStyle.FontSize > 0 ? entityStyle.FontSize : _labelFontSize,
+            fontSize = entityStyle.FontSize >= 0 ? entityStyle.FontSize : _labelFontSize,
             fontStyle = FontStyle.Bold,
             alignment = TextAnchor.UpperCenter
         };

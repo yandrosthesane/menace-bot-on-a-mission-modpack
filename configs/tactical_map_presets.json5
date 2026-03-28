@@ -33,8 +33,9 @@
   // MapBrightness — override global MapBrightness for this preset (0.1–4.0, optional)
   "DisplayStyles": [
     { "Name": "1080 M",      "MapStyle": "captured",      "EntityStyle": "native",         "Anchor": "bottom-right", "Opacity": 0.8, "MapBrightness": 4.0 },
-    { "Name": "1080 Clean",  "MapStyle": "captured",      "EntityStyle": "native-nolabel", "Anchor": "bottom-right", "Opacity": 0.8, "MapBrightness": 4.0 },
+    { "Name": "1080 NoLabel",  "MapStyle": "captured",      "EntityStyle": "native-nolabel", "Anchor": "bottom-right", "Opacity": 0.8, "MapBrightness": 4.0 },
     { "Name": "1080 L",      "MapStyle": "captured-l",    "EntityStyle": "native-l",       "Anchor": "center",       "Opacity": 0.8, "MapBrightness": 4.0 },
+    { "Name": "1080 L Nolabel",  "MapStyle": "captured-l",    "EntityStyle": "native-l-nolabel",       "Anchor": "center", "Opacity": 0.8, "MapBrightness": 4.0 },
     { "Name": "4K M",        "MapStyle": "captured-4k",   "EntityStyle": "native-4k",      "Anchor": "bottom-right", "Opacity": 0.8, "MapBrightness": 4.0 },
     { "Name": "4K L",        "MapStyle": "captured-4k-l", "EntityStyle": "native-4k-l",    "Anchor": "center",       "Opacity": 0.8, "MapBrightness": 4.0 },
     { "Name": "1080 L",      "MapStyle": "captured-4k-l", "EntityStyle": "native-4k-l-nolabel",       "Anchor": "center", "Opacity": 0.8, "MapBrightness": 4.0 }
@@ -98,6 +99,19 @@
       "Key": "native-l",
       "IconSize": 24,
       "FontSize": 16,
+      "Background": "#120803E6",
+      "HeaderText": "#F7AD66",
+      "FactionColors": {
+        "Player": "#4DC99E", "PlayerAI": "#4DC99E", "Civilian": "#F7AD40",
+        "AlliedLocalForces": "#4DC99E", "EnemyLocalForces": "#FF4242",
+        "Pirates": "#FF4242", "Wildlife": "#F705FF", "Constructs": "#BA9478",
+        "RogueArmy": "#FF4242", "Default": "#BA9478"
+      }
+    },
+    {
+      "Key": "native-l-nolabel",
+      "IconSize": 24,
+      "FontSize": 0,
       "Background": "#120803E6",
       "HeaderText": "#F7AD66",
       "FactionColors": {

@@ -49,3 +49,9 @@ Add or remove presets by duplicating or commenting out entries in `tactical_map_
 - **Display presets** (map styles, entity styles, anchors): `tactical_map_presets.json5`
 
 Edit `tactical_map_presets.json5` to add, remove, or modify presets. See [Configuration](README_CONFIG.md) for the full config reference.
+
+# Examples
+
+![minimap_1](/docs/images/minimap_1.png)
+
+![minimap_no_label](/docs/images/minimap_nolabel.png)

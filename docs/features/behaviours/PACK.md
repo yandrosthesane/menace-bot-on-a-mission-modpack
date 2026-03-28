@@ -4,60 +4,103 @@ order: 3
 
 # Pack
 
-Pulls units toward allies, forming natural groups. Engaged allies exert stronger attraction, causing packs to converge on threats.
+## Objective
 
-Nodes: `pack-init` (OnTacticalReady), `pack-behaviour` (OnTurnEnd)
-
-## Scoring
-
-Pack uses directional density scoring. For each reachable tile, it computes pack density (weighted sum of nearby allies) and compares it to the current position. Only improvements are added:
+Pull units toward allies to form natural groups. When an ally is fighting, the pack converges on the threat. Prevent aimless clumping when not in combat.
 
 ```
-improvement = max(0, tileDensity - currentDensity)
+Actor turn ends
+    │
+    ├─ Build ally list (same faction only, exclude self)
+    │   each ally carries: position, hasActed, engaged (inRange && inContact)
+    │
+    ├─ Compute pack density at current position (baseline)
+    │
+    ├─ For each tile in actor's existing tile map:
+    │   │
+    │   ├─ Compute pack density at this tile
+    │   │   density = sum of weighted ally influences within radius
+    │   │
+    │   ├─ improvement = max(0, tileDensity - currentDensity)
+    │   │   (directional: only tiles that improve cohesion score positive)
+    │   │
+    │   └─ tile score += improvement
+    │
+    ▼
+Tile scores added on top of roaming + reposition
+
+Ally influence per tile:
+    ┌─────────────────────────────────────────┐
+    │  influence = (1 - distance/radius)      │
+    │           * weight                      │
+    │                                         │
+    │  weight = anchoredWeight  (if acted)    │
+    │         | unactedWeight   (if not)      │
+    │         + contactBonus    (if engaged)  │
+    └─────────────────────────────────────────┘
+
+Crowd curve:
+    ┌─────────────────────────────────────────┐
+    │  score = attraction * min(density, peak)│
+    │        - crowdPenalty * excess           │
+    │                                         │
+    │  excess = max(0, density - peak)        │
+    │  (suppressed when any nearby ally is    │
+    │   engaged — crowding near threats is ok)│
+    └─────────────────────────────────────────┘
 ```
 
-Each ally within `radius` contributes influence based on distance and status:
+## Init boost
+
+At battle start, `pack-init` runs with `initMultiplier` applied to density improvements. This forms packs aggressively before the first turn, then normal scoring takes over.
+
+## Formulas
+
+Per-ally influence at a tile:
 
 ```
-influence = (1 - distance / radius) * weight
+dist = euclidean distance from ally to tile
+influence = max(0, 1 - dist / radius) * weight
 ```
 
-Weight depends on the ally's state:
-- Already acted this round: `anchoredWeight` (stable position, stronger pull)
-- Not yet acted: `unactedWeight` (may still move, weaker pull)
-- Engaged (personally sees a detected enemy): adds `contactBonus` on top
-
-This creates a natural cycle — early in the round allies are unacted (weak pull, roaming dominates), late in the round they're anchored (strong pull, pack tightens).
-
-### Crowd control
-
-When density exceeds `peak`, a crowd penalty applies to discourage oversized blobs:
+Weight per ally:
 
 ```
-score = attraction * min(density, peak) - crowdPenalty * max(0, density - peak)
+weight = (acted ? anchoredWeight : unactedWeight) + (engaged ? contactBonus : 0)
 ```
 
-The penalty is suppressed when any contributing ally is engaged — converging on a threat should not be penalized.
+Density at a tile:
 
-### Init boost
+```
+density = sum of influence across all allies within radius
+```
 
-At battle start, `pack-init` runs with `initMultiplier` to form packs aggressively before the first turn.
+Crowd curve:
+
+```
+score = attraction * min(density, peak) - penalty
+penalty = crowdPenalty * max(0, density - peak)   // 0 if any contributing ally is engaged
+```
+
+Attraction scales with game scores:
+
+```
+attraction = max(config.attraction, gameMaxScore * config.fraction)
+```
 
 ## Parameters
 
-Configurable in `behaviour.json5` under `"pack"` presets.
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `radius` | 20 | Influence range per ally in tiles |
-| `peak` | 4.0 | Ideal density. Above this, crowd penalty applies (unless engaged) |
-| `attraction` | 560 | Floor utility per density unit. Actual = `max(attraction, gameMax * fraction)` |
-| `fraction` | 1.2 | Multiplier against game max score |
-| `crowdPenalty` | 120 | Penalty per density unit above peak (suppressed near engaged allies) |
-| `anchoredWeight` | 1.0 | Weight for allies that already acted |
-| `unactedWeight` | 0.3 | Weight for allies that haven't acted |
+| Parameter | Default | Effect |
+|-----------|---------|--------|
+| `radius` | 20 | Influence range per ally (tiles) |
+| `peak` | 4.0 | Ideal density — above this, crowd penalty applies |
+| `attraction` | 560 | Floor utility per density unit |
+| `fraction` | 1.2 | Scales attraction against game's max Combined score |
+| `crowdPenalty` | 120 | Penalty per density above peak (suppressed near engaged allies) |
+| `anchoredWeight` | 1.0 | Weight for allies that already acted this round |
+| `unactedWeight` | 0.3 | Weight for allies that haven't acted yet |
 | `contactBonus` | 1.5 | Extra weight for engaged allies |
-| `initMultiplier` | 3.0 | Boost factor for round 1 pack formation |
+| `initMultiplier` | 3.0 | Boost for round 1 pack formation |
 
 ## Presets
 

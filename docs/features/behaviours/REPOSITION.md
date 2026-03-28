@@ -4,39 +4,65 @@ order: 2
 
 # Reposition
 
-Moves units toward their ideal attack range from the closest known opponent. Only active near engagement. Melee units rush in, ranged units find firing positions.
+## Objective
 
-Node: `reposition-behaviour` (OnTurnEnd)
-
-## Scoring
-
-Tiles are scored by how much they improve the actor's position relative to its ideal attack range:
+Move units toward their ideal attack range from the closest known opponent. Melee units rush in. Ranged units find a firing position. Only activates near an engagement — otherwise roaming handles movement.
 
 ```
-improvement = currentDeviation - tileDeviation
-utility = (maxUtility / idealRange) * (improvement / currentDeviation)
+Actor turn ends (near engagement)
+    │
+    ├─ Find closest known opponent position
+    │   │
+    │   └─ None found → skip (no modifiers)
+    │
+    ├─ Look up actor's idealRange from skills
+    │   (smallest IdealRange across all attacks)
+    │
+    ├─ Already within 0.5 tiles of ideal range?
+    │   │
+    │   └─ YES → skip (already positioned)
+    │
+    └─ Score each reachable tile by improvement:
+        how much closer to ideal range does this tile get us
+        vs staying in place?
+
+        Melee (idealRange=1) gets full utility
+        Ranged (idealRange=3) gets 1/3
+        Support (idealRange=5) gets 1/5
+
+        ▼
+Tile scores merged into existing map (additive with roaming zeros + pack)
 ```
 
-Where `deviation = |distanceToTarget - idealRange|`. Only tiles that reduce deviation score positive.
+## Formulas
 
-The `idealRange` comes from the actor's skills (smallest ideal range across all attacks):
+Deviation from ideal range:
 
-- idealRange 1 (melee): full `maxUtility`. Tiles adjacent to the target score highest.
-- idealRange 3 (ranged): `maxUtility / 3`. Tiles at distance 3 from target score highest.
-- idealRange 5 (support): `maxUtility / 5`. Lighter pull toward a distant position.
+```
+currentDeviation = |distanceToTarget - idealRange|
+tileDeviation    = |tileDistanceToTarget - idealRange|
+improvement      = currentDeviation - tileDeviation
+```
 
-If already within 0.5 tiles of ideal range, reposition produces no modifiers.
+Per-tile utility (only tiles with positive improvement):
+
+```
+rangeScale = maxUtility / idealRange
+utility    = rangeScale * (improvement / currentDeviation)
+```
+
+Max utility scales with game scores:
+
+```
+maxUtility = max(config.maxUtility, gameMaxScore * config.fraction)
+```
 
 ## Parameters
 
-Configurable in `behaviour.json5` under `"reposition"` presets.
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `maxUtility` | 600 | Floor modifier strength for melee (idealRange=1). Ranged gets `maxUtility / idealRange`. |
-| `fraction` | 2.0 | Multiplier against game max score. Actual max = `max(maxUtility, gameMax * fraction)`. |
-
-Increasing `fraction` makes melee units push harder toward enemies. The range-scaling means ranged units always reposition more gently.
+| Parameter | Default | Effect |
+|-----------|---------|--------|
+| `maxUtility` | 600 | Floor strength for melee. Ranged gets `maxUtility / idealRange`. |
+| `fraction` | 2.0 | Scales max against game's max Combined score |
 
 ## Presets
 
