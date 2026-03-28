@@ -42,12 +42,10 @@ jobs:
           TAG="${GITHUB_REF_NAME}"
           # Check if release exists
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
-            # Update existing release body and upload assets
-            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file /tmp/release_notes.md
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" -F /tmp/release_notes.md
             for f in release/*.zip; do
               gh release upload "$TAG" "$f" --repo "$GITHUB_REPOSITORY" --clobber
             done
           else
-            # Create new release
-            gh release create "$TAG" release/*.zip --repo "$GITHUB_REPOSITORY" --notes-file /tmp/release_notes.md
+            gh release create "$TAG" release/*.zip --repo "$GITHUB_REPOSITORY" -F /tmp/release_notes.md -t "$TAG"
           fi
