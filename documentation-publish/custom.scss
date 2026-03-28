@@ -4,8 +4,9 @@
 
 // Widen the layout — give center content column more room
 body {
-  max-width: 100%;
+  max-width: 1920px;
   margin: 0 auto;
+  padding: 0 2rem;
 }
 
 // Override Quartz grid to give content ~60% instead of the default narrow center
