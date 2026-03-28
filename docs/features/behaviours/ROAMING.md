@@ -1,3 +1,7 @@
+---
+order: 1
+---
+
 # Roaming Behaviour
 
 Encourages idle AI units to explore outward. When no engagement is nearby, units spread out across the map rather than staying in place.

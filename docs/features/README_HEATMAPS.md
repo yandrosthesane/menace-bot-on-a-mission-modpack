@@ -1,3 +1,7 @@
+---
+order: 5
+---
+
 # Heatmap Renderer
 
 Renders heatmap PNG images showing AI evaluation scores overlaid on the captured map background. Each heatmap visualizes one actor's turn: tile scores, unit positions, vision range, chosen behavior, and move destination.

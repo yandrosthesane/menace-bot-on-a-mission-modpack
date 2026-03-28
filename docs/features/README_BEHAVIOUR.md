@@ -1,3 +1,7 @@
+---
+order: 4
+---
+
 # AI Behaviour System
 
 BOAM's behaviour system modifies enemy AI movement by injecting per-tile utility scores during the game's tile evaluation phase. It does **not** replace the game's AI — it influences WHERE units move by adjusting tile attractiveness scores.

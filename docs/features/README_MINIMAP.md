@@ -1,3 +1,7 @@
+---
+order: 3
+---
+
 # Tactical Minimap
 
 In-game IMGUI overlay showing unit positions on the captured map background. Units are rendered with the same icon fallback chain as heatmaps (leader -- template -- faction).

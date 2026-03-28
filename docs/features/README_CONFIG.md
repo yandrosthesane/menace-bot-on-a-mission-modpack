@@ -1,3 +1,7 @@
+---
+order: 2
+---
+
 # Configuration
 
 BOAM uses a two-tier config system with versioned JSON5 files. All configs support `//` and `/* */` comments.

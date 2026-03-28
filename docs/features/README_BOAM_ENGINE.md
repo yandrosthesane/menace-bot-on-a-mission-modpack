@@ -1,3 +1,7 @@
+---
+order: 7
+---
+
 # BOAM-engine
 
 Companion process that runs outside the game. Receives hook data from the BOAM-modpack over HTTP and provides heatmap rendering, action logging, and auto-navigation.

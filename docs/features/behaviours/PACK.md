@@ -1,3 +1,7 @@
+---
+order: 3
+---
+
 # Pack Behaviour
 
 Pulls units toward allies, forming natural groups. Units near combat get extra attraction. Groups converge on threats through ally-following rather than direct enemy targeting.

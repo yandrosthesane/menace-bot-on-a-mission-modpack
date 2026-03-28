@@ -1,3 +1,7 @@
+---
+order: 8
+---
+
 # BOAM-modpack
 
 The in-game mod that runs inside MelonLoader. This is what gets deployed via the Menace Modkit.

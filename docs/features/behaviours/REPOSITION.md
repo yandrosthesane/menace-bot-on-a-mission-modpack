@@ -1,3 +1,7 @@
+---
+order: 2
+---
+
 # Reposition Behaviour
 
 Moves units toward their ideal attack range from the closest known enemy. Only active near engagement. Melee units rush in, ranged units find firing positions.

@@ -23,6 +23,16 @@ const explorerConfig = {
     }
     return true
   },
+  sortFn: (a: any, b: any) => {
+    // Sort by frontmatter "order" field if present, then alphabetically
+    const orderA = a.file?.frontmatter?.order ?? 999
+    const orderB = b.file?.frontmatter?.order ?? 999
+    if (orderA !== orderB) return orderA - orderB
+    // Folders before files
+    if (a.isFolder && !b.isFolder) return -1
+    if (!a.isFolder && b.isFolder) return 1
+    return (a.displayName ?? "").localeCompare(b.displayName ?? "")
+  },
   mapFn: (node: any) => {
     // Rename folder display names to hide nesting
     if (node.isFolder) {

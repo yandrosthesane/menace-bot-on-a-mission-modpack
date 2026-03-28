@@ -1,3 +1,7 @@
+---
+order: 4
+---
+
 # Adding a New Behaviour Node
 
 Step-by-step guide to create and register a new behaviour node in the BOAM engine.

@@ -1,3 +1,7 @@
+---
+order: 6
+---
+
 # Icon Asset Pipeline (`boam_asset_pipeline/`)
 
 Generates properly sized icon assets from game badge art for use in heatmap unit overlays and the tactical minimap.
