@@ -3,7 +3,7 @@
 **v2.0.0** | [Documentation](https://yandrosthesane.github.io/menace-bot-on-a-mission-modpack) | [Changelog](docs/features/CHANGELOG.md)
 
 AI behavior analysis and modification mod for Menace.
-Modifies enemy AI movement through configurable behaviour nodes (roaming, pack formation, combat repositioning),
+Modifies enemy AI movement through configurable behaviour nodes,
 captures tactical data for offline heatmap rendering,
 provides a real-time in-game minimap overlay,
 and records full battle sessions (player actions + AI decisions + combat outcomes).
@@ -12,7 +12,7 @@ and records full battle sessions (player actions + AI decisions + combat outcome
 
 | Feature | Description |
 |---------|-------------|
-| [AI Behaviour](docs/features/README_BEHAVIOUR.md) | Configurable behaviour nodes that influence enemy AI movement — roaming, pack formation, combat repositioning |
+| [AI Behaviour](docs/features/README_BEHAVIOUR.md) | Configurable behaviour nodes that influence enemy AI movement |
 | [Tactical Minimap](docs/features/README_MINIMAP.md) | In-game IMGUI overlay showing unit positions on the captured map background |
 | [Heatmap Renderer](docs/features/README_HEATMAPS.md) | Offline heatmap generation from deferred render jobs — tile scores, decisions, movement |
 | [Action Logging](docs/features/README_BOAM_ENGINE.md) | Records player actions, AI decisions, and combat outcomes to JSONL battle logs |
