@@ -7,35 +7,26 @@ open BOAM.TacticalEngine.GameTypes
 open BOAM.TacticalEngine.NodeContext
 open BOAM.TacticalEngine.Node
 open BOAM.TacticalEngine.Keys
+open BOAM.TacticalEngine.Config
 
-// Pack scoring parameters
-let private radius = 20f           // Influence range per ally (tiles)
-let private peak = 4.0f            // Ideal density — sweet spot (encourages groups of 4-5)
-let private defaultAttraction = 560f
-let private packFraction = 1.2f    // pack influence as fraction of game max score
-let private crowdPenalty = 120f    // Penalty per density unit above peak
-let private anchoredWeight = 1.0f  // Influence multiplier for allies that already acted
-let private unactedWeight = 0.3f   // Influence multiplier for allies that haven't acted
-let private contactBonus = 1.5f    // Extra influence for engaged allies (inRange && inContact)
+let private cfg () = Behaviour.Pack
 
 /// Compute raw pack density at a point given ally positions.
 let private packDensityAt (attraction: float32) (x: int) (z: int) (allies: (TilePos * bool * bool) list) =
+    let c = cfg ()
     let mutable density = 0f
     let mutable hasEngaged = false
     for (pos, hasActed, engaged) in allies do
         let dx = float32 (x - pos.X)
         let dz = float32 (z - pos.Z)
         let dist = sqrt (dx * dx + dz * dz)
-        if dist < radius then
-            let influence = (1f - dist / radius)
-            let weight = (if hasActed then anchoredWeight else unactedWeight) + (if engaged then contactBonus else 0f)
+        if dist < c.Radius then
+            let influence = (1f - dist / c.Radius)
+            let weight = (if hasActed then c.AnchoredWeight else c.UnactedWeight) + (if engaged then c.ContactBonus else 0f)
             density <- density + influence * weight
             if engaged then hasEngaged <- true
-    // Crowd curve: rises to peak, then drops — but no crowd penalty near engaged allies
-    let penalty = if hasEngaged then 0f else crowdPenalty * max 0f (density - peak)
-    attraction * min density peak - penalty
-
-let private initMultiplier = 3.0f   // Boost pack pull on round 1 to form packs fast
+    let penalty = if hasEngaged then 0f else c.CrowdPenalty * max 0f (density - c.Peak)
+    attraction * min density c.Peak - penalty
 
 /// Tactical-ready node: compute initial pack scores for all actors with boosted attraction.
 let initNode : NodeDef = {
@@ -45,6 +36,7 @@ let initNode : NodeDef = {
     Reads = [ "ai-actors"; "actor-positions"; "tile-modifiers" ]
     Writes = [ "tile-modifiers" ]
     Run = fun ctx ->
+        let c = cfg ()
         let actors = ctx |> NodeContext.readOrDefault aiActors [||]
         let positions = ctx |> NodeContext.readOrDefault actorPositions Map.empty
         let mutable modifiers = ctx |> NodeContext.readOrDefault tileModifiers Map.empty
@@ -61,19 +53,19 @@ let initNode : NodeDef = {
                 if not allies.IsEmpty then
                     let actorTiles = modifiers |> Map.tryFind actorId |> Option.defaultValue Map.empty
                     if not (Map.isEmpty actorTiles) then
-                        let currentDensity = packDensityAt defaultAttraction posState.Position.X posState.Position.Z allies
+                        let currentDensity = packDensityAt c.Attraction posState.Position.X posState.Position.Z allies
                         let updatedTiles =
                             actorTiles |> Map.map (fun pos existingUtility ->
-                                let tileDensity = packDensityAt defaultAttraction pos.X pos.Z allies
-                                let improvement = max 0f (tileDensity - currentDensity) * initMultiplier
+                                let tileDensity = packDensityAt c.Attraction pos.X pos.Z allies
+                                let improvement = max 0f (tileDensity - currentDensity) * c.InitMultiplier
                                 existingUtility + improvement)
                         modifiers <- modifiers |> Map.add actorId updatedTiles
 
         ctx |> NodeContext.write tileModifiers modifiers
-        ctx.Log (sprintf "Pack init: boosted pack scores for %d actors (x%.1f)" (Array.length actors) initMultiplier)
+        ctx.Log (sprintf "Pack init: boosted pack scores for %d actors (x%.1f)" (Array.length actors) c.InitMultiplier)
 }
 
-/// Turn-end node. Register this in the graph after RoamingBehaviour.
+/// Turn-end node.
 let node : NodeDef = {
     Name = "pack-behaviour"
     Hook = OnTurnEnd
@@ -81,6 +73,7 @@ let node : NodeDef = {
     Reads = [ "tile-modifiers"; "turn-end-actor"; "actor-positions"; "game-score-scale" ]
     Writes = [ "tile-modifiers" ]
     Run = fun ctx ->
+        let c = cfg ()
         let existing = ctx |> NodeContext.readOrDefault tileModifiers Map.empty
         let positions = ctx |> NodeContext.readOrDefault actorPositions Map.empty
         let scales = ctx |> NodeContext.readOrDefault gameScoreScale Map.empty
@@ -89,7 +82,6 @@ let node : NodeDef = {
         match actorOpt with
         | None -> ()
         | Some a ->
-            // Build ally list: same-faction actors only
             let allies =
                 positions
                 |> Map.toList
@@ -106,7 +98,7 @@ let node : NodeDef = {
                 if Map.isEmpty actorTiles then
                     ctx.Log (sprintf "%s: no tiles to score (no tile map)" a.Actor)
                 else
-                    let actorAttraction = match Map.tryFind a.Actor scales with Some s -> max defaultAttraction (s * packFraction) | None -> defaultAttraction
+                    let actorAttraction = match Map.tryFind a.Actor scales with Some s -> max c.Attraction (s * c.Fraction) | None -> c.Attraction
                     let currentDensity = packDensityAt actorAttraction a.Position.X a.Position.Z allies
 
                     let mutable minScore = System.Single.MaxValue
@@ -114,7 +106,6 @@ let node : NodeDef = {
                     let updatedTiles =
                         actorTiles |> Map.map (fun pos existingUtility ->
                             let tileDensity = packDensityAt actorAttraction pos.X pos.Z allies
-                            // Directional: only add positive improvement over current position
                             let improvement = max 0f (tileDensity - currentDensity)
                             if improvement < minScore then minScore <- improvement
                             if improvement > maxScore then maxScore <- improvement

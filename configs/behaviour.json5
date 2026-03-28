@@ -1,0 +1,126 @@
+// BOAM Behaviour Presets — AI movement modifier tuning
+//
+// This is the mod default. To customise, copy to:
+//   <game_dir>/UserData/BOAM/configs/behaviour.json5
+//
+// Each behaviour (roaming, reposition, pack) has named presets.
+// The "active" block selects which preset each behaviour uses.
+// All values are optional — missing fields use the built-in defaults.
+//
+// Score scaling: modifiers scale relative to the game's own tile evaluation scores.
+// "fraction" controls the multiplier: modifier = max(default, gameMaxScore * fraction).
+// The default value is the floor — game scaling only kicks in when it produces higher values.
+{
+  "configVersion": 1,
+
+  // ── Hook Chains ──
+  // Define which behaviour nodes run on each hook point, and in what order.
+  // Node names must match registered catalogue entries.
+  // Remove a node from the list to disable it. Reorder to change execution priority.
+  "hooks": {
+    "OnTacticalReady": ["roaming-init", "pack-init"],
+    "OnTurnEnd": ["roaming-behaviour", "reposition-behaviour", "pack-behaviour"]
+  },
+
+  // ── Active Presets ──
+  // Select which preset each behaviour uses by name.
+  "active": {
+    "roaming": "default",
+    "reposition": "default",
+    "pack": "default"
+  },
+
+  // ── Roaming ──
+  // Encourages idle units to explore outward. Disabled near engagement.
+  //
+  // baseUtility    — default modifier strength (floor for game score scaling)
+  // fraction       — modifier as fraction of game max score (1.0 = match game scores)
+  // engagementRadius — tiles; suppress roaming when any same-faction engaged ally is within this range
+  "roaming": {
+    "default": {
+      "baseUtility": 100,
+      "fraction": 1.0,
+      "engagementRadius": 20
+    },
+    "cautious": {
+      "baseUtility": 50,
+      "fraction": 0.5,
+      "engagementRadius": 30
+    },
+    "aggressive": {
+      "baseUtility": 150,
+      "fraction": 1.5,
+      "engagementRadius": 15
+    }
+  },
+
+  // ── Reposition ──
+  // Moves units toward their ideal attack range from the closest known opponent.
+  // Only active near engagement. Melee units get stronger pull (scaled by 1/idealRange).
+  //
+  // maxUtility     — default modifier strength for melee (idealRange=1); ranged = maxUtility/idealRange
+  // fraction       — modifier as fraction of game max score (2.0 = 2x game scores for melee)
+  "reposition": {
+    "default": {
+      "maxUtility": 600,
+      "fraction": 2.0
+    },
+    "aggressive": {
+      "maxUtility": 900,
+      "fraction": 3.0
+    },
+    "passive": {
+      "maxUtility": 300,
+      "fraction": 1.0
+    }
+  },
+
+  // ── Pack ──
+  // Pulls units toward allies. Directional scoring: tiles that improve pack density score higher.
+  // Engaged allies (inRange && inContact) get extra weight. No crowd penalty near engaged allies.
+  //
+  // radius         — influence range per ally (tiles)
+  // peak           — ideal density; above this, crowd penalty applies (unless engaged ally nearby)
+  // attraction     — default utility per density unit below peak (floor for game score scaling)
+  // fraction       — attraction as fraction of game max score
+  // crowdPenalty   — penalty per density unit above peak (suppressed near engaged allies)
+  // anchoredWeight — influence multiplier for allies that already acted this round
+  // unactedWeight  — influence multiplier for allies that haven't acted yet
+  // contactBonus   — extra influence weight for engaged allies (inRange && inContact)
+  // initMultiplier — boost factor for pack scores at tactical-ready (round 1 pack formation)
+  "pack": {
+    "default": {
+      "radius": 20,
+      "peak": 4.0,
+      "attraction": 560,
+      "fraction": 1.2,
+      "crowdPenalty": 120,
+      "anchoredWeight": 1.0,
+      "unactedWeight": 0.3,
+      "contactBonus": 1.5,
+      "initMultiplier": 3.0
+    },
+    "tight": {
+      "radius": 12,
+      "peak": 3.0,
+      "attraction": 700,
+      "fraction": 1.5,
+      "crowdPenalty": 150,
+      "anchoredWeight": 1.0,
+      "unactedWeight": 0.5,
+      "contactBonus": 2.0,
+      "initMultiplier": 4.0
+    },
+    "loose": {
+      "radius": 25,
+      "peak": 5.0,
+      "attraction": 400,
+      "fraction": 0.8,
+      "crowdPenalty": 80,
+      "anchoredWeight": 1.0,
+      "unactedWeight": 0.2,
+      "contactBonus": 1.0,
+      "initMultiplier": 2.0
+    }
+  }
+}

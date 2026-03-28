@@ -29,6 +29,29 @@ type TacticalEngineConfig = {
     Rendering: RenderingConfig
 }
 
+// --- Behaviour config (separate file: behaviour.json5) ---
+
+type RoamingPreset = {
+    BaseUtility: float32
+    Fraction: float32
+    EngagementRadius: float32
+}
+type RepositionPreset = {
+    MaxUtility: float32
+    Fraction: float32
+}
+type PackPreset = {
+    Radius: float32
+    Peak: float32
+    Attraction: float32
+    Fraction: float32
+    CrowdPenalty: float32
+    AnchoredWeight: float32
+    UnactedWeight: float32
+    ContactBonus: float32
+    InitMultiplier: float32
+}
+
 let private parseBorder (el: JsonElement) : BorderConfig =
     let color = el.GetProperty("color")
     { Margin = el.GetProperty("margin").GetInt32()
@@ -158,3 +181,142 @@ let private load () : TacticalEngineConfig =
 
 /// Singleton config — loaded once at module init.
 let Current = load ()
+
+// --- Behaviour presets (behaviour.json5) ---
+
+let private defaultRoaming : RoamingPreset = {
+    BaseUtility = 100f; Fraction = 1.0f; EngagementRadius = 20f
+}
+let private defaultReposition : RepositionPreset = {
+    MaxUtility = 600f; Fraction = 2.0f
+}
+let private defaultPack : PackPreset = {
+    Radius = 20f; Peak = 4.0f; Attraction = 560f; Fraction = 1.2f
+    CrowdPenalty = 120f; AnchoredWeight = 1.0f; UnactedWeight = 0.3f
+    ContactBonus = 1.5f; InitMultiplier = 3.0f
+}
+
+let private tryFloat (el: JsonElement) (key: string) (fallback: float32) =
+    match el.TryGetProperty(key) with | true, v -> v.GetSingle() | _ -> fallback
+
+let private parseRoaming (el: JsonElement) (defaults: RoamingPreset) : RoamingPreset = {
+    BaseUtility = tryFloat el "baseUtility" defaults.BaseUtility
+    Fraction = tryFloat el "fraction" defaults.Fraction
+    EngagementRadius = tryFloat el "engagementRadius" defaults.EngagementRadius
+}
+
+let private parseReposition (el: JsonElement) (defaults: RepositionPreset) : RepositionPreset = {
+    MaxUtility = tryFloat el "maxUtility" defaults.MaxUtility
+    Fraction = tryFloat el "fraction" defaults.Fraction
+}
+
+let private parsePack (el: JsonElement) (defaults: PackPreset) : PackPreset = {
+    Radius = tryFloat el "radius" defaults.Radius
+    Peak = tryFloat el "peak" defaults.Peak
+    Attraction = tryFloat el "attraction" defaults.Attraction
+    Fraction = tryFloat el "fraction" defaults.Fraction
+    CrowdPenalty = tryFloat el "crowdPenalty" defaults.CrowdPenalty
+    AnchoredWeight = tryFloat el "anchoredWeight" defaults.AnchoredWeight
+    UnactedWeight = tryFloat el "unactedWeight" defaults.UnactedWeight
+    ContactBonus = tryFloat el "contactBonus" defaults.ContactBonus
+    InitMultiplier = tryFloat el "initMultiplier" defaults.InitMultiplier
+}
+
+/// Pick a preset by name from a presets object, falling back to defaults.
+let private pickPreset (presets: JsonElement) (name: string) (parse: JsonElement -> 'a) (defaults: 'a) =
+    match presets.TryGetProperty(name) with
+    | true, el -> parse el
+    | _ -> defaults
+
+type BehaviourConfig = {
+    Hooks: Map<string, string list>  // hook point name → ordered list of node names
+    Roaming: RoamingPreset
+    Reposition: RepositionPreset
+    Pack: PackPreset
+}
+
+let mutable BehaviourSource : ConfigSource = { Path = ""; Label = ""; Version = 0 }
+
+let private loadBehaviour () : BehaviourConfig =
+    let exeDir = AppDomain.CurrentDomain.BaseDirectory
+    let gameDir =
+        Environment.GetEnvironmentVariable("MENACE_GAME_DIR")
+        |> Option.ofObj
+        |> Option.defaultValue (Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            ".steam/steam/steamapps/common/Menace"))
+    let persistentDir =
+        Environment.GetEnvironmentVariable("BOAM_PERSISTENT_ASSETS")
+        |> Option.ofObj
+        |> Option.defaultValue (Path.Combine(gameDir, "UserData", "BOAM"))
+    let userPath = Path.Combine(persistentDir, "configs", "behaviour.json5")
+    let modDir = Path.GetDirectoryName(exeDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
+    let defaultPath = Path.Combine(modDir, "configs", "behaviour.json5")
+
+    // Seed user config from mod default if missing
+    if not (File.Exists(userPath)) && File.Exists(defaultPath) then
+        try
+            Directory.CreateDirectory(Path.GetDirectoryName(userPath)) |> ignore
+            File.Copy(defaultPath, userPath)
+        with _ -> ()
+
+    let configPath =
+        if File.Exists(userPath) then
+            let userVer = readVersion userPath
+            let defaultVer = if File.Exists(defaultPath) then readVersion defaultPath else 0
+            if userVer >= defaultVer then
+                BehaviourSource <- { Path = userPath; Label = "user"; Version = userVer }
+                userPath
+            else
+                BehaviourSource <- { Path = defaultPath; Label = "default"; Version = defaultVer }
+                defaultPath
+        elif File.Exists(defaultPath) then
+            BehaviourSource <- { Path = defaultPath; Label = "default"; Version = readVersion defaultPath }
+            defaultPath
+        else
+            // No file — use hardcoded defaults
+            BehaviourSource <- { Path = ""; Label = "builtin"; Version = 0 }
+            ""
+
+    let defaultHooks = Map.ofList [
+        "OnTacticalReady", ["roaming-init"; "pack-init"]
+        "OnTurnEnd", ["roaming-behaviour"; "reposition-behaviour"; "pack-behaviour"]
+    ]
+
+    if configPath = "" then
+        { Hooks = defaultHooks; Roaming = defaultRoaming; Reposition = defaultReposition; Pack = defaultPack }
+    else
+        let json = stripComments (File.ReadAllText(configPath))
+        let doc = JsonDocument.Parse(json)
+        let root = doc.RootElement
+
+        // Read active preset names
+        let activeRoaming = match root.TryGetProperty("active") with | true, a -> match a.TryGetProperty("roaming") with | true, v -> v.GetString() | _ -> "default" | _ -> "default"
+        let activeReposition = match root.TryGetProperty("active") with | true, a -> match a.TryGetProperty("reposition") with | true, v -> v.GetString() | _ -> "default" | _ -> "default"
+        let activePack = match root.TryGetProperty("active") with | true, a -> match a.TryGetProperty("pack") with | true, v -> v.GetString() | _ -> "default" | _ -> "default"
+
+        // Parse hook chains
+        let hooks =
+            match root.TryGetProperty("hooks") with
+            | true, hooksEl ->
+                [ for prop in hooksEl.EnumerateObject() ->
+                    prop.Name, [ for item in prop.Value.EnumerateArray() -> item.GetString() ] ]
+                |> Map.ofList
+            | _ -> defaultHooks
+
+        let roaming =
+            match root.TryGetProperty("roaming") with
+            | true, presets -> pickPreset presets activeRoaming (fun el -> parseRoaming el defaultRoaming) defaultRoaming
+            | _ -> defaultRoaming
+        let reposition =
+            match root.TryGetProperty("reposition") with
+            | true, presets -> pickPreset presets activeReposition (fun el -> parseReposition el defaultReposition) defaultReposition
+            | _ -> defaultReposition
+        let pack =
+            match root.TryGetProperty("pack") with
+            | true, presets -> pickPreset presets activePack (fun el -> parsePack el defaultPack) defaultPack
+            | _ -> defaultPack
+
+        { Hooks = hooks; Roaming = roaming; Reposition = reposition; Pack = pack }
+
+/// Singleton behaviour config.
+let Behaviour = loadBehaviour ()

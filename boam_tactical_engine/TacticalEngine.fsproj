@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <None Include="../configs/engine.json5" CopyToOutputDirectory="PreserveNewest" Link="configs/engine.json5" />
+    <None Include="../configs/behaviour.json5" CopyToOutputDirectory="PreserveNewest" Link="configs/behaviour.json5" />
   </ItemGroup>
 
   <ItemGroup>
@@ -31,6 +32,7 @@
     <Compile Include="NodeSystem/NodeContext.fs" />
     <Compile Include="NodeSystem/Node.fs" />
     <Compile Include="NodeSystem/Registry.fs" />
+    <Compile Include="NodeSystem/Catalogue.fs" />
     <Compile Include="NodeSystem/Walker.fs" />
 
     <!-- Heatmaps: rendering pipeline -->

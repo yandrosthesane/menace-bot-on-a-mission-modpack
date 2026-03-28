@@ -8,11 +8,10 @@ open BOAM.TacticalEngine.GameTypes
 open BOAM.TacticalEngine.NodeContext
 open BOAM.TacticalEngine.Node
 open BOAM.TacticalEngine.Keys
+open BOAM.TacticalEngine.Config
 
-let private defaultBaseUtility = 100f
-let private roamingFraction = 1.0f   // roaming influence as fraction of game max score
+let private cfg () = Behaviour.Roaming
 let private mapSize = 42
-let private engagementRadius = 20f
 
 /// Compute per-tile utility for an actor: utility scales with distance, gated by AP budget.
 let computeTileModifiers (pos: TilePos) (maxDist: int) (baseUtility: float32) : TileModifierMap =
@@ -27,21 +26,23 @@ let computeTileModifiers (pos: TilePos) (maxDist: int) (baseUtility: float32) : 
                 tiles <- tiles |> Map.add { X = x; Z = z } utility
     tiles
 
-/// Get the base utility for an actor — max of game-scaled and default.
+/// Get the base utility for an actor — max of config default and game-scaled value.
 let getBaseUtility (actorId: string) (scales: Map<string, float32>) =
+    let c = cfg ()
     match Map.tryFind actorId scales with
-    | Some maxScore -> max defaultBaseUtility (maxScore * roamingFraction)
-    | None -> defaultBaseUtility
+    | Some maxScore -> max c.BaseUtility (maxScore * c.Fraction)
+    | None -> c.BaseUtility
 
 /// Check if any same-faction ally within radius is engaged.
 let private isNearEngagement (actorPos: TilePos) (actorFaction: int) (positions: Map<string, ActorPosState>) =
+    let r = (cfg ()).EngagementRadius
     positions |> Map.exists (fun _ state ->
         state.Faction = actorFaction && state.InRange && state.InContact &&
         (let dx = float32 (state.Position.X - actorPos.X)
          let dz = float32 (state.Position.Z - actorPos.Z)
-         sqrt (dx * dx + dz * dz) <= engagementRadius))
+         sqrt (dx * dx + dz * dz) <= r))
 
-/// Compute roaming for a single actor. Returns the tile map (full roaming or zeroed).
+/// Compute roaming for a single actor.
 let private computeForActor (pos: TilePos) (faction: int) (apStart: int) (cheapestAttack: int) (costPerTile: int) (positions: Map<string, ActorPosState>) (baseUtility: float32) (log: string -> unit) (actorId: string) =
     let moveBudget = apStart - cheapestAttack
     let maxDist = if costPerTile > 0 then moveBudget / costPerTile else 3
@@ -65,7 +66,7 @@ let initNode : NodeDef = {
         let actors = ctx |> NodeContext.readOrDefault aiActors [||]
         let positions = ctx |> NodeContext.readOrDefault actorPositions Map.empty
         let staticData = ctx |> NodeContext.readOrDefault actorStaticData Map.empty
-        // No game scores yet at tactical-ready — use defaults
+        let baseUtil = (cfg ()).BaseUtility
         let mutable modifiers = Map.empty
 
         for actorId in actors do
@@ -73,7 +74,7 @@ let initNode : NodeDef = {
             | Some posState, Some sd ->
                 let cheapestAttack = sd.Skills |> List.choose (fun s -> if s.ApCost > 0 then Some s.ApCost else None) |> function [] -> 0 | xs -> List.min xs
                 let costPerTile = match sd.Movement with Some m when m.LowestMovementCost > 0 -> m.LowestMovementCost | _ -> 16
-                let tileMap = computeForActor posState.Position posState.Faction sd.ApStart cheapestAttack costPerTile positions defaultBaseUtility ctx.Log actorId
+                let tileMap = computeForActor posState.Position posState.Faction sd.ApStart cheapestAttack costPerTile positions baseUtil ctx.Log actorId
                 modifiers <- modifiers |> Map.add actorId tileMap
             | _ -> ()
 
@@ -104,3 +105,4 @@ let node : NodeDef = {
 
         ctx |> NodeContext.write tileModifiers modifiers
 }
+

@@ -7,9 +7,9 @@ open BOAM.TacticalEngine.GameTypes
 open BOAM.TacticalEngine.NodeContext
 open BOAM.TacticalEngine.Node
 open BOAM.TacticalEngine.Keys
+open BOAM.TacticalEngine.Config
 
-let private defaultMaxUtility = 600f
-let private repositionFraction = 2.0f  // reposition influence as fraction of game max score (melee at range 1)
+let private cfg () = Behaviour.Reposition
 let private mapSize = 42
 
 /// Find the closest known opponent to this actor's position.
@@ -24,19 +24,15 @@ let private closestOpponent (actorPos: TilePos) (opponents: TilePos list) =
     |> Option.map fst
 
 /// Compute tile scores: reward tiles that bring the actor closer to ideal range from target.
-/// Compares each reachable tile's distance-to-target vs the actor's current distance-to-target.
-/// Melee (idealRange <= 1): any tile closer to target scores higher.
-/// Ranged (idealRange > 1): tiles that reduce distance to idealRange score higher.
 let computeRepositionTiles (actorPos: TilePos) (target: TilePos) (idealRange: int) (maxDist: int) (maxUtility: float32) : TileModifierMap =
     let idealF = float32 (max 1 idealRange)
-    // Melee (range 1) gets full utility; range 3 gets 1/3; range 5 gets 1/5
     let rangeScale = maxUtility / idealF
     let currentDx = float32 (actorPos.X - target.X)
     let currentDz = float32 (actorPos.Z - target.Z)
     let currentDistToTarget = sqrt (currentDx * currentDx + currentDz * currentDz)
     let currentDeviation = abs (currentDistToTarget - idealF)
     let mutable tiles = Map.empty
-    if currentDeviation < 0.5f then tiles // already at ideal range
+    if currentDeviation < 0.5f then tiles
     else
         for x in 0 .. mapSize - 1 do
             for z in 0 .. mapSize - 1 do
@@ -61,6 +57,7 @@ let node : NodeDef = {
     Reads = [ "turn-end-actor"; "tile-modifiers"; "actor-positions"; "known-opponents"; "actor-static-data"; "game-score-scale" ]
     Writes = [ "tile-modifiers" ]
     Run = fun ctx ->
+        let c = cfg ()
         let existing = ctx |> NodeContext.readOrDefault tileModifiers Map.empty
         let positions = ctx |> NodeContext.readOrDefault actorPositions Map.empty
         let opponents = ctx |> NodeContext.readOrDefault knownOpponents []
@@ -71,12 +68,13 @@ let node : NodeDef = {
         match actorOpt with
         | None -> ()
         | Some a ->
+            let engRadius = Behaviour.Roaming.EngagementRadius
             let nearEngagement =
                 positions |> Map.exists (fun _ state ->
                     state.Faction = a.Faction && state.InRange && state.InContact &&
                     (let dx = float32 (state.Position.X - a.Position.X)
                      let dz = float32 (state.Position.Z - a.Position.Z)
-                     sqrt (dx * dx + dz * dz) <= 20f))
+                     sqrt (dx * dx + dz * dz) <= engRadius))
             if not nearEngagement then () else
 
             match closestOpponent a.Position opponents with
@@ -90,13 +88,12 @@ let node : NodeDef = {
                     | None -> 1
                 let moveBudget = a.ApStart - a.CheapestAttack
                 let maxDist = if a.CostPerTile > 0 then moveBudget / a.CostPerTile else 3
-                let maxUtil = match Map.tryFind a.Actor scales with Some s -> max defaultMaxUtility (s * repositionFraction) | None -> defaultMaxUtility
+                let maxUtil = match Map.tryFind a.Actor scales with Some s -> max c.MaxUtility (s * c.Fraction) | None -> c.MaxUtility
                 let tileMap = computeRepositionTiles a.Position target idealRange maxDist maxUtil
 
                 ctx.Log (sprintf "%s at (%d,%d) → target (%d,%d) idealRange=%d maxDist=%d maxUtil=%.0f → %d tiles"
                     a.Actor a.Position.X a.Position.Z target.X target.Z idealRange maxDist maxUtil (Map.count tileMap))
 
-                // Write reposition tiles — these replace the zeroed roaming tiles
                 let actorTiles = existing |> Map.tryFind a.Actor |> Option.defaultValue Map.empty
                 let merged = tileMap |> Map.fold (fun acc k v -> Map.add k (v + (Map.tryFind k acc |> Option.defaultValue 0f)) acc) actorTiles
                 ctx |> NodeContext.write tileModifiers (existing |> Map.add a.Actor merged)

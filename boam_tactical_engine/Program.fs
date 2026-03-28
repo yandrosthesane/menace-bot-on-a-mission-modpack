@@ -126,17 +126,42 @@ let main argv =
     printfn "%s" (if Config.Current.AiLogging then on "AI decision logging" else off "AI decision logging")
     printfn "%s" (if Config.Current.CriterionLogging then on "Criterion logging" else off "Criterion logging")
     printfn "  %s" (dim "─────────────────────────────────")
+    let bSrc = Config.BehaviourSource
+    if bSrc.Path <> "" then
+        printfn "  Behaviour: %s %s" (cyan (sprintf "%s (v%d)" bSrc.Label bSrc.Version)) (dim bSrc.Path)
+    else
+        printfn "  Behaviour: %s" (dim "builtin defaults")
+    let b = Config.Behaviour
+    printfn "    Roaming:    base=%.0f frac=%.1f engRadius=%.0f" b.Roaming.BaseUtility b.Roaming.Fraction b.Roaming.EngagementRadius
+    printfn "    Reposition: max=%.0f frac=%.1f" b.Reposition.MaxUtility b.Reposition.Fraction
+    printfn "    Pack:       r=%.0f peak=%.1f attr=%.0f frac=%.1f crowd=%.0f contact=%.1f init=%.1fx"
+        b.Pack.Radius b.Pack.Peak b.Pack.Attraction b.Pack.Fraction b.Pack.CrowdPenalty b.Pack.ContactBonus b.Pack.InitMultiplier
+    printfn "  %s" (dim "─────────────────────────────────")
     printfn ""
 
     // Engine setup
     let registry = Registry()
     let store = StateStore()
 
-    registry.Register([Nodes.RoamingBehaviour.initNode])
-    registry.Register([Nodes.PackBehaviour.initNode])
-    registry.Register([Nodes.RoamingBehaviour.node])
-    registry.Register([Nodes.RepositionBehaviour.node])
-    registry.Register([Nodes.PackBehaviour.node])
+    // Register all nodes in the catalogue
+    Catalogue.register Nodes.RoamingBehaviour.initNode
+    Catalogue.register Nodes.RoamingBehaviour.node
+    Catalogue.register Nodes.RepositionBehaviour.node
+    Catalogue.register Nodes.PackBehaviour.initNode
+    Catalogue.register Nodes.PackBehaviour.node
+
+    // Config-driven registration: hooks section defines which nodes run on which hook, in order
+    for kv in b.Hooks do
+        let hookName = kv.Key
+        match Catalogue.parseHookPoint hookName with
+        | None -> logWarn (sprintf "Unknown hook point in config: %s" hookName)
+        | Some hook ->
+            for nodeName in kv.Value do
+                match Catalogue.tryFind nodeName with
+                | None -> logWarn (sprintf "Unknown node in config: %s (hook %s)" nodeName hookName)
+                | Some nodeDef ->
+                    // Override the hook from config (node declares a default, config can reassign)
+                    registry.Register([{ nodeDef with Hook = hook }])
 
     logInfo "Engine initialized"
     for line in registry.FormatReport() do logEngine line

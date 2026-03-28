@@ -43,6 +43,9 @@ let run
     log.Add(sprintf "--- %s --- Faction %d ---" hookLabel faction.FactionIndex)
 
     for node in nodes do
+        let startMsg = sprintf "  >> %s" node.Name
+        log.Add(startMsg)
+        logFn startMsg
         let nodeSw = Stopwatch.StartNew()
         try
             let ctx = {
@@ -57,12 +60,15 @@ let run
             node.Run ctx
             nodeSw.Stop()
             ran <- ran + 1
-            log.Add(sprintf "  -> %s (%.2fms)" node.Name nodeSw.Elapsed.TotalMilliseconds)
+            let endMsg = sprintf "  << %s (%.2fms)" node.Name nodeSw.Elapsed.TotalMilliseconds
+            log.Add(endMsg)
+            logFn endMsg
         with ex ->
             nodeSw.Stop()
             skipped <- skipped + 1
-            log.Add(sprintf "  -> %s FAILED: %s (%.2fms)" node.Name ex.Message nodeSw.Elapsed.TotalMilliseconds)
-            logFn (sprintf "  [%s] ERROR: %s" node.Name ex.Message)
+            let failMsg = sprintf "  << %s FAILED: %s (%.2fms)" node.Name ex.Message nodeSw.Elapsed.TotalMilliseconds
+            log.Add(failMsg)
+            logFn failMsg
 
     sw.Stop()
     log.Add(sprintf "--- %s complete (%d ran, %d skipped, %.2fms) ---"
