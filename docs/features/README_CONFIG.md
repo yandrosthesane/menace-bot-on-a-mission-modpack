@@ -18,6 +18,7 @@ On first run, each component automatically copies its config from `Mods/BOAM/con
 | Config | Seeded by |
 |--------|-----------|
 | `engine.json5` | BOAM-engine (on engine startup) |
+| `behaviour.json5` | BOAM-engine (on engine startup) |
 | `tactical_map.json5` | BOAM-modpack (on game launch) |
 | `tactical_map_presets.json5` | BOAM-modpack (on game launch) |
 
@@ -135,6 +136,29 @@ Defines the presets cycled with `DisplayKey`. Four sections:
 | `Opacity` | float (optional) | Override global opacity (0.1–1.0) |
 | `MapBrightness` | float (optional) | Override global brightness (0.1–4.0) |
 
+### `behaviour.json5` — AI Behaviour Presets
+
+Controls the AI behaviour system: which nodes run, in what order, and with what parameters. See [AI Behaviour System](README_BEHAVIOUR.md) for full documentation.
+
+| Section | Description |
+|---------|-------------|
+| `hooks` | Node chains per hook point — controls execution order |
+| `active` | Selects which named preset each behaviour uses |
+| `roaming` | Named presets for roaming parameters |
+| `reposition` | Named presets for reposition parameters |
+| `pack` | Named presets for pack parameters |
+
+Individual behaviour parameters are documented in [Roaming](behaviours/ROAMING.md), [Reposition](behaviours/REPOSITION.md), and [Pack](behaviours/PACK.md).
+
+### `modpack.json5` — Modpack Config
+
+Independent config for the C# bridge, separate from the engine.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `configVersion` | int | 1 | Config structure version |
+| `opponent_filter` | bool | true | Enable opponent filtering |
+
 ### `icon-config.json5` — Icon Generator
 
 See [Icon Generator](README_ICON_GENERATOR.md) for full details.
@@ -144,6 +168,8 @@ See [Icon Generator](README_ICON_GENERATOR.md) for full details.
 | Config | Version |
 |--------|:-------:|
 | `engine.json5` | 2 |
+| `behaviour.json5` | 1 |
+| `modpack.json5` | 1 |
 | `tactical_map.json5` | 1 |
 | `tactical_map_presets.json5` | 1 |
 | `icon-config.json5` | 1 |

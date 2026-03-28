@@ -1,5 +1,62 @@
 # Changelog
 
+## v2.0.0
+
+### AI Behaviour System
+
+Three behaviour nodes modify enemy AI movement through per-tile utility injection:
+
+- **Roaming** — idle units explore outward, suppressed when near engagement
+- **Reposition** — units move toward their ideal attack range from the closest known enemy. Melee swarm, ranged find firing positions.
+- **Pack** — units form groups and converge on engaged allies. Crowd penalty suppressed near combat.
+
+See [AI Behaviour System](README_BEHAVIOUR.md) and individual docs for [Roaming](behaviours/ROAMING.md), [Reposition](behaviours/REPOSITION.md), [Pack](behaviours/PACK.md).
+
+### Configurable Behaviour
+
+All behaviour parameters are in `configs/behaviour.json5`:
+
+- **Hook chains** — define which nodes run on each game event, in what order. Remove a node to disable it.
+- **Named presets** — each behaviour has presets (default, aggressive, cautious, etc.) selectable by name.
+- **Adaptive score scaling** — modifiers scale relative to the game's own tile scores. Hardcoded defaults serve as a floor.
+
+See [Adding Nodes](behaviours/ADDING_NODES.md) for a guide to creating new behaviours.
+
+### Symmetric Protocol
+
+C# bridge and F# engine communicate via a symmetric query/command protocol:
+
+- `POST /query` — read-only queries (status, features)
+- `POST /command` — side effects (hooks, tile modifiers)
+
+Both directions use `{"type": "..."}` dispatch. Replaces the previous 15+ individual HTTP routes.
+
+### Architecture Cleanup
+
+- **Thread-safe StateStore** — `ConcurrentDictionary` eliminates race conditions
+- **Faction-aware pack scoring** — player units no longer treated as wildlife allies
+- **Static data pipeline** — skills and movement costs stored once at tactical-ready, not re-sent each turn
+- **C# sync transforms** — contact detection and movement budget computed from live game objects
+- **Batch tile modifier flush** — single POST replaces 28 sequential round-trips
+- **Config-driven node registration** — `behaviour.json5` controls which nodes run on which hooks
+
+### Fixes
+
+- Engine connection race — multiple check threads no longer overwrite each other
+- Template AP fallback — `GetActionPointsAtTurnStart()` returns 0 for wildlife before their first turn; now reads from entity template
+- `boam-launch.sh` kills stale engine processes before starting a new one
+- `idealRange` now included in dramatis personae (was missing from tactical-ready payload)
+
+### Removed
+
+- `BehaviorOverridePatch.cs` — dead Harmony patch
+- `ShapeTileModifier.fs` — test node
+- `EngineClient.cs` — replaced by QueryCommandClient
+- `CommandServer.cs` — replaced by QueryCommandServer
+- 15+ individual hook routes — replaced by symmetric protocol dispatch
+
+---
+
 ## v1.3.0
 
 ### Tile modifier system

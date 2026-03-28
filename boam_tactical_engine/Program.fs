@@ -16,7 +16,7 @@ open BOAM.TacticalEngine.HeatmapRenderer
 open BOAM.TacticalEngine.HeatmapTypes
 open BOAM.TacticalEngine.Routes
 
-let private version = "1.3.0"
+let private version = "2.0.0"
 
 [<EntryPoint>]
 let main argv =
