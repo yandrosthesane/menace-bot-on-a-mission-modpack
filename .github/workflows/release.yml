@@ -35,8 +35,19 @@ jobs:
           echo "Found $(wc -l < /tmp/release_notes.md) lines of release notes"
           cat /tmp/release_notes.md
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          body_path: /tmp/release_notes.md
-          files: release/*.zip
+      - name: Create or update GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          # Check if release exists
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            # Update existing release body and upload assets
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --notes-file /tmp/release_notes.md
+            for f in release/*.zip; do
+              gh release upload "$TAG" "$f" --repo "$GITHUB_REPOSITORY" --clobber
+            done
+          else
+            # Create new release
+            gh release create "$TAG" release/*.zip --repo "$GITHUB_REPOSITORY" --notes-file /tmp/release_notes.md
+          fi
