@@ -1,13 +1,14 @@
 [size=5][b]BOAM — Bot On A Mission[/b][/size]
 
-[b]Version:[/b] 1.3.0 | [url=https://yandrosthesane.github.io/menace-bot-on-a-mission-modpack]Documentation[/url] | [url=https://yandrosthesane.github.io/menace-bot-on-a-mission-modpack/docs/features/CHANGELOG]Changelog[/url]
+[b]Version:[/b] 2.0.1 | [url=https://yandrosthesane.github.io/menace-bot-on-a-mission-modpack]Documentation[/url] | [url=https://yandrosthesane.github.io/menace-bot-on-a-mission-modpack/docs/features/CHANGELOG]Changelog[/url]
 
-AI behavior analysis mod for Menace.
-Intercepts AI decision-making at runtime, captures tactical data for offline heatmap rendering, provides a real-time in-game minimap overlay, and records full battle sessions (player actions + AI decisions + combat outcomes).
+AI behavior analysis and modification mod for Menace.
+Modifies enemy AI movement through configurable behaviour nodes, captures tactical data for offline heatmap rendering, provides a real-time in-game minimap overlay, and records full battle sessions (player actions + AI decisions + combat outcomes).
 
 [size=4][b]Features[/b][/size]
 
 [list]
+[*][url=https://yandrosthesane.github.io/menace-bot-on-a-mission-modpack/docs/features/README_BEHAVIOUR][b]AI Behaviour[/b][/url] — Configurable behaviour nodes that influence enemy AI movement
 [*][url=https://yandrosthesane.github.io/menace-bot-on-a-mission-modpack/docs/features/README_MINIMAP][b]Tactical Minimap[/b][/url] — In-game IMGUI overlay showing unit positions on the captured map background
 [*][url=https://yandrosthesane.github.io/menace-bot-on-a-mission-modpack/docs/features/README_HEATMAPS][b]Heatmap Renderer[/b][/url] — Offline heatmap generation from deferred render jobs — tile scores, decisions, movement
 [*][url=https://yandrosthesane.github.io/menace-bot-on-a-mission-modpack/docs/features/README_BOAM_ENGINE][b]Action Logging[/b][/url] — Records player actions, AI decisions, and combat outcomes to JSONL battle logs
@@ -36,7 +37,7 @@ Each release includes:
 [*][b]BOAM-tactical-engine[/b] — pre-built binaries for Linux and Windows (bundled and slim variants)
 [/list]
 
-Prefer to build yourself? See the [url=https://github.com/yandrosthesane/menace-bot-on-a-mission-modpack/blob/main/docs/features/README_BUILD.md]build instructions[/url].
+Prefer to build yourself? See [url=https://yandrosthesane.github.io/menace-bot-on-a-mission-modpack/docs/features/README_BUILD]Building from Source[/url].
 
 [size=4][b]Install Layout[/b][/size]
 
@@ -46,7 +47,8 @@ Menace/
 │   ├── dlls/BOAM.dll              C# bridge (compiled by ModpackLoader)
 │   ├── modpack.json               Mod manifest
 │   ├── configs/                   Mod default configs (reset on deploy)
-│   │   ├── config.json5           Engine ports, rendering, heatmaps toggle
+│   │   ├── engine.json5           Engine ports, rendering, heatmaps toggle
+│   │   ├── behaviour.json5       AI behaviour node chains and tuning presets
 │   │   ├── tactical_map.json5     Minimap keybindings, visual defaults
 │   │   ├── tactical_map_presets.json5  Display presets (sizes, styles, anchors)
 │   │   └── icon-config.json5      Icon generation source mappings
@@ -54,22 +56,21 @@ Menace/
 │   │   └── TacticalEngine(.exe)
 │   ├── start-tactical-engine.sh   Launcher (opens terminal, logs to file)
 │   ├── boam-icons(.exe)           Icon generator
-│   ├── icons/                     Generated heatmap/minimap icons
-│   │   ├── factions/
-│   │   └── templates/
+│   ├── boam-launch.sh(.bat)       Steam launch helper
 │   └── logs/                      Engine log (overwritten each run)
 │       └── tactical_engine.log
 └── UserData/BOAM/
     ├── configs/                   User configs (persistent, checked first)
-    ├── badges/                    Source art for icon generation
-    ├── factions/
+    ├── icons/                     Generated heatmap/minimap icons
+    │   ├── factions/
+    │   └── templates/
     └── battle_reports/            Recorded battles (auto-created per session)
         └── battle_YYYY_MM_DD_HH_MM/
             ├── mapbg.png          Captured map background
             ├── mapbg.info         Tile dimensions
             ├── mapdata.bin        Binary tile data
-            ├── dramatis_personae.json  Actor registry
-            ├── round_log.jsonl    Action log
+            ├── dramatis_personae.json  Actor registry (UUIDs, templates, factions)
+            ├── round_log.jsonl    Action log (player actions + AI decisions)
             ├── render_jobs/       Self-contained render job JSON files
             └── heatmaps/          Rendered heatmap PNGs
 [/code]
@@ -150,9 +151,18 @@ Two BOAM-engine variants are available:
 
 [size=4][b]Changelog[/b][/size]
 
+[size=3][b]v2.0.0[/b][/size]
+[list]
+[*][b]AI behaviour system[/b] — Per-tile score modifiers injected during AI tile evaluation. Three behaviour nodes (roaming, reposition, pack) run in a configurable chain.
+[*][b]Configurable behaviour[/b] — Hook chains, named presets, node catalogue, adaptive score scaling — all driven by behaviour.json5.
+[*][b]Symmetric protocol[/b] — C# bridge and F# engine communicate via POST /query (read-only) and POST /command (side effects). Replaces 15+ individual routes.
+[*][b]Architecture[/b] — Thread-safe StateStore, OnTacticalReady hook point, faction-aware pack scoring, static data pipeline, C# sync transforms, batch tile modifier flush.
+[*][b]Minimap[/b] — No-label display preset, all presets now show all fields.
+[/list]
+
 [size=3][b]v1.3.0[/b][/size]
 [list]
-[*][b]Zero-config icon generation[/b] — Icons generated automatically from extracted game assets. No manual copying needed. Tactical engine auto-generates on startup if missing.
+[*][b]Zero-config icon generation[/b] — Icons generated automatically from extracted game assets. No manual copying needed.
 [*][b]Steam launch integration[/b] — New boam-launch scripts start the tactical engine via Steam Launch Options alongside the game.
 [*][b]Cross-platform releases[/b] — Portable config paths, zip archives, boam-icons binary included for both Linux and Windows.
 [*][b]Engine health check[/b] — Startup banner shows resolved paths and icon count with color status.
@@ -163,9 +173,6 @@ Two BOAM-engine variants are available:
 [*][b]Standalone minimap[/b] — Minimap works without the BOAM-engine. Only start the engine for heatmaps or action logging.
 [*][b]Bounded context architecture[/b] — Both BOAM-modpack and BOAM-engine reorganized into independent bounded contexts.
 [*][b]Config auto-seeding[/b] — Configs automatically copied to UserData on first run. No manual setup needed.
-[*][b]Slim engine variant[/b] — ~5 MB download if you have .NET 10 installed. Bundled variant (~112 MB) also available.
-[*][b]Engine startup banner[/b] — Shows config source and active/inactive features at launch.
-[*][b]Replay system removed[/b] — Experimental replay removed. Action logging and AI capture remain.
 [/list]
 
 Full changelog: [url=https://yandrosthesane.github.io/menace-bot-on-a-mission-modpack/docs/features/CHANGELOG]Changelog[/url]
@@ -181,12 +188,14 @@ Full changelog: [url=https://yandrosthesane.github.io/menace-bot-on-a-mission-mo
 
 [list]
 [*][url=https://yandrosthesane.github.io/menace-bot-on-a-mission-modpack/docs/features/README_INSTALL]Installation Guide[/url] — Setup, asset extraction, icon generation, shell shortcuts
+[*][url=https://yandrosthesane.github.io/menace-bot-on-a-mission-modpack/docs/features/README_BEHAVIOUR]AI Behaviour[/url] — How behaviour nodes work, configuration, adding custom nodes
 [*][url=https://yandrosthesane.github.io/menace-bot-on-a-mission-modpack/docs/features/README_MINIMAP]Tactical Minimap[/url] — In-game overlay controls, display presets, customization
 [*][url=https://yandrosthesane.github.io/menace-bot-on-a-mission-modpack/docs/features/README_HEATMAPS]Heatmap Renderer[/url] — Render API, pattern matching, what each heatmap shows
 [*][url=https://yandrosthesane.github.io/menace-bot-on-a-mission-modpack/docs/features/README_CONFIG]Configuration[/url] — Two-tier config system, versioning, all config options
 [*][url=https://yandrosthesane.github.io/menace-bot-on-a-mission-modpack/docs/features/README_BOAM_MODPACK]BOAM-modpack[/url] — In-game mod: minimap, hooks, map capture
 [*][url=https://yandrosthesane.github.io/menace-bot-on-a-mission-modpack/docs/features/README_BOAM_ENGINE]BOAM-engine[/url] — External engine: heatmaps, logging, CLI, HTTP API
 [*][url=https://yandrosthesane.github.io/menace-bot-on-a-mission-modpack/docs/features/README_ICON_GENERATOR]Icon Generator[/url] — Config format, fallback chain, customization
+[*][url=https://yandrosthesane.github.io/menace-bot-on-a-mission-modpack/docs/features/README_BUILD]Building from Source[/url] — Clone, build, and install from source
 [*][url=https://yandrosthesane.github.io/menace-bot-on-a-mission-modpack/docs/features/CHANGELOG]Changelog[/url] — Version history
 [/list]
 
