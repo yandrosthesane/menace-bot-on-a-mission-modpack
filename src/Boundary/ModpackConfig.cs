@@ -11,13 +11,9 @@ namespace BOAM.Boundary;
 /// </summary>
 internal static class ModpackConfig
 {
-    internal static bool OpponentFilter { get; private set; }
-
     internal static void Load(string modFolder, MelonLogger.Instance log)
     {
-        var persistentDir = Environment.GetEnvironmentVariable("BOAM_PERSISTENT_ASSETS");
-        if (string.IsNullOrEmpty(persistentDir))
-            persistentDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "UserData", "BOAM");
+        var persistentDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "UserData", "BOAM");
 
         var userPath = Path.Combine(persistentDir, "configs", "modpack.json5");
         var defaultPath = Path.Combine(modFolder, "configs", "modpack.json5");
@@ -27,14 +23,11 @@ internal static class ModpackConfig
         try
         {
             var json = StripJsonComments(File.ReadAllText(configPath));
-            OpponentFilter = ReadBool(json, "opponent_filter", false);
-
-            log.Msg($"[BOAM] Modpack config: opponent_filter={OpponentFilter}");
+            log.Msg($"[BOAM] Modpack config loaded: {configPath}");
         }
         catch (Exception ex)
         {
             log.Warning($"[BOAM] Failed to load modpack config: {ex.Message}");
-            OpponentFilter = false;
         }
     }
 }

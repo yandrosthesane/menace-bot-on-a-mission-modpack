@@ -305,6 +305,7 @@ public class BoamBridge : IModpackPlugin
         // Load modpack config (independent from engine)
         var modFolder = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Mods", "BOAM");
         Boundary.ModpackConfig.Load(modFolder, Logger);
+        Boundary.DataEvents.Init(modFolder, Logger);
 
         // Initialize tactical map overlay
         _tacticalMap = new TacticalMap.TacticalMapOverlay();
@@ -326,7 +327,7 @@ public class BoamBridge : IModpackPlugin
         }
 
         // Notify tactical engine of every scene change
-        if (_engineAvailable && !string.IsNullOrEmpty(sceneName))
+        if (_engineAvailable && !string.IsNullOrEmpty(sceneName) && DataEvents.SceneChangeEvent.IsActive)
         {
             var scenePayload = JsonSerializer.Serialize(new { scene = sceneName });
             ThreadPool.QueueUserWorkItem(_ => QueryCommandClient.Hook("scene-change", scenePayload));
@@ -345,8 +346,8 @@ public class BoamBridge : IModpackPlugin
         {
             if (_inTactical)
             {
-                // End battle session when leaving tactical
-                ThreadPool.QueueUserWorkItem(_ => QueryCommandClient.Hook("battle-end", "{}"));
+                if (DataEvents.BattleEndEvent.IsActive)
+                    ThreadPool.QueueUserWorkItem(_ => QueryCommandClient.Hook("battle-end", "{}"));
                 TacticalMap.TacticalMapState.Reset();
             }
             _inTactical = false;
@@ -372,10 +373,13 @@ public class BoamBridge : IModpackPlugin
             ReloadMapFromDisk(); // copies preview → battle report, sets BattleSessionDir
             _tacticalMap?.OnTacticalReady();
             // battle-start after ReloadMapFromDisk so BattleSessionDir is set
-            var sessionDir = TacticalMap.TacticalMapState.BattleSessionDir ?? "";
-            var startPayload = JsonSerializer.Serialize(new { sessionDir });
-            ThreadPool.QueueUserWorkItem(_ => QueryCommandClient.Hook("battle-start", startPayload));
-            if (_engineAvailable)
+            if (DataEvents.BattleStartEvent.IsActive)
+            {
+                var sessionDir = TacticalMap.TacticalMapState.BattleSessionDir ?? "";
+                var startPayload = JsonSerializer.Serialize(new { sessionDir });
+                ThreadPool.QueueUserWorkItem(_ => QueryCommandClient.Hook("battle-start", startPayload));
+            }
+            if (_engineAvailable && DataEvents.TacticalReadyEvent.IsActive)
             {
                 var payload = JsonSerializer.Serialize(new { dramatis_personae = dp });
                 ThreadPool.QueueUserWorkItem(_ => QueryCommandClient.Hook("tactical-ready", payload));
@@ -456,9 +460,7 @@ public class BoamBridge : IModpackPlugin
             }
 
             // Create the real battle report dir (timestamped)
-            var persistentDir = Environment.GetEnvironmentVariable("BOAM_PERSISTENT_ASSETS");
-            if (string.IsNullOrEmpty(persistentDir))
-                persistentDir = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "UserData", "BOAM");
+            var persistentDir = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "UserData", "BOAM");
 
             var ts = DateTime.Now.ToString("yyyy_MM_dd_HH_mm");
             var sessionDir = System.IO.Path.Combine(persistentDir, "battle_reports", $"battle_{ts}");

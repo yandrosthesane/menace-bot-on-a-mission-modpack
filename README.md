@@ -24,7 +24,7 @@ and records full battle sessions (player actions + AI decisions + combat outcome
 |-----------|----------|---------|-------------|
 | [BOAM-modpack](docs/features/README_BOAM_MODPACK.md) | `src/` | In-game (MelonLoader/Wine) | Harmony patches, minimap overlay, map capture, action forwarding |
 | [BOAM-engine](docs/features/README_BOAM_ENGINE.md) | `boam_tactical_engine/` | Native (.NET 10, port 7660) | Heatmap renderer, action logger, auto-navigation |
-| [Icon Generator](docs/features/README_ICON_GENERATOR.md) | `boam_asset_pipeline/` | CLI tool | Resizes game badge art into heatmap/minimap icons |
+| [Icon Generator](docs/features/README_ICON_GENERATOR.md) | `boam_asset_pipeline/` | CLI tool | Resizes game badge art into heatmap/minimap icons |git 
 
 The BOAM-modpack works standalone — the minimap needs no engine. Start the BOAM-engine only when you want heatmaps or action logging.
 

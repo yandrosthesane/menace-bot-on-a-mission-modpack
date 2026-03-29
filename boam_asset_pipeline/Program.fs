@@ -60,10 +60,7 @@ let private resolveGamePaths () =
     // exeDir = .../Menace/Mods/BOAM  (or wherever the binary is)
     let boamModDir = exeDir
     let gameDir = Path.GetDirectoryName(Path.GetDirectoryName(boamModDir))
-    let persistentDir =
-        Environment.GetEnvironmentVariable("BOAM_PERSISTENT_ASSETS")
-        |> Option.ofObj
-        |> Option.defaultValue (Path.Combine(gameDir, "UserData", "BOAM"))
+    let persistentDir = Path.Combine(gameDir, "UserData", "BOAM")
     boamModDir, persistentDir
 
 let private parseConfig (configPath: string) =

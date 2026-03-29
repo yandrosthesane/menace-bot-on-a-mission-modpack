@@ -32,6 +32,7 @@ static class AiActionPatches
         {
             var bridge = BoamBridge.Instance;
             if (bridge == null || !bridge.IsEngineReady) return;
+            if (!DataEvents.ActionLoggingEvent.IsActive) return;
             if (_actor == null || _to == null) return;
 
             var actorInfo = ActorRegistry.GetActorInfo(_actor);
@@ -72,6 +73,7 @@ static class AiActionPatches
         {
             var bridge = BoamBridge.Instance;
             if (bridge == null || !bridge.IsEngineReady) return;
+            if (!DataEvents.ActionLoggingEvent.IsActive) return;
             if (_actor == null) return;
 
             var actorInfo = ActorRegistry.GetActorInfo(_actor);
@@ -122,10 +124,11 @@ static class AiActionPatches
             var actorUuid = ActorRegistry.GetUuid(entityId);
             var (tileX, tileZ) = ActorRegistry.GetPos(gameObj);
 
-            BoamBridge.Logger.Msg($"[BOAM] TurnEnd: {actorUuid} f{factionId}");
-
             var bridge = BoamBridge.Instance;
             if (bridge == null || !bridge.IsEngineReady) return;
+            if (!DataEvents.OnTurnEndEvent.IsActive) return;
+
+            BoamBridge.Logger.Msg($"[BOAM] TurnEnd: {actorUuid} f{factionId}");
 
             int round = bridge.Round;
 
@@ -173,16 +176,15 @@ static class AiActionPatches
                 }
             };
 
-            // Transforms: enrich payload with derived values from live game objects
-            SyncTransforms.ComputeContactState(gameObj, vision, factionId, turnEndData);
-            SyncTransforms.ComputeMovementBudget(actor, entity, turnEndData);
+            DataEvents.ContactStateEvent.Enrich(gameObj, vision, factionId, turnEndData);
+            DataEvents.MovementBudgetEvent.Enrich(actor, entity, turnEndData);
 
             var turnEndPayload = JsonSerializer.Serialize(turnEndData);
-            TileModifierStore.SetPending();
+            DataEvents.TileModifiersEvent.SetPending();
             ThreadPool.QueueUserWorkItem(_ => QueryCommandClient.Hook("on-turn-end", turnEndPayload));
 
             // AI action logging (AI factions only)
-            if (IsAiFaction(factionId))
+            if (DataEvents.ActionLoggingEvent.IsActive && IsAiFaction(factionId))
             {
                 var payload = JsonSerializer.Serialize(new
                 {
@@ -216,6 +218,7 @@ static class AiActionPatches
         {
             var bridge = BoamBridge.Instance;
             if (bridge == null || !bridge.IsEngineReady) return;
+            if (!DataEvents.CombatLoggingEvent.IsActive) return;
             if (__instance == null) return;
 
             var entity = __instance.GetEntity();

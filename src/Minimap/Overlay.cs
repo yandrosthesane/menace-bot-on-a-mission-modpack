@@ -94,11 +94,7 @@ internal class TacticalMapOverlay
         _log = logger;
         _modFolder = modFolder;
 
-        // User config in persistent assets takes precedence over mod default.
-        // Path: BOAM_PERSISTENT_ASSETS env var, or <game_dir>/UserData/CustomPersistentAssets/BOAM
-        var persistentDir = Environment.GetEnvironmentVariable("BOAM_PERSISTENT_ASSETS");
-        if (string.IsNullOrEmpty(persistentDir))
-            persistentDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
+        var persistentDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
                 "UserData", "BOAM");
         var userConfigDir = Path.Combine(persistentDir, "configs");
         var defaultConfigDir = Path.Combine(modFolder, "configs");

@@ -25,40 +25,13 @@ static class Patch_OnTurnStart
         {
             var bridge = BoamBridge.Instance;
             if (bridge == null || !bridge.IsEngineReady) return;
+            if (!DataEvents.OnTurnStartEvent.IsActive) return;
 
-            // Wait for engine to finish sending tile modifiers
-            TileModifierStore.WaitReady();
+            DataEvents.TileModifiersEvent.WaitReady();
 
             int factionIdx = __instance.GetIndex();
 
-            var opponents = __instance.m_Opponents;
-            int opponentCount = opponents?.Count ?? 0;
-
-            var oppList = new System.Collections.Generic.List<object>();
-            if (opponents != null)
-            {
-                for (int i = 0; i < opponents.Count; i++)
-                {
-                    try
-                    {
-                        var opp = opponents[i];
-                        var actorInfo = ActorRegistry.GetActorInfo(opp.Actor);
-                        if (actorInfo == null) continue;
-                        var (gameObj, _, entityId, _) = actorInfo.Value;
-                        var (px, pz) = ActorRegistry.GetPos(gameObj);
-
-                        oppList.Add(new
-                        {
-                            actor = ActorRegistry.GetUuid(entityId),
-                            position = new { x = px, z = pz },
-                            ttl = opp.TTL,
-                            isKnown = opp.IsKnown(),
-                            isAlive = opp.Actor.IsAlive()
-                        });
-                    }
-                    catch { }
-                }
-            }
+            var (oppList, opponentCount) = DataEvents.OpponentTrackingEvent.Gather(__instance);
 
             int round = BoamBridge.Instance?.Round ?? 0;
 
@@ -102,6 +75,8 @@ static class Patch_PostProcessTileScores
             var bridge = BoamBridge.Instance;
             if (bridge == null || !bridge.IsTacticalReady) return;
 
+            if (!DataEvents.TileScoresEvent.IsActive && !DataEvents.MinimapUnitsEvent.IsActive) return;
+
             var actor = __instance.m_Actor;
             if (actor == null) return;
 
@@ -116,55 +91,55 @@ static class Patch_PostProcessTileScores
             var (actorX, actorZ) = ActorRegistry.GetPos(gameObj);
 
             var tileList = new System.Collections.Generic.List<object>();
-
-            var enumerator = tiles.GetEnumerator();
-            while (enumerator.MoveNext())
+            if (DataEvents.TileScoresEvent.IsActive)
             {
-                try
+                var enumerator = tiles.GetEnumerator();
+                while (enumerator.MoveNext())
                 {
-                    var kvp = enumerator.Current;
-                    var tile = kvp.Key;
-                    var score = kvp.Value;
-                    if (tile == null || score == null) continue;
-
-                    var combined = score.GetScore();
-                    if (float.IsInfinity(combined) || float.IsNaN(combined))
-                        combined = combined > 0 ? 9999f : -9999f;
-
-                    if (bridge.CriterionLogging)
+                    try
                     {
-                        tileList.Add(new
+                        var kvp = enumerator.Current;
+                        var tile = kvp.Key;
+                        var score = kvp.Value;
+                        if (tile == null || score == null) continue;
+
+                        var combined = score.GetScore();
+                        if (float.IsInfinity(combined) || float.IsNaN(combined))
+                            combined = combined > 0 ? 9999f : -9999f;
+
+                        if (bridge.CriterionLogging)
                         {
-                            x = tile.GetX(),
-                            z = tile.GetZ(),
-                            combined,
-                            utility = score.UtilityScore,
-                            utilityScaled = score.UtilityScoreScaled,
-                            safety = score.SafetyScore,
-                            safetyScaled = score.SafetyScoreScaled,
-                            distance = score.DistanceScore,
-                            distanceToCurrent = score.DistanceToCurrentTile,
-                            apCost = score.APCost,
-                            isVisible = score.IsVisibleToOpponentsHere,
-                            utilityByAttacks = score.UtilityByAttacksScore
-                        });
-                    }
-                    else
-                    {
-                        tileList.Add(new
+                            tileList.Add(new
+                            {
+                                x = tile.GetX(),
+                                z = tile.GetZ(),
+                                combined,
+                                utility = score.UtilityScore,
+                                utilityScaled = score.UtilityScoreScaled,
+                                safety = score.SafetyScore,
+                                safetyScaled = score.SafetyScoreScaled,
+                                distance = score.DistanceScore,
+                                distanceToCurrent = score.DistanceToCurrentTile,
+                                apCost = score.APCost,
+                                isVisible = score.IsVisibleToOpponentsHere,
+                                utilityByAttacks = score.UtilityByAttacksScore
+                            });
+                        }
+                        else
                         {
-                            x = tile.GetX(),
-                            z = tile.GetZ(),
-                            combined
-                        });
+                            tileList.Add(new
+                            {
+                                x = tile.GetX(),
+                                z = tile.GetZ(),
+                                combined
+                            });
+                        }
                     }
+                    catch { }
                 }
-                catch { } // skip individual tile on error
             }
 
-            if (tileList.Count == 0) return;
-
-            // Gather all alive units from all factions for overlay
+            // Gather all alive units from all factions for overlay (heatmaps)
             var unitList = new System.Collections.Generic.List<object>();
             try
             {
@@ -217,6 +192,8 @@ static class Patch_PostProcessTileScores
             int round = BoamBridge.Instance?.Round ?? 0;
 
             // Update TacticalMapState with current unit positions for the minimap overlay
+            if (DataEvents.MinimapUnitsEvent.IsActive)
+            {
             var overlayUnits = new System.Collections.Generic.List<TacticalMap.OverlayUnit>();
             try
             {
@@ -271,8 +248,9 @@ static class Patch_PostProcessTileScores
             TacticalMap.TacticalMapState.SetUnits(overlayUnits);
             TacticalMap.TacticalMapState.CurrentRound = round;
             TacticalMap.TacticalMapState.CurrentFaction = factionId;
+            } // end MinimapUnits
 
-            if (!bridge.IsEngineReady) return;
+            if (!bridge.IsEngineReady || !DataEvents.TileScoresEvent.IsActive) return;
 
             var payload = JsonSerializer.Serialize(new
             {
@@ -326,9 +304,10 @@ static class Patch_MovementFinished
             int tileZ = _to.GetZ();
 
             // Update minimap overlay with new position
-            TacticalMap.TacticalMapState.UpdateUnitPosition(actorUuid, tileX, tileZ);
+            if (DataEvents.MinimapUnitsEvent.IsActive)
+                TacticalMap.TacticalMapState.UpdateUnitPosition(actorUuid, tileX, tileZ);
 
-            if (!bridge.IsEngineReady) return;
+            if (!bridge.IsEngineReady || !DataEvents.MovementFinishedEvent.IsActive) return;
 
             var payload = JsonSerializer.Serialize(new
             {
@@ -362,7 +341,7 @@ static class Patch_AgentExecute
         {
             var bridge = BoamBridge.Instance;
             if (bridge == null || !bridge.IsEngineReady) return;
-
+            if (!DataEvents.DecisionCaptureEvent.IsActive) return;
 
             var actor = __instance.m_Actor;
             if (actor == null) return;

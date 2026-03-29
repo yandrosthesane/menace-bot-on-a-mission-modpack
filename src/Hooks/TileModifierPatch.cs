@@ -13,6 +13,7 @@ static class TileModifierPatch
 {
     static void Postfix(Agent __instance)
     {
+        if (!DataEvents.TileModifiersEvent.IsActive) return;
         try
         {
             var actor = __instance.m_Actor;

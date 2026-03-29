@@ -59,10 +59,7 @@ let main argv =
         |> Option.defaultValue (IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
             ".steam/steam/steamapps/common/Menace"))
     let boamModDir = IO.Path.Combine(gameDir, "Mods", "BOAM")
-    let persistentDir =
-        Environment.GetEnvironmentVariable("BOAM_PERSISTENT_ASSETS")
-        |> Option.ofObj
-        |> Option.defaultValue (IO.Path.Combine(gameDir, "UserData", "BOAM"))
+    let persistentDir = IO.Path.Combine(gameDir, "UserData", "BOAM")
     let iconBaseDir = IO.Path.Combine(persistentDir, "icons")
     let battleReportsDir = IO.Path.Combine(persistentDir, "battle_reports")
 
@@ -132,6 +129,17 @@ let main argv =
     else
         printfn "  Behaviour: %s" (dim "builtin defaults")
     let b = Config.Behaviour
+    let allDataEvents = [
+        "on-turn-start"; "on-turn-end"; "movement-finished"; "actor-changed"
+        "scene-change"; "battle-start"; "battle-end"; "tactical-ready"; "preview-ready"
+        "contact-state"; "movement-budget"; "objective-detection"; "tile-modifiers"; "opponent-tracking"
+        "tile-scores"; "decision-capture"; "minimap-units"
+        "action-logging"; "combat-logging"
+    ]
+    for ev in allDataEvents do
+        if b.DataEvents.Contains ev then printfn "%s" (on ev)
+        else printfn "%s" (off ev)
+    printfn "  %s" (dim "─────────────────────────────────")
     let activeNodes = b.Hooks |> Map.toSeq |> Seq.collect snd |> Set.ofSeq
     let isActive (names: string list) = names |> List.exists activeNodes.Contains
     if isActive ["roaming-init"; "roaming-behaviour"] then

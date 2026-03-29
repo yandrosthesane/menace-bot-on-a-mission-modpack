@@ -11,7 +11,65 @@
 // "fraction" controls the multiplier: modifier = max(default, gameMaxScore * fraction).
 // The default value is the floor — game scaling only kicks in when it produces higher values.
 {
-  "configVersion": 1,
+  "configVersion": 5,
+
+  // ── Data Events ──
+  // C# data gathering that is only performed when listed here.
+  // Remove an entry to disable it.
+  //
+  // Core:
+  //   on-turn-start        — faction state sent to engine at AI turn start
+  //   on-turn-end          — actor status sent to engine at turn end
+  //   movement-finished    — position update sent to engine after movement
+  //   actor-changed        — active actor notification sent to engine
+  //   scene-change         — scene transition notification
+  //   battle-start         — battle session init
+  //   battle-end           — battle session cleanup
+  //   tactical-ready       — dramatis personae + init sent to engine
+  //   preview-ready        — map capture signal
+  //
+  // Behaviour:
+  //   contact-state        — per-actor detection state (roaming, reposition)
+  //   movement-budget      — AP/skill/movement cost (roaming, reposition)
+  //   objective-detection  — mission objective targets (guard-vip)
+  //   tile-modifiers       — tile score modifier pipeline (any behaviour node)
+  //   opponent-tracking    — faction opponent list at turn-start (reposition)
+  //
+  // Observation:
+  //   tile-scores          — tile evaluation data sent to engine (scoring, heatmaps, criterion logging)
+  //   decision-capture     — AI behaviour decisions sent to engine (logging, heatmaps)
+  //   minimap-units        — unit positions from tile evaluation
+  //
+  // Logging:
+  //   action-logging       — player and AI action events
+  //   combat-logging       — damage / element hit events
+  "dataEvents": [
+    "on-turn-start",
+    "on-turn-end",
+    "movement-finished",
+    "actor-changed",
+    "scene-change",
+    "battle-start",
+    "battle-end",
+    "tactical-ready",
+    "preview-ready",
+    //Optional
+    "contact-state",
+    "movement-budget",
+    "tile-modifiers",
+    "opponent-tracking",
+    "tile-scores",
+    "minimap-units"
+  ],
+
+  // Events listed here are recognized but inactive by default.
+  // Move an entry to "dataEvents" to enable it.
+  "inactiveDataEvents": [
+    "objective-detection",
+    "decision-capture",
+    "action-logging",
+    "combat-logging"
+  ],
 
   // ── Hook Chains ──
   // Define which behaviour nodes run on each hook point, and in what order.

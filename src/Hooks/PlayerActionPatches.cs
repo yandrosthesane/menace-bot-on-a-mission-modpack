@@ -31,6 +31,7 @@ static class Patch_EndTurn
         {
             var bridge = BoamBridge.Instance;
             if (bridge == null || !bridge.IsEngineReady) return;
+            if (!DataEvents.ActionLoggingEvent.IsActive) return;
 
             // Only log during player faction turns
             int factionId = TacticalController.GetCurrentFaction();
@@ -173,9 +174,7 @@ static class Patch_LaunchMission
         if (sizeX == 0 || sizeZ == 0) return;
 
         // Write to fixed preview dir — copied to battle report at tactical-ready
-        var persistentDir = Environment.GetEnvironmentVariable("BOAM_PERSISTENT_ASSETS");
-        if (string.IsNullOrEmpty(persistentDir))
-            persistentDir = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
+        var persistentDir = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
                 "UserData", "BOAM");
 
         var previewDir = System.IO.Path.Combine(persistentDir, "battle_preview");
@@ -300,11 +299,14 @@ static class Patch_ActiveActorChanged
             var actorUuid = ActorRegistry.GetUuid(entityId);
             var (px, pz) = ActorRegistry.GetPos(gameObj);
 
-            // Update minimap overlay (always, even without engine)
-            TacticalMap.TacticalMapState.ActiveActor = actorUuid;
-            TacticalMap.TacticalMapState.UpdateUnitPosition(actorUuid, px, pz);
+            // Update minimap overlay
+            if (DataEvents.MinimapUnitsEvent.IsActive)
+            {
+                TacticalMap.TacticalMapState.ActiveActor = actorUuid;
+                TacticalMap.TacticalMapState.UpdateUnitPosition(actorUuid, px, pz);
+            }
 
-            if (!bridge.IsEngineReady) return;
+            if (!bridge.IsEngineReady || !DataEvents.ActorChangedEvent.IsActive) return;
 
             var round = bridge.Round;
             var payload = JsonSerializer.Serialize(new
@@ -320,7 +322,7 @@ static class Patch_ActiveActorChanged
             ThreadPool.QueueUserWorkItem(_ => QueryCommandClient.Hook("actor-changed", payload));
 
             // Log select primitive for player factions
-            if (factionId == 1 || factionId == 2)
+            if (DataEvents.ActionLoggingEvent.IsActive && (factionId == 1 || factionId == 2))
             {
                 var selectPayload = JsonSerializer.Serialize(new
                 {
@@ -353,6 +355,7 @@ static class Patch_ClickOnTile
         {
             var bridge = BoamBridge.Instance;
             if (bridge == null || !bridge.IsEngineReady) return;
+            if (!DataEvents.ActionLoggingEvent.IsActive) return;
 
             // Get the concrete action type name for diagnostics
             var actionClassName = __instance?.GetType()?.Name ?? "unknown";
@@ -406,6 +409,7 @@ static class Patch_SelectSkill
 
             var bridge = BoamBridge.Instance;
             if (bridge == null || !bridge.IsEngineReady) return;
+            if (!DataEvents.ActionLoggingEvent.IsActive) return;
 
             int factionId = TacticalController.GetCurrentFaction();
             if (factionId != 1 && factionId != 2) return;
@@ -435,7 +439,7 @@ static class Patch_SelectSkill
             // Start tracking this skill for duration measurement.
             // AttackTileStart will override for attack skills; for non-attack skills
             // (Deploy, Get Up, etc.) this is the only timer start.
-            Patch_Diagnostics.StartPlayerSkillTimer(actorUuid, skillName);
+            DataEvents.ActionLoggingEvent.StartPlayerSkillTimer(actorUuid, skillName);
 
             BoamBridge.Logger.Msg($"[BOAM] player-action {actorUuid}: useskill {skillName}");
             QueryCommandClient.Hook("player-action", payload);

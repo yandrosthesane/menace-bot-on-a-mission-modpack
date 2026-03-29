@@ -5,12 +5,4 @@
 {
   "configVersion": 1,
 
-  // ── AI Tweaks ──
-  // Experimental features that modify AI behavior at runtime.
-  // These are NOT read-only observations — they change how the AI plays.
-
-  // Strip opponents from AI faction's m_Opponents that no faction member can see via LOS.
-  // Prevents AI from "knowing" about concealed units it hasn't detected.
-  // Default: false (observation-only mode, no AI modification)
-  "opponent_filter": false
 }

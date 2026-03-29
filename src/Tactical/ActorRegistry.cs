@@ -73,44 +73,6 @@ internal static class ActorRegistry
         return pos.HasValue ? (pos.Value.x, pos.Value.y) : (0, 0);
     }
 
-    /// Collect entity IDs of mission objective targets (KillUnit objectives).
-    private static System.Collections.Generic.HashSet<IntPtr> GetObjectiveTargets(MelonLogger.Instance log)
-    {
-        var targets = new System.Collections.Generic.HashSet<IntPtr>();
-        try
-        {
-            var tm = Il2CppMenace.Tactical.TacticalManager.Get();
-            if (tm == null) return targets;
-            var mission = tm.GetMission();
-            if (mission == null) return targets;
-            var om = mission.Objectives;
-            if (om == null) return targets;
-            var objs = om.m_Objectives;
-            if (objs == null) return targets;
-            for (int i = 0; i < objs.Length; i++)
-            {
-                try
-                {
-                    var obj = objs[i];
-                    if (obj == null || obj.GetState() != Il2CppMenace.Tactical.Objectives.ObjectiveState.Ongoing)
-                        continue;
-                    var target = obj.GetTarget();
-                    if (target != null)
-                    {
-                        targets.Add(target.Pointer);
-                        log.Msg($"[BOAM] Objective target: {target.Pointer}");
-                    }
-                }
-                catch { }
-            }
-        }
-        catch (Exception ex)
-        {
-            log.Warning($"[BOAM] GetObjectiveTargets error: {ex.Message}");
-        }
-        return targets;
-    }
-
     /// Build the full dramatis personae on the main thread.
     /// Scans all entities, computes stable UUIDs, populates the registries.
     internal static System.Collections.Generic.List<object> BuildDramatisPersonae(MelonLogger.Instance log)
@@ -155,8 +117,7 @@ internal static class ActorRegistry
             return result;
         }
 
-        var objectiveTargets = GetObjectiveTargets(log);
-        log.Msg($"[BOAM] Found {objectiveTargets.Count} objective targets");
+        var objectiveTargets = DataEvents.ObjectiveDetectionEvent.GetTargets(log);
 
         var newEntityToUuid = new System.Collections.Generic.Dictionary<int, string>();
         var newUuidToEntity = new System.Collections.Generic.Dictionary<string, int>();
