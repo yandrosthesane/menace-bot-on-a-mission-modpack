@@ -7,6 +7,7 @@ open BOAM.TacticalEngine.GameTypes
 open BOAM.TacticalEngine.NodeContext
 open BOAM.TacticalEngine.Node
 open BOAM.TacticalEngine.Keys
+open BOAM.TacticalEngine.Catalogue
 open BOAM.TacticalEngine.Config
 
 type RepositionConfig = { MaxUtilityByAttacks: float32; UtilityByAttacksFraction: float32; ApproachBias: float32 }
@@ -131,3 +132,5 @@ let node : NodeDef = {
                 let merged = tileMap |> Map.fold (fun acc k v -> Map.add k (TileModifier.add v (Map.tryFind k acc |> Option.defaultValue TileModifier.zero)) acc) actorTiles
                 ctx |> NodeContext.write tileModifiers (existing |> Map.add a.Actor merged)
 }
+
+do register node

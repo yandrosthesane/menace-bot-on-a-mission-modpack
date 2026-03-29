@@ -97,7 +97,6 @@ static class CombatLoggingEvent
 
             var payload = JsonSerializer.Serialize(new
             {
-                hook = "combat-outcome",
                 round = bridge.Round,
                 type = "element_hit",
                 target = targetUuid,
@@ -121,7 +120,7 @@ static class CombatLoggingEvent
             });
 
             BoamBridge.Logger.Msg($"[BOAM] element_hit {attackerUuid} → {targetUuid}[{elementIndex}]: {_damageAppliedToElement}dmg");
-            ThreadPool.QueueUserWorkItem(_ => QueryCommandClient.Hook("combat-outcome", payload));
+            ThreadPool.QueueUserWorkItem(_ => QueryCommandClient.SendEvent("combat-outcome", payload));
         }
         catch (Exception ex)
         {

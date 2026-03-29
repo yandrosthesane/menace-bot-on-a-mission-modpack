@@ -35,6 +35,6 @@ let private log color tag msg =
     logFile.WriteLine(sprintf "%s [%s] %s" ts tag msg)
 
 let logInfo   = log green "BOAM"
-let logHook   = log yellow "HOOK"
+let logEvent  = log yellow "EVNT"
 let logWarn   = log red "WARN"
 let logEngine = log cyan "ENGI"

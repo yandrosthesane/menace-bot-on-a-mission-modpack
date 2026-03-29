@@ -132,7 +132,6 @@ static class Patch_AgentExecute
 
             var payload = JsonSerializer.Serialize(new
             {
-                hook = "action-decision",
                 round,
                 faction = factionId,
                 actor = actorUuid,
@@ -148,7 +147,7 @@ static class Patch_AgentExecute
             });
 
             BoamBridge.Logger.Msg($"[BOAM] action-decision {actorUuid}: {chosenName}({chosenScore})");
-            QueryCommandClient.Hook("action-decision", payload);
+            QueryCommandClient.SendEvent("action-decision", payload);
         }
         catch (Exception ex)
         {

@@ -1,5 +1,5 @@
 /// System and utility routes for the tactical engine.
-/// Game hook traffic is handled by HookHandlers via the symmetric Messaging protocol.
+/// Game event traffic is handled by EventHandlers via the symmetric Messaging protocol.
 module BOAM.TacticalEngine.Routes
 
 open System
@@ -7,7 +7,7 @@ open System.Text.Json
 open Microsoft.AspNetCore.Builder
 open Microsoft.AspNetCore.Http
 open BOAM.TacticalEngine.Config
-open BOAM.TacticalEngine.HookPayload
+open BOAM.TacticalEngine.EventPayload
 open BOAM.TacticalEngine.HeatmapRenderer
 open BOAM.TacticalEngine.HeatmapTypes
 open BOAM.TacticalEngine.EventBus
@@ -117,28 +117,28 @@ let registerRoutes (app: WebApplication) (ctx: RouteContext) =
                     let jobJson = IO.File.ReadAllText(jobPath)
                     let job = JsonDocument.Parse(jobJson).RootElement
 
-                    let tiles = HookPayload.tryArray job "tiles" (fun el ->
+                    let tiles = EventPayload.tryArray job "tiles" (fun el ->
                         { X = el.GetProperty("x").GetInt32()
                           Z = el.GetProperty("z").GetInt32()
                           Combined = el.GetProperty("combined").GetSingle() } : TileScore)
 
-                    let units = HookPayload.tryArray job "units" (fun el ->
+                    let units = EventPayload.tryArray job "units" (fun el ->
                         { Faction = el.GetProperty("faction").GetInt32()
                           X = el.GetProperty("x").GetInt32(); Z = el.GetProperty("z").GetInt32()
-                          Actor = HookPayload.tryStr el "actor" ""
-                          Name = HookPayload.tryStr el "name" ""
-                          Leader = HookPayload.tryStr el "leader" "" } : RenderUnit)
+                          Actor = EventPayload.tryStr el "actor" ""
+                          Name = EventPayload.tryStr el "name" ""
+                          Leader = EventPayload.tryStr el "leader" "" } : RenderUnit)
 
                     let toPos (p: GameTypes.TilePos) : Pos = { X = p.X; Z = p.Z }
                     let toPosOpt (p: GameTypes.TilePos option) : Pos option = p |> Option.map toPos
-                    let actorPos = HookPayload.parseOptionalTilePos job "actorPosition" |> toPosOpt
-                    let moveDest = HookPayload.parseOptionalTilePos job "moveDestination" |> toPosOpt
-                    let faction = HookPayload.tryInt job "faction" 0
-                    let visionRange = HookPayload.tryInt job "visionRange" 0
-                    let actor = HookPayload.tryStr job "actor" ""
-                    let bgPath = HookPayload.tryStr job "mapBgPath" ""
-                    let infoPath = HookPayload.tryStr job "mapInfoPath" ""
-                    let iconBase = HookPayload.tryStr job "iconBaseDir" ctx.IconBaseDir
+                    let actorPos = EventPayload.parseOptionalTilePos job "actorPosition" |> toPosOpt
+                    let moveDest = EventPayload.parseOptionalTilePos job "moveDestination" |> toPosOpt
+                    let faction = EventPayload.tryInt job "faction" 0
+                    let visionRange = EventPayload.tryInt job "visionRange" 0
+                    let actor = EventPayload.tryStr job "actor" ""
+                    let bgPath = EventPayload.tryStr job "mapBgPath" ""
+                    let infoPath = EventPayload.tryStr job "mapInfoPath" ""
+                    let iconBase = EventPayload.tryStr job "iconBaseDir" ctx.IconBaseDir
 
                     let label = IO.Path.GetFileNameWithoutExtension(jobPath)
                     let outPath = renderFromPaths bgPath infoPath tiles actorPos units faction iconBase heatmapDir label actor visionRange moveDest

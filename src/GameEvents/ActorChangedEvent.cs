@@ -43,7 +43,7 @@ static class ActorChangedEvent
             if (_activeActor == null)
             {
                 if (bridge.IsEngineReady && IsActive)
-                    ThreadPool.QueueUserWorkItem(_ => QueryCommandClient.Hook("actor-changed",
+                    ThreadPool.QueueUserWorkItem(_ => QueryCommandClient.SendEvent("actor-changed",
                         JsonSerializer.Serialize(new { actor = "", faction = 0, x = 0, z = 0 })));
                 return;
             }
@@ -65,18 +65,17 @@ static class ActorChangedEvent
             });
 
             BoamBridge.Logger.Msg($"[BOAM] active-actor-changed: {actorUuid} r={round} at ({px},{pz})");
-            ThreadPool.QueueUserWorkItem(_ => QueryCommandClient.Hook("actor-changed", payload));
+            ThreadPool.QueueUserWorkItem(_ => QueryCommandClient.SendEvent("actor-changed", payload));
 
             // Log select primitive for player factions
             if (ActionLoggingEvent.IsActive && (factionId == 1 || factionId == 2))
             {
                 var selectPayload = JsonSerializer.Serialize(new
                 {
-                    hook = "player-action", round, faction = factionId, actor = actorUuid,
                     actionType = "select", skillName = "", tile = new { x = px, z = pz }
                 });
                 BoamBridge.Logger.Msg($"[BOAM] player-action {actorUuid}: select");
-                ThreadPool.QueueUserWorkItem(_ => QueryCommandClient.Hook("player-action", selectPayload));
+                ThreadPool.QueueUserWorkItem(_ => QueryCommandClient.SendEvent("player-action", selectPayload));
             }
         }
         catch { }

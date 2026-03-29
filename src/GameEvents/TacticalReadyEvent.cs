@@ -12,6 +12,6 @@ static class TacticalReadyEvent
     {
         if (!IsActive) return;
         var payload = JsonSerializer.Serialize(new { dramatis_personae = dramatisPersonae });
-        ThreadPool.QueueUserWorkItem(_ => QueryCommandClient.Hook("tactical-ready", payload));
+        ThreadPool.QueueUserWorkItem(_ => QueryCommandClient.SendEvent("tactical-ready", payload));
     }
 }

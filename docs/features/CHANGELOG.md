@@ -23,7 +23,7 @@ order: 10
 - Manual patch registration moved from BoamBridge into each event's `Register()` method. BoamBridge.OnInitialize reduced to 5 Register calls.
 - Inactive events produce no log output and skip all associated work.
 - Eliminated `src/Hooks/` directory — AiObservationPatches, AiActionPatches, PlayerActionPatches, DiagnosticPatches, TileModifierPatch all absorbed into event files.
-- See [Adding a Data Event](ADDING_A_DATA_EVENT) for the full guide.
+- See [Adding a Data Event](ADDING_A_GAME_EVENT) for the full guide.
 
 ### Features
 

@@ -14,7 +14,7 @@ namespace BOAM.TacticalMap;
 
 /// <summary>
 /// In-game IMGUI minimap overlay. Reads unit positions from TacticalMapState
-/// (populated by game hooks) rather than polling the game directly.
+/// (populated by game events) rather than polling the game directly.
 /// Lifecycle methods are called from BoamBridge.
 /// </summary>
 internal class TacticalMapOverlay

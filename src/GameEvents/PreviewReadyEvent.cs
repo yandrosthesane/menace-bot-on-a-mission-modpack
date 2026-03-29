@@ -67,7 +67,7 @@ static class PreviewReadyEvent
             BoamBridge.Logger.Msg("[BOAM] Mission preview ready — capturing map data");
 
             if (IsActive)
-                ThreadPool.QueueUserWorkItem(_ => QueryCommandClient.Hook("preview-ready", "{}"));
+                ThreadPool.QueueUserWorkItem(_ => QueryCommandClient.SendEvent("preview-ready", "{}"));
 
             CaptureMapData(__instance, _result);
         }

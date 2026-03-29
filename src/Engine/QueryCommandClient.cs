@@ -24,12 +24,12 @@ internal static class QueryCommandClient
         catch { return null; }
     }
 
-    /// <summary>Send a hook event to the engine. Wraps payload with type=hook and hook=name.</summary>
-    internal static string Hook(string hookName, string payloadJson)
+    /// <summary>Send a game event to the engine. Wraps payload with type=event and event=name.</summary>
+    internal static string SendEvent(string eventName, string payloadJson)
     {
         try
         {
-            var body = InjectHook(hookName, payloadJson);
+            var body = InjectEvent(eventName, payloadJson);
             using var client = new System.Net.WebClient();
             client.Headers[System.Net.HttpRequestHeader.ContentType] = "application/json";
             return client.UploadString(BaseUrl + "/command", body);
@@ -50,15 +50,15 @@ internal static class QueryCommandClient
         catch { return null; }
     }
 
-    /// <summary>Wrap a JSON payload with type=hook and hook=name fields.</summary>
-    private static string InjectHook(string hookName, string payloadJson)
+    /// <summary>Wrap a JSON payload with type=event and event=name fields.</summary>
+    private static string InjectEvent(string eventName, string payloadJson)
     {
         var doc = JsonDocument.Parse(payloadJson);
         using var ms = new System.IO.MemoryStream();
         using var writer = new Utf8JsonWriter(ms);
         writer.WriteStartObject();
-        writer.WriteString("type", "hook");
-        writer.WriteString("hook", hookName);
+        writer.WriteString("type", "event");
+        writer.WriteString("event", eventName);
         foreach (var prop in doc.RootElement.EnumerateObject())
             prop.WriteTo(writer);
         writer.WriteEndObject();

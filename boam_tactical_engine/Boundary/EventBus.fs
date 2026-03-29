@@ -1,5 +1,5 @@
 /// Simple event bus for synchronizing auto-navigation with game events.
-/// Hooks push events, auto-navigate awaits them. Thread-safe via SemaphoreSlim.
+/// Event handlers push events, auto-navigate awaits them. Thread-safe via SemaphoreSlim.
 module BOAM.TacticalEngine.EventBus
 
 open System
@@ -37,7 +37,7 @@ type Bus(log: string -> unit) =
     let queue = ConcurrentQueue<GameEvent>()
     let signal = new SemaphoreSlim(0)
 
-    /// Push an event (called by hook handlers).
+    /// Push an event (called by event handlers).
     member _.Push(evt: GameEvent) =
         log (sprintf "[EventBus] <- %s" (formatEvent evt))
         queue.Enqueue(evt)

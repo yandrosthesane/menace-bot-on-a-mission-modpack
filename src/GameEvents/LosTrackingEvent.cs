@@ -80,14 +80,12 @@ static class Patch_EntitySetTile
                     int round = BoamBridge.Instance?.Round ?? 0;
                     var payload = JsonSerializer.Serialize(new
                     {
-                        type = "hook",
-                        hook = "investigate-event",
                         faction = factionIdx,
                         x = lastSeen.x,
                         z = lastSeen.z,
                         round
                     });
-                    ThreadPool.QueueUserWorkItem(_ => QueryCommandClient.Hook("investigate-event", payload));
+                    ThreadPool.QueueUserWorkItem(_ => QueryCommandClient.SendEvent("investigate-event", payload));
                     BoamBridge.Logger?.Msg($"[BOAM] LOS lost: faction {factionIdx} lost player at ({lastSeen.x},{lastSeen.z})");
                 }
             }

@@ -1,5 +1,5 @@
 /// Boundary payload types — the wire format between the C# game bridge and the F# engine.
-/// These are DTOs for HTTP hook payloads, not domain types.
+/// These are DTOs for HTTP event payloads, not domain types.
 module BOAM.TacticalEngine.BoundaryTypes
 
 open BOAM.TacticalEngine.GameTypes
@@ -20,7 +20,7 @@ type TileScoreData = {
     UtilityByAttacks: float32
 }
 
-/// A unit on the tactical map (any faction), used for hook payloads.
+/// A unit on the tactical map (any faction), used for event payloads.
 type UnitInfo = {
     Faction: FactionId
     Position: TilePos
@@ -29,7 +29,7 @@ type UnitInfo = {
     Leader: string   // character nickname — empty if N/A
 }
 
-/// Parsed tile-scores hook payload from the C# bridge.
+/// Parsed tile-scores event payload from the C# bridge.
 type TileScoresPayload = {
     Round: int
     Faction: FactionId
@@ -40,7 +40,7 @@ type TileScoresPayload = {
     VisionRange: int
 }
 
-/// Parsed movement-finished hook payload from the C# bridge.
+/// Parsed movement-finished event payload from the C# bridge.
 type MovementFinishedPayload = {
     Actor: string
     Tile: TilePos

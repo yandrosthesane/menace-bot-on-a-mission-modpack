@@ -127,10 +127,9 @@ static class ActionLoggingEvent
         if (!IsActive || !IsAiFaction(factionId)) return;
         var payload = JsonSerializer.Serialize(new
         {
-            hook = "ai-action", round, faction = factionId, actor = actorUuid,
             actionType = "ai_endturn", skillName = "", tile = new { x = tileX, z = tileZ }
         });
-        ThreadPool.QueueUserWorkItem(_ => QueryCommandClient.Hook("ai-action", payload));
+        ThreadPool.QueueUserWorkItem(_ => QueryCommandClient.SendEvent("ai-action", payload));
     }
 
     // --- Harmony targets ---
@@ -153,11 +152,10 @@ static class ActionLoggingEvent
 
             var payload = JsonSerializer.Serialize(new
             {
-                hook = "ai-action", round = bridge.Round, faction = factionId, actor = actorUuid,
                 actionType = "ai_move", skillName = "", tile = new { x = tileX, z = tileZ }
             });
             BoamBridge.Logger.Msg($"[BOAM] ai-action {actorUuid}: ai_move ({tileX},{tileZ})");
-            ThreadPool.QueueUserWorkItem(_ => QueryCommandClient.Hook("ai-action", payload));
+            ThreadPool.QueueUserWorkItem(_ => QueryCommandClient.SendEvent("ai-action", payload));
         }
         catch (Exception ex) { BoamBridge.Logger.Error($"[BOAM] ai-action move error: {ex.Message}"); }
     }
@@ -183,11 +181,10 @@ static class ActionLoggingEvent
 
             var payload = JsonSerializer.Serialize(new
             {
-                hook = "ai-action", round = bridge.Round, faction = factionId, actor = actorUuid,
                 actionType = "ai_useskill", skillName, tile = new { x = tileX, z = tileZ }
             });
             BoamBridge.Logger.Msg($"[BOAM] ai-action {actorUuid}: ai_useskill {skillName} ({tileX},{tileZ})");
-            ThreadPool.QueueUserWorkItem(_ => QueryCommandClient.Hook("ai-action", payload));
+            ThreadPool.QueueUserWorkItem(_ => QueryCommandClient.SendEvent("ai-action", payload));
         }
         catch (Exception ex) { BoamBridge.Logger.Error($"[BOAM] ai-action useskill error: {ex.Message}"); }
     }
@@ -209,7 +206,7 @@ static class ActionLoggingEvent
 
                 var payload = JsonSerializer.Serialize(new { actor = _pendingPlayerActor, skill = name, durationMs = actualMs });
                 _pendingPlayerSkill = null;
-                ThreadPool.QueueUserWorkItem(_ => QueryCommandClient.Hook("skill-complete", payload));
+                ThreadPool.QueueUserWorkItem(_ => QueryCommandClient.SendEvent("skill-complete", payload));
             }
         }
         catch { }
@@ -272,11 +269,10 @@ static class ActionLoggingEvent
             var (tileX, tileZ) = ActorRegistry.GetPos(gameObj);
             var payload = JsonSerializer.Serialize(new
             {
-                hook = "player-action", round, faction = factionId, actor = actorUuid,
                 actionType = "endturn", skillName = "", tile = new { x = tileX, z = tileZ }
             });
             BoamBridge.Logger.Msg($"[BOAM] player-action {actorUuid}: endturn at ({tileX},{tileZ})");
-            QueryCommandClient.Hook("player-action", payload);
+            QueryCommandClient.SendEvent("player-action", payload);
         }
         catch (Exception ex) { BoamBridge.Logger.Error($"[BOAM] endturn patch error: {ex.Message}"); }
     }
@@ -303,11 +299,10 @@ static class ActionLoggingEvent
 
             var payload = JsonSerializer.Serialize(new
             {
-                hook = "player-action", round = bridge.Round, faction = factionId, actor = actorUuid,
                 actionType = "click", skillName = "", tile = new { x = tileX, z = tileZ }
             });
             BoamBridge.Logger.Msg($"[BOAM] player-action {actorUuid}: click ({tileX},{tileZ})");
-            QueryCommandClient.Hook("player-action", payload);
+            QueryCommandClient.SendEvent("player-action", payload);
         }
         catch { }
     }
@@ -336,12 +331,11 @@ static class ActionLoggingEvent
 
             var payload = JsonSerializer.Serialize(new
             {
-                hook = "player-action", round = bridge.Round, faction = factionId, actor = actorUuid,
                 actionType = "useskill", skillName, tile = new { x = 0, z = 0 }
             });
             StartPlayerSkillTimer(actorUuid, skillName);
             BoamBridge.Logger.Msg($"[BOAM] player-action {actorUuid}: useskill {skillName}");
-            QueryCommandClient.Hook("player-action", payload);
+            QueryCommandClient.SendEvent("player-action", payload);
         }
         catch { }
     }

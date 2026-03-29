@@ -1,5 +1,5 @@
-/// InvestigateBehaviour — self-contained node with its own types, keys, config, and registration.
-/// Only external coupling: one dispatch entry in HookHandlers.fs for incoming investigate-events.
+/// InvestigateBehaviour — self-contained node with its own types, keys, config, and hook handler.
+/// No external coupling: hook handler is self-registered via HookRegistry.
 module BOAM.TacticalEngine.Nodes.InvestigateBehaviour
 
 open System.Text.Json
@@ -10,6 +10,7 @@ open BOAM.TacticalEngine.Node
 open BOAM.TacticalEngine.Keys
 open BOAM.TacticalEngine.Catalogue
 open BOAM.TacticalEngine.Config
+open BOAM.TacticalEngine.EventHandlerRegistry
 open BOAM.TacticalEngine.Logging
 
 // --- Node-local types ---
@@ -28,11 +29,11 @@ let private defaultConfig = { BaseUtility = 200f; UtilityFraction = 0.8f; Ttl = 
 
 let private loadConfig () = defaultConfig
 
-let private cfg = loadConfig ()
+let cfg = loadConfig ()
 
-// --- Hook handler (called from HookHandlers.fs dispatch) ---
+// --- Hook handler (self-registered via HookRegistry) ---
 
-let handleEvent (store: BOAM.TacticalEngine.StateStore.StateStore) (root: JsonElement) =
+let private handleEvent (store: BOAM.TacticalEngine.StateStore.StateStore) (root: JsonElement) =
     let faction = match root.TryGetProperty("faction") with | true, v -> v.GetInt32() | _ -> 0
     let x = match root.TryGetProperty("x") with | true, v -> v.GetInt32() | _ -> 0
     let z = match root.TryGetProperty("z") with | true, v -> v.GetInt32() | _ -> 0
@@ -40,7 +41,7 @@ let handleEvent (store: BOAM.TacticalEngine.StateStore.StateStore) (root: JsonEl
     let targets = store.ReadOrDefault(investigateTargets, [])
     let target : InvestigateTarget = { Position = { X = x; Z = z }; Faction = faction; RoundCreated = round }
     store.Write(investigateTargets, target :: targets)
-    logHook (sprintf "investigate-event  faction=%d  pos=(%d,%d)  round=%d  total=%d" faction x z round (List.length targets + 1))
+    logEvent (sprintf "investigate-event  faction=%d  pos=(%d,%d)  round=%d  total=%d" faction x z round (List.length targets + 1))
 
 // --- Node definition ---
 
@@ -108,3 +109,4 @@ let node : NodeDef = {
 // --- Self-registration ---
 
 do register node
+do registerHandler "investigate-event" handleEvent

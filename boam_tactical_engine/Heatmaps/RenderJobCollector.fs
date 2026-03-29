@@ -1,4 +1,4 @@
-/// Accumulates per-actor per-round data from hooks and flushes
+/// Accumulates per-actor per-round data from events and flushes
 /// self-contained render job JSON files to the battle session directory.
 module BOAM.TacticalEngine.RenderJobCollector
 

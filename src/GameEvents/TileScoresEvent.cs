@@ -21,10 +21,10 @@ static class TileScoresEvent
         ["minimap-units"] = (f, r) => MinimapUnitsEvent.PopulateOverlay(f, r),
     };
 
-    internal static void InitHooks()
+    internal static void InitEnrichments()
     {
         _enrichments.Clear();
-        if (Boundary.GameEvents.Hooks.TryGetValue("tile-scores", out var names))
+        if (Boundary.GameEvents.Enrichments.TryGetValue("tile-scores", out var names))
         {
             foreach (var name in names)
                 if (_enrichmentRegistry.TryGetValue(name, out var cb))
@@ -156,7 +156,7 @@ static class Patch_PostProcessTileScores
 
             int round = BoamBridge.Instance?.Round ?? 0;
 
-            // Enrichment hooks
+            // Enrichments
             foreach (var enrich in TileScoresEvent._enrichments)
                 enrich(factionId, round);
 
@@ -165,7 +165,6 @@ static class Patch_PostProcessTileScores
 
             var payload = JsonSerializer.Serialize(new
             {
-                hook = "tile-scores",
                 round,
                 faction = factionId,
                 actor = actorUuid,
@@ -178,7 +177,7 @@ static class Patch_PostProcessTileScores
             var json = payload;
             ThreadPool.QueueUserWorkItem(_ =>
             {
-                var response = QueryCommandClient.Hook("tile-scores", json);
+                var response = QueryCommandClient.SendEvent("tile-scores", json);
                 if (response != null)
                     BoamBridge.Logger.Msg($"[BOAM] tile-scores f{factionId} {actorUuid}: {tileList.Count} tiles");
             });

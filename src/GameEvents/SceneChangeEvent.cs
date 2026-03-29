@@ -11,6 +11,6 @@ static class SceneChangeEvent
     {
         if (!IsActive || string.IsNullOrEmpty(sceneName)) return;
         var payload = JsonSerializer.Serialize(new { scene = sceneName });
-        ThreadPool.QueueUserWorkItem(_ => QueryCommandClient.Hook("scene-change", payload));
+        ThreadPool.QueueUserWorkItem(_ => QueryCommandClient.SendEvent("scene-change", payload));
     }
 }

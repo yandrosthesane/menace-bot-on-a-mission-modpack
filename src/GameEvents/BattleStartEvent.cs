@@ -12,6 +12,6 @@ static class BattleStartEvent
         if (!IsActive) return;
         var sessionDir = TacticalMap.TacticalMapState.BattleSessionDir ?? "";
         var payload = JsonSerializer.Serialize(new { sessionDir });
-        ThreadPool.QueueUserWorkItem(_ => QueryCommandClient.Hook("battle-start", payload));
+        ThreadPool.QueueUserWorkItem(_ => QueryCommandClient.SendEvent("battle-start", payload));
     }
 }

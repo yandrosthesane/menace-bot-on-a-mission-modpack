@@ -34,14 +34,13 @@ static class Patch_MovementFinished
 
             var payload = JsonSerializer.Serialize(new
             {
-                hook = "movement_finished",
                 faction = factionId,
                 actor = actorUuid,
                 tile = new { x = tileX, z = tileZ }
             });
 
             BoamBridge.Logger.Msg($"[BOAM] movement-finished {actorUuid} tile=({tileX},{tileZ})");
-            QueryCommandClient.Hook("movement-finished", payload);
+            QueryCommandClient.SendEvent("movement-finished", payload);
         }
         catch (Exception ex)
         {

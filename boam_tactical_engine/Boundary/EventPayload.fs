@@ -1,6 +1,6 @@
-/// JSON parsing helpers and hook-specific payload parsers.
+/// JSON parsing helpers and event-specific payload parsers.
 /// Converts raw JsonElement data from HTTP requests into domain types.
-module BOAM.TacticalEngine.HookPayload
+module BOAM.TacticalEngine.EventPayload
 
 open System.Text.Json
 open BOAM.TacticalEngine.GameTypes
@@ -36,7 +36,7 @@ let parseOptionalTilePos (el: JsonElement) (prop: string) : TilePos option =
     | true, p when p.ValueKind <> JsonValueKind.Null -> Some (parseTilePos p)
     | _ -> None
 
-// --- Hook-specific parsers ---
+// --- Event-specific parsers ---
 
 let private parseOpponent (el: JsonElement) : OpponentInfo =
     { Actor = tryStr el "actor" ""

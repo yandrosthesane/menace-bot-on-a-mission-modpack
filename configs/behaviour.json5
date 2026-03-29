@@ -88,11 +88,11 @@
     }
   },
 
-  // ── Guard VIP ── (targets Safety score) [WIP — not in hook chain by default]
+  // ── Guard VIP ── (targets Safety score) [WIP — not in execution chain by default]
   // Draws same-faction units toward mission objective targets (VIPs / ELIMINATE markers).
   // Only active when the mission has objective actors. Non-objective units get safety
   // modifiers for tiles closer to objective allies.
-  // To enable, add "guard-vip-behaviour" to the OnTurnEnd hook chain above.
+  // To enable, add "guard-vip-behaviour" to the OnTurnEnd execution chain above.
   //
   // radius         — influence range from each objective actor (tiles)
   // baseSafety     — default modifier strength (floor for game score scaling)
@@ -107,10 +107,10 @@
     }
   },
 
-  // ── Investigate ── (targets Utility score) [WIP — not in hook chain by default]
+  // ── Investigate ── (targets Utility score) [WIP — not in execution chain by default]
   // Directs AI units toward last known positions of player units that broke LOS.
   // Requires "los-tracking" game event to be active.
-  // To enable, add "investigate-behaviour" to the OnTurnEnd hook chain above
+  // To enable, add "investigate-behaviour" to the OnTurnEnd execution chain above
   // and add "los-tracking" to the active events in game_events.json5.
   //
   // baseUtility      — default modifier strength (floor for game score scaling)

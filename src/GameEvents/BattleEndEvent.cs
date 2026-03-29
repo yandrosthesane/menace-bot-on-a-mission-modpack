@@ -10,6 +10,6 @@ static class BattleEndEvent
     {
         Boundary.GameStore.Clear();
         if (!IsActive) return;
-        ThreadPool.QueueUserWorkItem(_ => QueryCommandClient.Hook("battle-end", "{}"));
+        ThreadPool.QueueUserWorkItem(_ => QueryCommandClient.SendEvent("battle-end", "{}"));
     }
 }

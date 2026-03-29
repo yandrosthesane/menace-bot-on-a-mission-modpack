@@ -1,7 +1,7 @@
-/// Hook command handlers for the symmetric protocol.
-/// Registers a "hook" command type on Messaging that dispatches by the "hook" field.
-/// Each sub-handler processes one game event type.
-module BOAM.TacticalEngine.HookHandlers
+/// Game event handlers for the symmetric protocol.
+/// Registers an "event" command type on Messaging that dispatches by the "event" field.
+/// Each handler processes one game event type.
+module BOAM.TacticalEngine.EventHandlers
 
 open System
 open System.Text.Json
@@ -11,7 +11,7 @@ open BOAM.TacticalEngine.GameTypes
 open BOAM.TacticalEngine.BoundaryTypes
 open BOAM.TacticalEngine.Node
 open BOAM.TacticalEngine.Walker
-open BOAM.TacticalEngine.HookPayload
+open BOAM.TacticalEngine.EventPayload
 open BOAM.TacticalEngine.ActionLog
 open BOAM.TacticalEngine.RenderJobCollector
 open BOAM.TacticalEngine.HeatmapRenderer
@@ -80,7 +80,7 @@ let flushTileModifiersViaMessaging (store: StateStore.StateStore) =
 
 let private handleOnTurnStart (ctx: RouteContext) (root: JsonElement) =
     let factionState = parseOnTurnStart root
-    logHook (sprintf "on-turn-start  faction=%d  opponents=%d  round=%d"
+    logEvent (sprintf "on-turn-start  faction=%d  opponents=%d  round=%d"
         factionState.FactionIndex (List.length factionState.Opponents) factionState.Round)
     if Config.GameEvents.Contains "heatmaps" then
         RenderJobCollector.onRoundChange ActionLog.currentBattleDir factionState.Round ctx.BoamModDir ctx.IconBaseDir
@@ -94,8 +94,8 @@ let private handleOnTurnStart (ctx: RouteContext) (root: JsonElement) =
     ctx.Store.Write(actorPositions, reset)
     ctx.EventBus.Push(TurnStart(factionState.FactionIndex, factionState.Round))
     let result = Walker.run ctx.Registry ctx.Store OnTurnStart Prefix factionState logEngine
-    logHook (sprintf "  walk: %d ran, %d skipped, %.1fms" result.NodesRun result.NodesSkipped result.ElapsedMs)
-    Results.Ok({| hook = "on-turn-start"; status = "ok"; nodesRun = result.NodesRun |}) :> IResult
+    logEvent (sprintf "  walk: %d ran, %d skipped, %.1fms" result.NodesRun result.NodesSkipped result.ElapsedMs)
+    Results.Ok({| event = "on-turn-start"; status = "ok"; nodesRun = result.NodesRun |}) :> IResult
 
 let private parseActorStatus (root: JsonElement) actor faction tileX tileZ (staticData: Map<string, ActorStaticData>) =
     let s = match root.TryGetProperty("status") with | true, v -> Some v | _ -> None
@@ -121,7 +121,7 @@ let private handleOnTurnEnd (ctx: RouteContext) (root: JsonElement) =
     let actor = match root.TryGetProperty("actor") with | true, v -> v.GetString() | _ -> ""
     let tileX = match root.TryGetProperty("tile") with | true, t -> match t.TryGetProperty("x") with | true, v -> v.GetInt32() | _ -> 0 | _ -> 0
     let tileZ = match root.TryGetProperty("tile") with | true, t -> match t.TryGetProperty("z") with | true, v -> v.GetInt32() | _ -> 0 | _ -> 0
-    logHook (sprintf "on-turn-end  faction=%d  round=%d  actor=%s  tile=(%d,%d)" faction round actor tileX tileZ)
+    logEvent (sprintf "on-turn-end  faction=%d  round=%d  actor=%s  tile=(%d,%d)" faction round actor tileX tileZ)
 
     try
         let staticData = ctx.Store.ReadOrDefault(actorStaticData, Map.empty)
@@ -133,29 +133,29 @@ let private handleOnTurnEnd (ctx: RouteContext) (root: JsonElement) =
         let positions = ctx.Store.ReadOrDefault(actorPositions, Map.empty)
         let updated = positions |> Map.add actor { Position = { X = tileX; Z = tileZ }; Faction = faction; HasActed = true; InRange = inRange; InContact = inContact }
         ctx.Store.Write(actorPositions, updated)
-        logHook (sprintf "  store: %d actors (actor=%s f=%d range=%b contact=%b)" (Map.count updated) actor faction inRange inContact)
+        logEvent (sprintf "  store: %d actors (actor=%s f=%d range=%b contact=%b)" (Map.count updated) actor faction inRange inContact)
     with ex -> logWarn (sprintf "  failed to parse actor status: %s" ex.Message)
 
     // Use the last real FactionState from turn-start, falling back to a minimal one
     let hasStoredState = ctx.Store.Read(lastFactionState).IsSome
     let factionState =
         ctx.Store.ReadOrDefault(lastFactionState, { FactionIndex = faction; IsAlliedWithPlayer = false; Opponents = []; Actors = []; Round = round })
-    logHook (sprintf "  turn-end factionState: %s (opponents=%d)" (if hasStoredState then "from turn-start" else "FALLBACK") (List.length factionState.Opponents))
+    logEvent (sprintf "  turn-end factionState: %s (opponents=%d)" (if hasStoredState then "from turn-start" else "FALLBACK") (List.length factionState.Opponents))
     let result = Walker.run ctx.Registry ctx.Store OnTurnEnd Prefix factionState logEngine
     if result.NodesRun > 0 then
-        logHook (sprintf "  walk: %d ran, %d skipped, %.1fms" result.NodesRun result.NodesSkipped result.ElapsedMs)
+        logEvent (sprintf "  walk: %d ran, %d skipped, %.1fms" result.NodesRun result.NodesSkipped result.ElapsedMs)
 
     // Flush modifiers via new protocol
     flushTileModifiersViaMessaging ctx.Store
 
-    Results.Ok({| hook = "on-turn-end"; status = "ok"; nodesRun = result.NodesRun |}) :> IResult
+    Results.Ok({| event = "on-turn-end"; status = "ok"; nodesRun = result.NodesRun |}) :> IResult
 
 let private handleTileScores (ctx: RouteContext) (root: JsonElement) =
     let payload = parseTileScores root
-    logHook (sprintf "tile-scores  round=%d  faction=%d  actor=%s  tiles=%d  units=%d  vision=%d"
+    logEvent (sprintf "tile-scores  round=%d  faction=%d  actor=%s  tiles=%d  units=%d  vision=%d"
         payload.Round payload.Faction payload.Actor (List.length payload.Tiles) (List.length payload.Units) payload.VisionRange)
     if List.isEmpty payload.Tiles then
-        Results.Ok({| hook = "tile-scores"; status = "ok"; message = "no tile data" |}) :> IResult
+        Results.Ok({| event = "tile-scores"; status = "ok"; message = "no tile data" |}) :> IResult
     else
         if Config.GameEvents.Contains "criterion-logging" then
             match ActionLog.currentBattleDir() with
@@ -178,29 +178,29 @@ let private handleTileScores (ctx: RouteContext) (root: JsonElement) =
         if maxAbs > 0f then
             let scales = ctx.Store.ReadOrDefault(gameScoreScale, Map.empty)
             ctx.Store.Write(gameScoreScale, scales |> Map.add payload.Actor maxAbs)
-        Results.Ok({| hook = "tile-scores"; status = "ok" |}) :> IResult
+        Results.Ok({| event = "tile-scores"; status = "ok" |}) :> IResult
 
 let private handleMovementFinished (ctx: RouteContext) (root: JsonElement) =
     let payload = parseMovementFinished root
-    logHook (sprintf "movement-finished  actor=%s  tile=(%d,%d)" payload.Actor payload.Tile.X payload.Tile.Z)
+    logEvent (sprintf "movement-finished  actor=%s  tile=(%d,%d)" payload.Actor payload.Tile.X payload.Tile.Z)
     ctx.EventBus.Push(MovementFinished(payload.Actor, payload.Tile.X, payload.Tile.Z))
     if Config.GameEvents.Contains "heatmaps" then
         RenderJobCollector.attachMoveDestination payload.Actor (ctx.Store.ReadOrDefault(currentRound, 0)) (toPos payload.Tile)
-    Results.Ok({| hook = "movement-finished"; status = "ok" |}) :> IResult
+    Results.Ok({| event = "movement-finished"; status = "ok" |}) :> IResult
 
 let private handleSceneChange (ctx: RouteContext) (root: JsonElement) =
     let scene = match root.TryGetProperty("scene") with | true, v -> v.GetString() |> Option.ofObj |> Option.defaultValue "" | _ -> ""
-    logHook (sprintf "scene-change  scene=%s" scene)
+    logEvent (sprintf "scene-change  scene=%s" scene)
     ctx.EventBus.Push(SceneChanged scene)
-    Results.Ok({| hook = "scene-change"; scene = scene |}) :> IResult
+    Results.Ok({| event = "scene-change"; scene = scene |}) :> IResult
 
 let private handlePreviewReady (ctx: RouteContext) (_root: JsonElement) =
-    logHook "preview-ready"
+    logEvent "preview-ready"
     ctx.EventBus.Push(PreviewReady)
-    Results.Ok({| hook = "preview-ready" |}) :> IResult
+    Results.Ok({| event = "preview-ready" |}) :> IResult
 
 let private handleTacticalReady (ctx: RouteContext) (root: JsonElement) =
-    logHook "tactical-ready"
+    logEvent "tactical-ready"
     try
         match root.TryGetProperty("dramatis_personae") with
         | true, dp ->
@@ -266,12 +266,12 @@ let private handleTacticalReady (ctx: RouteContext) (root: JsonElement) =
             // Run TacticalReady nodes (roaming init, etc.) — nodes compute initial modifiers
             let factionState : FactionState = { FactionIndex = 0; IsAlliedWithPlayer = false; Opponents = []; Actors = []; Round = 0 }
             let result = Walker.run ctx.Registry ctx.Store OnTacticalReady Prefix factionState logEngine
-            logHook (sprintf "  tactical-ready walk: %d ran, %d skipped, %.1fms" result.NodesRun result.NodesSkipped result.ElapsedMs)
+            logEvent (sprintf "  tactical-ready walk: %d ran, %d skipped, %.1fms" result.NodesRun result.NodesSkipped result.ElapsedMs)
             flushTileModifiersViaMessaging ctx.Store
         | _ -> ()
     with ex -> logWarn (sprintf "tactical-ready init error: %s" ex.Message)
     ctx.EventBus.Push(TacticalReady)
-    Results.Ok({| hook = "tactical-ready" |}) :> IResult
+    Results.Ok({| event = "tactical-ready" |}) :> IResult
 
 let private handleActorChanged (ctx: RouteContext) (root: JsonElement) =
     let actor = match root.TryGetProperty("actor") with | true, v -> v.GetString() |> Option.ofObj |> Option.defaultValue "" | _ -> ""
@@ -279,111 +279,111 @@ let private handleActorChanged (ctx: RouteContext) (root: JsonElement) =
     let round = match root.TryGetProperty("round") with | true, v -> v.GetInt32() | _ -> 0
     let x = match root.TryGetProperty("x") with | true, v -> v.GetInt32() | _ -> 0
     let z = match root.TryGetProperty("z") with | true, v -> v.GetInt32() | _ -> 0
-    logHook (sprintf "actor-changed  %s f=%d r=%d (%d,%d)" actor faction round x z)
+    logEvent (sprintf "actor-changed  %s f=%d r=%d (%d,%d)" actor faction round x z)
     ctx.EventBus.Push(ActiveActorChanged(actor, faction, round, x, z))
-    Results.Ok({| hook = "actor-changed"; actor = actor |}) :> IResult
+    Results.Ok({| event = "actor-changed"; actor = actor |}) :> IResult
 
 let private handleBattleStart (ctx: RouteContext) (root: JsonElement) =
     let payload = parseBattleStart root
     let dir = ActionLog.startBattle ctx.BattleReportsDir payload.SessionDir
     let versionJson = sprintf """{"engine":"%s","version":"%s","timestamp":"%s"}""" "BOAM Tactical Engine" ctx.Version (DateTime.UtcNow.ToString("o"))
     IO.File.WriteAllText(IO.Path.Combine(dir, "boam_version.json"), versionJson)
-    logHook (sprintf "battle-start  session=%s" (IO.Path.GetFileName(dir)))
+    logEvent (sprintf "battle-start  session=%s" (IO.Path.GetFileName(dir)))
     ctx.EventBus.Push(BattleStarted)
-    Results.Ok({| hook = "battle-start"; status = "ok"; battleDir = dir |}) :> IResult
+    Results.Ok({| event = "battle-start"; status = "ok"; battleDir = dir |}) :> IResult
 
 let private handleBattleEnd (ctx: RouteContext) (_root: JsonElement) =
     if Config.GameEvents.Contains "heatmaps" then
         RenderJobCollector.flushAll ActionLog.currentBattleDir ctx.BoamModDir ctx.IconBaseDir
     ctx.Store.ClearAll()
     ActionLog.endBattle ()
-    logHook "battle-end"
+    logEvent "battle-end"
     ctx.EventBus.Push(BattleEnded)
-    Results.Ok({| hook = "battle-end"; status = "ok" |}) :> IResult
+    Results.Ok({| event = "battle-end"; status = "ok" |}) :> IResult
 
 let private handleActionDecision (ctx: RouteContext) (root: JsonElement) =
     let payload = parseActionDecision root
-    logHook (sprintf "action-decision  round=%d  faction=%d  actor=%s  chosen=%s(%d)  alts=%d  candidates=%d"
+    logEvent (sprintf "action-decision  round=%d  faction=%d  actor=%s  chosen=%s(%d)  alts=%d  candidates=%d"
         payload.Round payload.Faction payload.Actor payload.Chosen.Name payload.Chosen.Score
         (List.length payload.Alternatives) (List.length payload.AttackCandidates))
     if Config.GameEvents.Contains "action-logging" && Config.GameEvents.Contains "decision-capture" then
         ActionLog.logActionDecision payload
     if Config.GameEvents.Contains "heatmaps" then
         RenderJobCollector.attachDecision (toRenderDecision payload)
-    Results.Ok({| hook = "action-decision"; status = "ok" |}) :> IResult
+    Results.Ok({| event = "action-decision"; status = "ok" |}) :> IResult
 
 let private handleCombatOutcome (_ctx: RouteContext) (root: JsonElement) =
     let payload = parseElementHit root
-    logHook (sprintf "element-hit  round=%d  %s → %s[%d]  skill=%s  dmg=%d  hp=%d  alive=%b"
+    logEvent (sprintf "element-hit  round=%d  %s → %s[%d]  skill=%s  dmg=%d  hp=%d  alive=%b"
         payload.Round payload.Attacker payload.Target payload.ElementIndex payload.Skill
         payload.Damage payload.ElementHpAfter payload.ElementAlive)
     if Config.GameEvents.Contains "action-logging" then
         ActionLog.logElementHit payload
-    Results.Ok({| hook = "combat-outcome"; status = "ok" |}) :> IResult
+    Results.Ok({| event = "combat-outcome"; status = "ok" |}) :> IResult
 
 let private handleAiAction (_ctx: RouteContext) (root: JsonElement) =
     let payload = parseAiAction root
-    logHook (sprintf "ai-action  round=%d  actor=%s  type=%s  skill=%s  tile=(%d,%d)"
+    logEvent (sprintf "ai-action  round=%d  actor=%s  type=%s  skill=%s  tile=(%d,%d)"
         payload.Round payload.Actor payload.ActionType payload.SkillName payload.Tile.X payload.Tile.Z)
     if Config.GameEvents.Contains "action-logging" then
         ActionLog.logAiAction payload
-    Results.Ok({| hook = "ai-action"; status = "ok" |}) :> IResult
+    Results.Ok({| event = "ai-action"; status = "ok" |}) :> IResult
 
 let private handlePlayerAction (ctx: RouteContext) (root: JsonElement) =
     let payload = parsePlayerAction root
-    logHook (sprintf "player-action  round=%d  actor=%s  type=%s  tile=(%d,%d)"
+    logEvent (sprintf "player-action  round=%d  actor=%s  type=%s  tile=(%d,%d)"
         payload.Round payload.Actor payload.ActionType payload.Tile.X payload.Tile.Z)
     if Config.GameEvents.Contains "action-logging" then
         ActionLog.logPlayerAction payload
     ctx.EventBus.Push(PlayerAction(payload.Round, payload.Actor, payload.ActionType, payload.Tile.X, payload.Tile.Z, payload.SkillName))
-    Results.Ok({| hook = "player-action"; status = "ok" |}) :> IResult
+    Results.Ok({| event = "player-action"; status = "ok" |}) :> IResult
 
 let private handleSkillComplete (_ctx: RouteContext) (root: JsonElement) =
-    let durationMs = HookPayload.tryInt root "durationMs" 0
-    let skill = HookPayload.tryStr root "skill" ""
-    let actor = HookPayload.tryStr root "actor" ""
-    logHook (sprintf "skill-complete  actor=%s  skill=%s  duration=%dms" actor skill durationMs)
+    let durationMs = EventPayload.tryInt root "durationMs" 0
+    let skill = EventPayload.tryStr root "skill" ""
+    let actor = EventPayload.tryStr root "actor" ""
+    logEvent (sprintf "skill-complete  actor=%s  skill=%s  duration=%dms" actor skill durationMs)
     if Config.GameEvents.Contains "action-logging" then
         ActionLog.amendLastPlayerActionDuration actor durationMs
-    Results.Ok({| hook = "skill-complete"; status = "ok" |}) :> IResult
-
-let private handleInvestigateEvent (ctx: RouteContext) (root: JsonElement) =
-    Nodes.InvestigateBehaviour.handleEvent ctx.Store root
-    Results.Ok({| hook = "investigate-event"; status = "ok" |}) :> IResult
+    Results.Ok({| event = "skill-complete"; status = "ok" |}) :> IResult
 
 // --- Registration ---
 
-let private hookDispatch = Collections.Generic.Dictionary<string, RouteContext -> JsonElement -> IResult>()
+let private eventDispatch = Collections.Generic.Dictionary<string, RouteContext -> JsonElement -> IResult>()
 
-let private registerHooks () =
-    hookDispatch.["on-turn-start"] <- handleOnTurnStart
-    hookDispatch.["on-turn-end"] <- handleOnTurnEnd
-    hookDispatch.["tile-scores"] <- handleTileScores
-    hookDispatch.["movement-finished"] <- handleMovementFinished
-    hookDispatch.["scene-change"] <- handleSceneChange
-    hookDispatch.["preview-ready"] <- handlePreviewReady
-    hookDispatch.["tactical-ready"] <- handleTacticalReady
-    hookDispatch.["actor-changed"] <- handleActorChanged
-    hookDispatch.["battle-start"] <- handleBattleStart
-    hookDispatch.["battle-end"] <- handleBattleEnd
-    hookDispatch.["action-decision"] <- handleActionDecision
-    hookDispatch.["combat-outcome"] <- handleCombatOutcome
-    hookDispatch.["ai-action"] <- handleAiAction
-    hookDispatch.["player-action"] <- handlePlayerAction
-    hookDispatch.["skill-complete"] <- handleSkillComplete
-    hookDispatch.["investigate-event"] <- handleInvestigateEvent
+let private registerEventHandlers () =
+    eventDispatch.["on-turn-start"] <- handleOnTurnStart
+    eventDispatch.["on-turn-end"] <- handleOnTurnEnd
+    eventDispatch.["tile-scores"] <- handleTileScores
+    eventDispatch.["movement-finished"] <- handleMovementFinished
+    eventDispatch.["scene-change"] <- handleSceneChange
+    eventDispatch.["preview-ready"] <- handlePreviewReady
+    eventDispatch.["tactical-ready"] <- handleTacticalReady
+    eventDispatch.["actor-changed"] <- handleActorChanged
+    eventDispatch.["battle-start"] <- handleBattleStart
+    eventDispatch.["battle-end"] <- handleBattleEnd
+    eventDispatch.["action-decision"] <- handleActionDecision
+    eventDispatch.["combat-outcome"] <- handleCombatOutcome
+    eventDispatch.["ai-action"] <- handleAiAction
+    eventDispatch.["player-action"] <- handlePlayerAction
+    eventDispatch.["skill-complete"] <- handleSkillComplete
+    // Merge node-registered handlers from EventHandlerRegistry
+    for eventName, nodeHandler in EventHandlerRegistry.getAll() do
+        eventDispatch.[eventName] <- fun ctx root ->
+            nodeHandler ctx.Store root
+            Results.Ok({| event = eventName; status = "ok" |}) :> IResult
 
-/// Register all hook handlers on the Messaging module. Call once at startup.
+/// Register all event handlers on the Messaging module. Call once at startup.
 let register (ctx: RouteContext) =
-    registerHooks ()
+    registerEventHandlers ()
 
-    Messaging.addCommandHandler "hook" (fun root ->
-        match root.TryGetProperty("hook") with
-        | false, _ -> Results.BadRequest({| error = "missing 'hook' field" |}) :> IResult
-        | true, hookProp ->
-            let hook = hookProp.GetString() |> Option.ofObj |> Option.defaultValue ""
-            match hookDispatch.TryGetValue(hook) with
-            | false, _ -> Results.BadRequest({| error = "unknown hook"; hook = hook |}) :> IResult
+    Messaging.addCommandHandler "event" (fun root ->
+        match root.TryGetProperty("event") with
+        | false, _ -> Results.BadRequest({| error = "missing 'event' field" |}) :> IResult
+        | true, eventProp ->
+            let eventName = eventProp.GetString() |> Option.ofObj |> Option.defaultValue ""
+            match eventDispatch.TryGetValue(eventName) with
+            | false, _ -> Results.BadRequest({| error = "unknown event"; event = eventName |}) :> IResult
             | true, handler -> handler ctx root)
 
-    logInfo (sprintf "Registered %d hook handlers via messaging protocol" hookDispatch.Count)
+    logInfo (sprintf "Registered %d event handlers via messaging protocol" eventDispatch.Count)

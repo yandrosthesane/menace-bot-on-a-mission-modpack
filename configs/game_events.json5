@@ -7,7 +7,7 @@
 // Remove an entry from "active" to disable it.
 // Move an entry from "inactive" to "active" to enable it.
 {
-  "configVersion": 6,
+  "configVersion": 7,
 
   // ── Features ──
   // Each feature activates its required events automatically.
@@ -81,10 +81,10 @@
     "combat-logging"
   ],
 
-  // ── Enrichment Hooks ──
+  // ── Enrichments ──
   // Events that enrich a host event's data before it is sent.
   // Order in the list = execution order.
-  "hooks": {
+  "enrichments": {
     "on-turn-start": [],
     "on-turn-end": ["contact-state", "movement-budget"],
     "movement-finished": [],

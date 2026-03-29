@@ -8,12 +8,12 @@ using static BOAM.TacticalMap.JsonHelper;
 namespace BOAM.Boundary;
 
 /// <summary>
-/// Static flags per game event + enrichment hook chains, read from game_events.json5.
+/// Static flags per game event + enrichment chains, read from game_events.json5.
 /// </summary>
 internal static class GameEvents
 {
-    // Enrichment hooks: host event name → ordered list of enrichment event names
-    internal static Dictionary<string, List<string>> Hooks = new();
+    // Enrichments: host event name → ordered list of enrichment event names
+    internal static Dictionary<string, List<string>> Enrichments = new();
 
     // Feature → required events mapping
     private static readonly Dictionary<string, string[]> FeatureDeps = new()
@@ -143,18 +143,18 @@ internal static class GameEvents
                     Activate(m.Groups[1].Value);
             }
 
-            // Parse enrichment hooks
-            Hooks.Clear();
-            var hooksObj = ReadObject(json, "hooks");
-            if (hooksObj != null)
+            // Parse enrichment chains
+            Enrichments.Clear();
+            var enrichObj = ReadObject(json, "enrichments");
+            if (enrichObj != null)
             {
-                foreach (Match hm in Regex.Matches(hooksObj, "\"([^\"]+)\"\\s*:\\s*\\[([^\\]]*)\\]"))
+                foreach (Match hm in Regex.Matches(enrichObj, "\"([^\"]+)\"\\s*:\\s*\\[([^\\]]*)\\]"))
                 {
                     var hostName = hm.Groups[1].Value;
                     var enrichments = new List<string>();
                     foreach (Match em in Regex.Matches(hm.Groups[2].Value, "\"([^\"]+)\""))
                         enrichments.Add(em.Groups[1].Value);
-                    Hooks[hostName] = enrichments;
+                    Enrichments[hostName] = enrichments;
                 }
             }
 

@@ -21,7 +21,7 @@ namespace BOAM;
 
 /// <summary>
 /// Thin C# bridge plugin — calls the BOAM Tactical Engine over HTTP
-/// at game hook checkpoints and applies the returned modifications.
+/// at game event checkpoints and applies the returned modifications.
 /// </summary>
 public class BoamBridge : IModpackPlugin
 {
@@ -43,7 +43,7 @@ public class BoamBridge : IModpackPlugin
     /// <summary>Tactical scene is loaded and initialized (minimap, unit registry).</summary>
     public bool IsTacticalReady => _ready;
 
-    /// <summary>Tactical scene ready AND engine is connected (for hooks that POST to the engine).</summary>
+    /// <summary>Tactical scene ready AND engine is connected (for events that POST to the engine).</summary>
     public bool IsEngineReady => _ready && _engineAvailable;
     private QueryCommandServer _commandServer;
     private readonly System.Collections.Concurrent.ConcurrentQueue<BridgeServer.ActionCommand> _executeQueue = new();
@@ -110,8 +110,8 @@ public class BoamBridge : IModpackPlugin
         // Load modpack config (independent from engine)
         var modFolder = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Mods", "BOAM");
         Boundary.GameEvents.Init(modFolder, Logger);
-        GameEvents.OnTurnEndEvent.InitHooks();
-        GameEvents.TileScoresEvent.InitHooks();
+        GameEvents.OnTurnEndEvent.InitEnrichments();
+        GameEvents.TileScoresEvent.InitEnrichments();
 
         // Initialize tactical map overlay
         _tacticalMap = new TacticalMap.TacticalMapOverlay();
@@ -142,7 +142,7 @@ public class BoamBridge : IModpackPlugin
             _inTactical = true;
             _initDelay = 60;
             _ready = false;
-            // battle-start hook fires later at tactical-ready, after preview data is copied
+            // battle-start event fires later at tactical-ready, after preview data is copied
         }
         else
         {
@@ -167,7 +167,7 @@ public class BoamBridge : IModpackPlugin
         {
             if (_initDelay > 0) { _initDelay--; return; }
             _ready = true;
-            Logger.Msg("[BOAM] Tactical ready, engine hooks active");
+            Logger.Msg("[BOAM] Tactical ready, engine events active");
             // BuildDramatisPersonae must run first — it registers actor UUIDs
             var dp = ActorRegistry.BuildDramatisPersonae(Logger);
             GameEvents.MinimapUnitsEvent.PopulateInitial(Round);
@@ -227,7 +227,7 @@ public class BoamBridge : IModpackPlugin
                 Thread.Sleep(retryDelayMs);
         }
 
-        Logger.Warning("[BOAM] Tactical engine not available — AI hooks will be no-ops");
+        Logger.Warning("[BOAM] Tactical engine not available — AI events will be no-ops");
     }
 
 

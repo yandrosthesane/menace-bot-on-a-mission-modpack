@@ -9,6 +9,7 @@ open BOAM.TacticalEngine.GameTypes
 open BOAM.TacticalEngine.NodeContext
 open BOAM.TacticalEngine.Node
 open BOAM.TacticalEngine.Keys
+open BOAM.TacticalEngine.Catalogue
 open BOAM.TacticalEngine.Config
 
 type RoamingConfig = { BaseUtility: float32; UtilityFraction: float32; EngagementRadius: float32 }
@@ -122,4 +123,7 @@ let node : NodeDef = {
 
         ctx |> NodeContext.write tileModifiers modifiers
 }
+
+do register initNode
+do register node
 

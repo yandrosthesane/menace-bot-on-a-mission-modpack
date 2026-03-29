@@ -22,10 +22,10 @@ static class OnTurnEndEvent
         ["movement-budget"] = (go, a, e, v, f, p) => MovementBudgetEvent.Enrich(a, e, p),
     };
 
-    internal static void InitHooks()
+    internal static void InitEnrichments()
     {
         _enrichments.Clear();
-        if (Boundary.GameEvents.Hooks.TryGetValue("on-turn-end", out var names))
+        if (Boundary.GameEvents.Enrichments.TryGetValue("on-turn-end", out var names))
         {
             foreach (var name in names)
                 if (_enrichmentRegistry.TryGetValue(name, out var cb))
@@ -117,7 +117,7 @@ static class OnTurnEndEvent
 
             var turnEndPayload = JsonSerializer.Serialize(turnEndData);
             TileModifiersEvent.SetPending();
-            ThreadPool.QueueUserWorkItem(_ => QueryCommandClient.Hook("on-turn-end", turnEndPayload));
+            ThreadPool.QueueUserWorkItem(_ => QueryCommandClient.SendEvent("on-turn-end", turnEndPayload));
 
             // AI action logging (AI factions only)
             ActionLoggingEvent.LogAiEndTurn(round, factionId, actorUuid, tileX, tileZ);

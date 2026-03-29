@@ -29,14 +29,13 @@ static class Patch_OnTurnStart
 
             var payload = JsonSerializer.Serialize(new
             {
-                hook = "on-turn-start",
                 round,
                 faction = factionIdx,
                 opponentCount,
                 opponents = oppList
             });
 
-            var response = QueryCommandClient.Hook("on-turn-start", payload);
+            var response = QueryCommandClient.SendEvent("on-turn-start", payload);
             if (response != null)
                 BoamBridge.Logger.Msg($"[BOAM] on-turn-start f{factionIdx} r{round}: {oppList.Count} opponents");
         }

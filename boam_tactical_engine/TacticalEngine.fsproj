@@ -23,7 +23,7 @@
     <Compile Include="Boundary/Config.fs" />
     <Compile Include="Boundary/Logging.fs" />
     <Compile Include="Boundary/ActionLog.fs" />
-    <Compile Include="Boundary/HookPayload.fs" />
+    <Compile Include="Boundary/EventPayload.fs" />
     <Compile Include="Boundary/EventBus.fs" />
     <Compile Include="Boundary/MessagingClient.fs" />
     <Compile Include="Boundary/Messaging.fs" />
@@ -36,6 +36,7 @@
     <Compile Include="NodeSystem/Registry.fs" />
     <Compile Include="NodeSystem/Catalogue.fs" />
     <Compile Include="NodeSystem/Walker.fs" />
+    <Compile Include="NodeSystem/EventHandlerRegistry.fs" />
 
     <!-- Heatmaps: rendering pipeline -->
     <Compile Include="Heatmaps/Types.fs" />
@@ -55,8 +56,8 @@
 
     <!-- System/utility routes + RouteContext -->
     <Compile Include="Routes.fs" />
-    <!-- Hook dispatch via symmetric protocol -->
-    <Compile Include="Boundary/HookHandlers.fs" />
+    <!-- Game event dispatch via symmetric protocol -->
+    <Compile Include="Boundary/EventHandlers.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 

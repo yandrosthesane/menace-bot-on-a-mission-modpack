@@ -7,6 +7,7 @@ open BOAM.TacticalEngine.GameTypes
 open BOAM.TacticalEngine.NodeContext
 open BOAM.TacticalEngine.Node
 open BOAM.TacticalEngine.Keys
+open BOAM.TacticalEngine.Catalogue
 open BOAM.TacticalEngine.Config
 
 type GuardVipConfig = { Radius: float32; BaseSafety: float32; SafetyFraction: float32; Weight: float32 }
@@ -96,3 +97,5 @@ let node : NodeDef = {
 
                     ctx |> NodeContext.write tileModifiers (existing |> Map.add a.Actor updatedTiles)
 }
+
+do register node

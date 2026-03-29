@@ -11,7 +11,7 @@ open BOAM.TacticalEngine.Registry
 open BOAM.TacticalEngine.StateStore
 open BOAM.TacticalEngine.EventBus
 open BOAM.TacticalEngine.Logging
-open BOAM.TacticalEngine.HookPayload
+open BOAM.TacticalEngine.EventPayload
 open BOAM.TacticalEngine.HeatmapRenderer
 open BOAM.TacticalEngine.HeatmapTypes
 open BOAM.TacticalEngine.Routes
@@ -154,8 +154,9 @@ let main argv =
     if isActive ["guard-vip-behaviour"] then
         printfn "    GuardVip:   r=%.0f safety=%.0f sFrac=%.1f weight=%.1f"
             gc.Radius gc.BaseSafety gc.SafetyFraction gc.Weight
+    let ic = Nodes.InvestigateBehaviour.cfg
     if isActive ["investigate-behaviour"] then
-        printfn "    Investigate: active"
+        printfn "    Investigate: base=%.0f utilFrac=%.1f ttl=%d" ic.BaseUtility ic.UtilityFraction ic.Ttl
     printfn "  %s" (dim "─────────────────────────────────")
     printfn ""
 
@@ -163,14 +164,8 @@ let main argv =
     let registry = Registry()
     let store = StateStore()
 
-    // Register all nodes in the catalogue
-    Catalogue.register Nodes.RoamingBehaviour.initNode
-    Catalogue.register Nodes.RoamingBehaviour.node
-    Catalogue.register Nodes.RepositionBehaviour.node
-    Catalogue.register Nodes.PackBehaviour.initNode
-    Catalogue.register Nodes.PackBehaviour.node
-    Catalogue.register Nodes.GuardVipBehaviour.node
-    Catalogue.register Nodes.InvestigateBehaviour.node
+    // Nodes self-register via `do Catalogue.register` in their module init.
+    // Module init is triggered by the banner cfg access above.
 
     // Config-driven registration: hooks section defines which nodes run on which hook, in order
     for kv in b.Hooks do
@@ -216,23 +211,23 @@ let main argv =
             try
                 let jobJson = IO.File.ReadAllText(jobPath)
                 let job = System.Text.Json.JsonDocument.Parse(jobJson).RootElement
-                let tiles = HookPayload.tryArray job "tiles" (fun el ->
+                let tiles = EventPayload.tryArray job "tiles" (fun el ->
                     { X = el.GetProperty("x").GetInt32(); Z = el.GetProperty("z").GetInt32()
                       Combined = el.GetProperty("combined").GetSingle() } : TileScore)
-                let units = HookPayload.tryArray job "units" (fun el ->
+                let units = EventPayload.tryArray job "units" (fun el ->
                     { Faction = el.GetProperty("faction").GetInt32()
                       X = el.GetProperty("x").GetInt32(); Z = el.GetProperty("z").GetInt32()
-                      Actor = HookPayload.tryStr el "actor" ""
-                      Name = HookPayload.tryStr el "name" ""
-                      Leader = HookPayload.tryStr el "leader" "" } : RenderUnit)
-                let actorPos = HookPayload.parseOptionalTilePos job "actorPosition" |> Option.map (fun p -> { X = p.X; Z = p.Z } : Pos)
-                let moveDest = HookPayload.parseOptionalTilePos job "moveDestination" |> Option.map (fun p -> { X = p.X; Z = p.Z } : Pos)
-                let faction = HookPayload.tryInt job "faction" 0
-                let visionRange = HookPayload.tryInt job "visionRange" 0
-                let actor = HookPayload.tryStr job "actor" ""
-                let bgPath = HookPayload.tryStr job "mapBgPath" ""
-                let infoPath = HookPayload.tryStr job "mapInfoPath" ""
-                let iconDir = HookPayload.tryStr job "iconBaseDir" iconBaseDir
+                      Actor = EventPayload.tryStr el "actor" ""
+                      Name = EventPayload.tryStr el "name" ""
+                      Leader = EventPayload.tryStr el "leader" "" } : RenderUnit)
+                let actorPos = EventPayload.parseOptionalTilePos job "actorPosition" |> Option.map (fun p -> { X = p.X; Z = p.Z } : Pos)
+                let moveDest = EventPayload.parseOptionalTilePos job "moveDestination" |> Option.map (fun p -> { X = p.X; Z = p.Z } : Pos)
+                let faction = EventPayload.tryInt job "faction" 0
+                let visionRange = EventPayload.tryInt job "visionRange" 0
+                let actor = EventPayload.tryStr job "actor" ""
+                let bgPath = EventPayload.tryStr job "mapBgPath" ""
+                let infoPath = EventPayload.tryStr job "mapInfoPath" ""
+                let iconDir = EventPayload.tryStr job "iconBaseDir" iconBaseDir
                 let label = IO.Path.GetFileNameWithoutExtension(jobPath)
                 let outPath = HeatmapRenderer.renderFromPaths bgPath infoPath tiles actorPos units faction iconDir heatmapDir label actor visionRange moveDest
                 logEngine (sprintf "  %s" (IO.Path.GetFileName(outPath)))
@@ -281,7 +276,7 @@ let main argv =
             criterionLogging = Config.GameEvents.Contains "criterion-logging"
         |}) :> Microsoft.AspNetCore.Http.IResult)
 
-    HookHandlers.register routeCtx
+    EventHandlers.register routeCtx
     Messaging.registerRoutes app
 
     let listenUrl = sprintf "http://127.0.0.1:%d" port
