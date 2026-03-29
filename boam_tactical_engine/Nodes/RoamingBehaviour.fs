@@ -4,13 +4,31 @@
 /// Zeros tiles when near engagement so reposition + pack can drive movement.
 module BOAM.TacticalEngine.Nodes.RoamingBehaviour
 
+open System.Text.Json
 open BOAM.TacticalEngine.GameTypes
 open BOAM.TacticalEngine.NodeContext
 open BOAM.TacticalEngine.Node
 open BOAM.TacticalEngine.Keys
 open BOAM.TacticalEngine.Config
 
-let private cfg () = Behaviour.Roaming
+type RoamingConfig = { BaseUtility: float32; UtilityFraction: float32; EngagementRadius: float32 }
+
+let private defaultCfg = { BaseUtility = 100f; UtilityFraction = 1.0f; EngagementRadius = 20f }
+
+let private loadCfg () =
+    match Behaviour.Root with
+    | Some root ->
+        let active = activePreset root "roaming"
+        match root.TryGetProperty("roaming") with
+        | true, presets ->
+            pickPreset presets active (fun el ->
+                { BaseUtility = readFloat el "baseUtility" defaultCfg.BaseUtility
+                  UtilityFraction = readFloat el "utilityFraction" defaultCfg.UtilityFraction
+                  EngagementRadius = readFloat el "engagementRadius" defaultCfg.EngagementRadius }) defaultCfg
+        | _ -> defaultCfg
+    | None -> defaultCfg
+
+let cfg = loadCfg ()
 let private mapSize = 42
 
 /// Compute per-tile utility for an actor: utility scales with distance, gated by AP budget.
@@ -28,14 +46,13 @@ let computeTileModifiers (pos: TilePos) (maxDist: int) (baseUtility: float32) : 
 
 /// Get the base utility for an actor — max of config default and game-scaled value.
 let getBaseUtility (actorId: string) (scales: Map<string, float32>) =
-    let c = cfg ()
     match Map.tryFind actorId scales with
-    | Some maxScore -> max c.BaseUtility (maxScore * c.UtilityFraction)
-    | None -> c.BaseUtility
+    | Some maxScore -> max cfg.BaseUtility (maxScore * cfg.UtilityFraction)
+    | None -> cfg.BaseUtility
 
 /// Check if any same-faction ally within radius is engaged.
 let private isNearEngagement (actorPos: TilePos) (actorFaction: int) (positions: Map<string, ActorPosState>) =
-    let r = (cfg ()).EngagementRadius
+    let r = cfg.EngagementRadius
     positions |> Map.exists (fun _ state ->
         state.Faction = actorFaction && state.InRange && state.InContact &&
         (let dx = float32 (state.Position.X - actorPos.X)
@@ -66,7 +83,7 @@ let initNode : NodeDef = {
         let actors = ctx |> NodeContext.readOrDefault aiActors [||]
         let positions = ctx |> NodeContext.readOrDefault actorPositions Map.empty
         let staticData = ctx |> NodeContext.readOrDefault actorStaticData Map.empty
-        let baseUtil = (cfg ()).BaseUtility
+        let baseUtil = (cfg).BaseUtility
         let mutable modifiers = Map.empty
 
         for actorId in actors do

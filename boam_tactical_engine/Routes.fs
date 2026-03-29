@@ -46,10 +46,10 @@ let registerRoutes (app: WebApplication) (ctx: RouteContext) =
             status = "ready"
             uptime = (DateTime.UtcNow - ctx.StartTime).TotalSeconds
             features = {|
-                heatmaps = Config.GameEvents.Contains "tile-scores"
+                heatmaps = Config.GameEvents.Contains "heatmaps"
                 actionLogging = Config.GameEvents.Contains "action-logging"
                 aiLogging = Config.GameEvents.Contains "decision-capture"
-                criterionLogging = Config.GameEvents.Contains "tile-scores"
+                criterionLogging = Config.GameEvents.Contains "criterion-logging"
             |}
         |})
     )) |> ignore

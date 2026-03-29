@@ -27,34 +27,6 @@ type TacticalEngineConfig = {
 
 // --- Behaviour config (separate file: behaviour.json5) ---
 
-type RoamingPreset = {
-    BaseUtility: float32
-    UtilityFraction: float32
-    EngagementRadius: float32
-}
-type RepositionPreset = {
-    MaxUtilityByAttacks: float32
-    UtilityByAttacksFraction: float32
-    ApproachBias: float32
-}
-type GuardVipPreset = {
-    Radius: float32
-    BaseSafety: float32
-    SafetyFraction: float32
-    Weight: float32
-}
-type PackPreset = {
-    Radius: float32
-    Peak: float32
-    BaseSafety: float32
-    SafetyFraction: float32
-    CrowdPenalty: float32
-    AnchoredWeight: float32
-    UnactedWeight: float32
-    ContactBonus: float32
-    InitMultiplier: float32
-}
-
 let private parseBorder (el: JsonElement) : BorderConfig =
     let color = el.GetProperty("color")
     { Margin = el.GetProperty("margin").GetInt32()
@@ -210,67 +182,25 @@ let Current = load ()
 
 // --- Behaviour presets (behaviour.json5) ---
 
-let private defaultRoaming : RoamingPreset = {
-    BaseUtility = 100f; UtilityFraction = 1.0f; EngagementRadius = 20f
-}
-let private defaultReposition : RepositionPreset = {
-    MaxUtilityByAttacks = 600f; UtilityByAttacksFraction = 2.0f; ApproachBias = 0.5f
-}
-let private defaultGuardVip : GuardVipPreset = {
-    Radius = 15f; BaseSafety = 400f; SafetyFraction = 1.5f; Weight = 2.0f
-}
-let private defaultPack : PackPreset = {
-    Radius = 20f; Peak = 4.0f; BaseSafety = 560f; SafetyFraction = 1.2f
-    CrowdPenalty = 120f; AnchoredWeight = 1.0f; UnactedWeight = 0.3f
-    ContactBonus = 1.5f; InitMultiplier = 3.0f
-}
-
-let private tryFloat (el: JsonElement) (key: string) (fallback: float32) =
+/// Read a float from a JSON element with fallback.
+let readFloat (el: JsonElement) (key: string) (fallback: float32) =
     match el.TryGetProperty(key) with | true, v -> v.GetSingle() | _ -> fallback
 
-let private parseRoaming (el: JsonElement) (defaults: RoamingPreset) : RoamingPreset = {
-    BaseUtility = tryFloat el "baseUtility" defaults.BaseUtility
-    UtilityFraction = tryFloat el "utilityFraction" defaults.UtilityFraction
-    EngagementRadius = tryFloat el "engagementRadius" defaults.EngagementRadius
-}
-
-let private parseGuardVip (el: JsonElement) (defaults: GuardVipPreset) : GuardVipPreset = {
-    Radius = tryFloat el "radius" defaults.Radius
-    BaseSafety = tryFloat el "baseSafety" defaults.BaseSafety
-    SafetyFraction = tryFloat el "safetyFraction" defaults.SafetyFraction
-    Weight = tryFloat el "weight" defaults.Weight
-}
-
-let private parseReposition (el: JsonElement) (defaults: RepositionPreset) : RepositionPreset = {
-    MaxUtilityByAttacks = tryFloat el "maxUtilityByAttacks" defaults.MaxUtilityByAttacks
-    UtilityByAttacksFraction = tryFloat el "utilityByAttacksFraction" defaults.UtilityByAttacksFraction
-    ApproachBias = tryFloat el "approachBias" defaults.ApproachBias
-}
-
-let private parsePack (el: JsonElement) (defaults: PackPreset) : PackPreset = {
-    Radius = tryFloat el "radius" defaults.Radius
-    Peak = tryFloat el "peak" defaults.Peak
-    BaseSafety = tryFloat el "baseSafety" defaults.BaseSafety
-    SafetyFraction = tryFloat el "safetyFraction" defaults.SafetyFraction
-    CrowdPenalty = tryFloat el "crowdPenalty" defaults.CrowdPenalty
-    AnchoredWeight = tryFloat el "anchoredWeight" defaults.AnchoredWeight
-    UnactedWeight = tryFloat el "unactedWeight" defaults.UnactedWeight
-    ContactBonus = tryFloat el "contactBonus" defaults.ContactBonus
-    InitMultiplier = tryFloat el "initMultiplier" defaults.InitMultiplier
-}
-
 /// Pick a preset by name from a presets object, falling back to defaults.
-let private pickPreset (presets: JsonElement) (name: string) (parse: JsonElement -> 'a) (defaults: 'a) =
+let pickPreset (presets: JsonElement) (name: string) (parse: JsonElement -> 'a) (defaults: 'a) =
     match presets.TryGetProperty(name) with
     | true, el -> parse el
     | _ -> defaults
 
+/// Read the active preset name for a behaviour section.
+let activePreset (root: JsonElement) (section: string) =
+    match root.TryGetProperty("active") with
+    | true, a -> match a.TryGetProperty(section) with | true, v -> v.GetString() | _ -> "default"
+    | _ -> "default"
+
 type BehaviourConfig = {
-    Hooks: Map<string, string list>  // hook point name → ordered list of node names
-    Roaming: RoamingPreset
-    Reposition: RepositionPreset
-    Pack: PackPreset
-    GuardVip: GuardVipPreset
+    Hooks: Map<string, string list>
+    Root: JsonElement option
 }
 
 let mutable BehaviourSource : ConfigSource = { Path = ""; Label = ""; Version = 0 }
@@ -318,19 +248,12 @@ let private loadBehaviour () : BehaviourConfig =
     ]
 
     if configPath = "" then
-        { Hooks = defaultHooks; Roaming = defaultRoaming; Reposition = defaultReposition; Pack = defaultPack; GuardVip = defaultGuardVip }
+        { Hooks = defaultHooks; Root = None }
     else
         let json = stripComments (File.ReadAllText(configPath))
         let doc = JsonDocument.Parse(json)
         let root = doc.RootElement
 
-        // Read active preset names
-        let activeRoaming = match root.TryGetProperty("active") with | true, a -> match a.TryGetProperty("roaming") with | true, v -> v.GetString() | _ -> "default" | _ -> "default"
-        let activeReposition = match root.TryGetProperty("active") with | true, a -> match a.TryGetProperty("reposition") with | true, v -> v.GetString() | _ -> "default" | _ -> "default"
-        let activePack = match root.TryGetProperty("active") with | true, a -> match a.TryGetProperty("pack") with | true, v -> v.GetString() | _ -> "default" | _ -> "default"
-        let activeGuardVip = match root.TryGetProperty("active") with | true, a -> match a.TryGetProperty("guard-vip") with | true, v -> v.GetString() | _ -> "default" | _ -> "default"
-
-        // Parse hook chains
         let hooks =
             match root.TryGetProperty("hooks") with
             | true, hooksEl ->
@@ -339,25 +262,7 @@ let private loadBehaviour () : BehaviourConfig =
                 |> Map.ofList
             | _ -> defaultHooks
 
-        let roaming =
-            match root.TryGetProperty("roaming") with
-            | true, presets -> pickPreset presets activeRoaming (fun el -> parseRoaming el defaultRoaming) defaultRoaming
-            | _ -> defaultRoaming
-        let reposition =
-            match root.TryGetProperty("reposition") with
-            | true, presets -> pickPreset presets activeReposition (fun el -> parseReposition el defaultReposition) defaultReposition
-            | _ -> defaultReposition
-        let pack =
-            match root.TryGetProperty("pack") with
-            | true, presets -> pickPreset presets activePack (fun el -> parsePack el defaultPack) defaultPack
-            | _ -> defaultPack
-
-        let guard =
-            match root.TryGetProperty("guard-vip") with
-            | true, presets -> pickPreset presets activeGuardVip (fun el -> parseGuardVip el defaultGuardVip) defaultGuardVip
-            | _ -> defaultGuardVip
-
-        { Hooks = hooks; Roaming = roaming; Reposition = reposition; Pack = pack; GuardVip = guard }
+        { Hooks = hooks; Root = Some root }
 
 /// Singleton behaviour config.
 let Behaviour = loadBehaviour ()

@@ -42,7 +42,7 @@ let private toRenderDecision (p: ActionDecisionPayload) : RenderDecision =
       Alternatives = p.Alternatives |> List.map (fun a -> { BehaviorId = a.BehaviorId; Name = a.Name; Score = a.Score } : HeatmapTypes.BehaviorScore)
       AttackCandidates = p.AttackCandidates |> List.map (fun c -> { Position = toPos c.Position; Score = c.Score } : AttackOption) }
 
-let mutable private currentRound = 0
+// currentRound now lives in StateStore via Keys.currentRound
 
 // --- Flush tile modifiers via new messaging protocol ---
 
@@ -82,9 +82,9 @@ let private handleOnTurnStart (ctx: RouteContext) (root: JsonElement) =
     let factionState = parseOnTurnStart root
     logHook (sprintf "on-turn-start  faction=%d  opponents=%d  round=%d"
         factionState.FactionIndex (List.length factionState.Opponents) factionState.Round)
-    if Config.GameEvents.Contains "tile-scores" then
+    if Config.GameEvents.Contains "heatmaps" then
         RenderJobCollector.onRoundChange ActionLog.currentBattleDir factionState.Round ctx.BoamModDir ctx.IconBaseDir
-    currentRound <- factionState.Round
+    ctx.Store.Write(currentRound, factionState.Round)
     let opponentPositions = factionState.Opponents |> List.map (fun o -> o.Position)
     ctx.Store.Write(knownOpponents, opponentPositions)
     ctx.Store.Write(lastFactionState, factionState)
@@ -116,7 +116,7 @@ let private parseActorStatus (root: JsonElement) actor faction tileX tileZ (stat
       CostPerTile = match root.TryGetProperty("costPerTile") with | true, v -> v.GetInt32() | _ -> 16 }
 
 let private handleOnTurnEnd (ctx: RouteContext) (root: JsonElement) =
-    let round = match root.TryGetProperty("round") with | true, v -> v.GetInt32() | _ -> currentRound
+    let round = match root.TryGetProperty("round") with | true, v -> v.GetInt32() | _ -> ctx.Store.ReadOrDefault(currentRound, 0)
     let faction = match root.TryGetProperty("faction") with | true, v -> v.GetInt32() | _ -> 0
     let actor = match root.TryGetProperty("actor") with | true, v -> v.GetString() | _ -> ""
     let tileX = match root.TryGetProperty("tile") with | true, t -> match t.TryGetProperty("x") with | true, v -> v.GetInt32() | _ -> 0 | _ -> 0
@@ -157,7 +157,7 @@ let private handleTileScores (ctx: RouteContext) (root: JsonElement) =
     if List.isEmpty payload.Tiles then
         Results.Ok({| hook = "tile-scores"; status = "ok"; message = "no tile data" |}) :> IResult
     else
-        if Config.GameEvents.Contains "tile-scores" then
+        if Config.GameEvents.Contains "criterion-logging" then
             match ActionLog.currentBattleDir() with
             | Some dir ->
                 let entry = JsonSerializer.Serialize({|
@@ -171,7 +171,7 @@ let private handleTileScores (ctx: RouteContext) (root: JsonElement) =
                 |})
                 IO.File.AppendAllText(IO.Path.Combine(dir, "criterion_scores.jsonl"), entry + "\n")
             | None -> ()
-        if Config.GameEvents.Contains "tile-scores" then
+        if Config.GameEvents.Contains "heatmaps" then
             RenderJobCollector.accumulate (toTileScoreInput payload)
         // Track max absolute Combined score per actor for scaling modifiers
         let maxAbs = payload.Tiles |> List.map (fun t -> abs t.Combined) |> List.fold max 0f
@@ -184,8 +184,8 @@ let private handleMovementFinished (ctx: RouteContext) (root: JsonElement) =
     let payload = parseMovementFinished root
     logHook (sprintf "movement-finished  actor=%s  tile=(%d,%d)" payload.Actor payload.Tile.X payload.Tile.Z)
     ctx.EventBus.Push(MovementFinished(payload.Actor, payload.Tile.X, payload.Tile.Z))
-    if Config.GameEvents.Contains "tile-scores" then
-        RenderJobCollector.attachMoveDestination payload.Actor currentRound (toPos payload.Tile)
+    if Config.GameEvents.Contains "heatmaps" then
+        RenderJobCollector.attachMoveDestination payload.Actor (ctx.Store.ReadOrDefault(currentRound, 0)) (toPos payload.Tile)
     Results.Ok({| hook = "movement-finished"; status = "ok" |}) :> IResult
 
 let private handleSceneChange (ctx: RouteContext) (root: JsonElement) =
@@ -293,9 +293,8 @@ let private handleBattleStart (ctx: RouteContext) (root: JsonElement) =
     Results.Ok({| hook = "battle-start"; status = "ok"; battleDir = dir |}) :> IResult
 
 let private handleBattleEnd (ctx: RouteContext) (_root: JsonElement) =
-    if Config.GameEvents.Contains "tile-scores" then
+    if Config.GameEvents.Contains "heatmaps" then
         RenderJobCollector.flushAll ActionLog.currentBattleDir ctx.BoamModDir ctx.IconBaseDir
-    currentRound <- 0
     ctx.Store.ClearAll()
     ActionLog.endBattle ()
     logHook "battle-end"
@@ -309,7 +308,7 @@ let private handleActionDecision (ctx: RouteContext) (root: JsonElement) =
         (List.length payload.Alternatives) (List.length payload.AttackCandidates))
     if Config.GameEvents.Contains "action-logging" && Config.GameEvents.Contains "decision-capture" then
         ActionLog.logActionDecision payload
-    if Config.GameEvents.Contains "tile-scores" then
+    if Config.GameEvents.Contains "heatmaps" then
         RenderJobCollector.attachDecision (toRenderDecision payload)
     Results.Ok({| hook = "action-decision"; status = "ok" |}) :> IResult
 
@@ -348,6 +347,10 @@ let private handleSkillComplete (_ctx: RouteContext) (root: JsonElement) =
         ActionLog.amendLastPlayerActionDuration actor durationMs
     Results.Ok({| hook = "skill-complete"; status = "ok" |}) :> IResult
 
+let private handleInvestigateEvent (ctx: RouteContext) (root: JsonElement) =
+    Nodes.InvestigateBehaviour.handleEvent ctx.Store root
+    Results.Ok({| hook = "investigate-event"; status = "ok" |}) :> IResult
+
 // --- Registration ---
 
 let private hookDispatch = Collections.Generic.Dictionary<string, RouteContext -> JsonElement -> IResult>()
@@ -368,6 +371,7 @@ let private registerHooks () =
     hookDispatch.["ai-action"] <- handleAiAction
     hookDispatch.["player-action"] <- handlePlayerAction
     hookDispatch.["skill-complete"] <- handleSkillComplete
+    hookDispatch.["investigate-event"] <- handleInvestigateEvent
 
 /// Register all hook handlers on the Messaging module. Call once at startup.
 let register (ctx: RouteContext) =

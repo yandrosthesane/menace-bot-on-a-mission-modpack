@@ -168,8 +168,15 @@ internal static class ActorRegistry
                         {
                             var skill = attacks[si];
                             if (skill != null)
-                                skillList.Add(new { name = skill.GetID() ?? "", apCost = skill.GetActionPointCost(),
-                                    minRange = skill.GetMinRange(), maxRange = skill.GetMaxRange(), idealRange = skill.GetIdealRange() });
+                            {
+                                var sName = skill.GetID() ?? "";
+                                var sAp = skill.GetActionPointCost();
+                                var sMin = skill.GetMinRange();
+                                var sMax = skill.GetMaxRange();
+                                var sIdeal = skill.GetIdealRange();
+                                log.Msg($"[BOAM]   {uuid} skill '{sName}' ap={sAp} range={sMin}-{sMax} ideal={sIdeal}");
+                                skillList.Add(new { name = sName, apCost = sAp, minRange = sMin, maxRange = sMax, idealRange = sIdeal });
+                            }
                         }
                 }
                 catch { }

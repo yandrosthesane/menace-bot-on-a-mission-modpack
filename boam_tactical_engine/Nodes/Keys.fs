@@ -31,3 +31,7 @@ let lastFactionState : StateKey<FactionState> = perFaction "last-faction-state"
 
 /// Set of actor UUIDs that are mission objective targets (e.g. KillUnit). Set at tactical-ready.
 let objectiveActors : StateKey<Set<string>> = perSession "objective-actors"
+
+
+/// Current round number, updated at turn-start.
+let currentRound : StateKey<int> = perSession "current-round"

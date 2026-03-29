@@ -7,7 +7,7 @@
 // Remove an entry from "active" to disable it.
 // Move an entry from "inactive" to "active" to enable it.
 {
-  "configVersion": 4,
+  "configVersion": 6,
 
   // ── Features ──
   // Each feature activates its required events automatically.
@@ -66,14 +66,16 @@
     "tile-modifiers",
     "opponent-tracking",
     "tile-scores",
-    "minimap-units"
+    "minimap-units",
+    "los-tracking"
   ],
 
   // Inactive events — recognized but disabled by default.
   // Move to "active" to enable.
   "inactive": [
     "objective-detection",
-    "los-tracking",
+    "heatmaps",
+    "criterion-logging",
     "decision-capture",
     "action-logging",
     "combat-logging"

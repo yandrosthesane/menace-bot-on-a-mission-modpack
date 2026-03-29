@@ -9,7 +9,24 @@ open BOAM.TacticalEngine.Node
 open BOAM.TacticalEngine.Keys
 open BOAM.TacticalEngine.Config
 
-let private cfg () = Behaviour.Reposition
+type RepositionConfig = { MaxUtilityByAttacks: float32; UtilityByAttacksFraction: float32; ApproachBias: float32 }
+
+let private defaultCfg = { MaxUtilityByAttacks = 600f; UtilityByAttacksFraction = 2.0f; ApproachBias = 0.5f }
+
+let private loadCfg () =
+    match Behaviour.Root with
+    | Some root ->
+        let active = activePreset root "reposition"
+        match root.TryGetProperty("reposition") with
+        | true, presets ->
+            pickPreset presets active (fun el ->
+                { MaxUtilityByAttacks = readFloat el "maxUtilityByAttacks" defaultCfg.MaxUtilityByAttacks
+                  UtilityByAttacksFraction = readFloat el "utilityByAttacksFraction" defaultCfg.UtilityByAttacksFraction
+                  ApproachBias = readFloat el "approachBias" defaultCfg.ApproachBias }) defaultCfg
+        | _ -> defaultCfg
+    | None -> defaultCfg
+
+let cfg = loadCfg ()
 let private mapSize = 42
 
 /// Find the closest known opponent to this actor's position.
@@ -62,7 +79,6 @@ let node : NodeDef = {
     Reads = [ "turn-end-actor"; "tile-modifiers"; "actor-positions"; "known-opponents"; "actor-static-data"; "game-score-scale" ]
     Writes = [ "tile-modifiers" ]
     Run = fun ctx ->
-        let c = cfg ()
         let existing = ctx |> NodeContext.readOrDefault tileModifiers Map.empty
         let positions = ctx |> NodeContext.readOrDefault actorPositions Map.empty
         let opponents = ctx |> NodeContext.readOrDefault knownOpponents []
@@ -73,7 +89,7 @@ let node : NodeDef = {
         match actorOpt with
         | None -> ()
         | Some a ->
-            let engRadius = Behaviour.Roaming.EngagementRadius
+            let engRadius = RoamingBehaviour.cfg.EngagementRadius
             let nearEngagement =
                 positions |> Map.exists (fun _ state ->
                     state.Faction = a.Faction && state.InRange && state.InContact &&
@@ -86,15 +102,27 @@ let node : NodeDef = {
             | None ->
                 ctx.Log (sprintf "%s: no known opponents for reposition" a.Actor)
             | Some target ->
+                let hasActiveSkills =
+                    match Map.tryFind a.Actor staticData with
+                    | Some sd -> sd.Skills |> List.exists (fun s -> s.Name.StartsWith("active."))
+                    | None -> false
+                if not hasActiveSkills then
+                    ctx.Log (sprintf "%s: no active skills, skipping reposition" a.Actor)
+                else
+
                 let idealRange =
                     match Map.tryFind a.Actor staticData with
                     | Some sd ->
-                        sd.Skills |> List.map (fun s -> s.IdealRange) |> List.filter (fun r -> r > 0) |> function [] -> 1 | rs -> List.min rs
+                        sd.Skills
+                        |> List.filter (fun s -> s.Name.StartsWith("active."))
+                        |> List.map (fun s -> s.IdealRange)
+                        |> List.filter (fun r -> r > 0)
+                        |> function [] -> 1 | rs -> List.min rs
                     | None -> 1
                 let moveBudget = a.ApStart - a.CheapestAttack
                 let maxDist = if a.CostPerTile > 0 then moveBudget / a.CostPerTile else 3
-                let maxUtil = match Map.tryFind a.Actor scales with Some s -> max c.MaxUtilityByAttacks (s * c.UtilityByAttacksFraction) | None -> c.MaxUtilityByAttacks
-                let tileMap = computeRepositionTiles a.Position target idealRange maxDist maxUtil c.ApproachBias
+                let maxUtil = match Map.tryFind a.Actor scales with Some s -> max cfg.MaxUtilityByAttacks (s * cfg.UtilityByAttacksFraction) | None -> cfg.MaxUtilityByAttacks
+                let tileMap = computeRepositionTiles a.Position target idealRange maxDist maxUtil cfg.ApproachBias
 
                 ctx.Log (sprintf "%s at (%d,%d) → target (%d,%d) idealRange=%d maxDist=%d maxUtil=%.0f → %d tiles"
                     a.Actor a.Position.X a.Position.Z target.X target.Z idealRange maxDist maxUtil (Map.count tileMap))

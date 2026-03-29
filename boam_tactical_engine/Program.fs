@@ -130,7 +130,8 @@ let main argv =
         "scene-change"; "battle-start"; "battle-end"; "tactical-ready"; "preview-ready"
         "contact-state"; "movement-budget"; "objective-detection"; "tile-modifiers"; "opponent-tracking"
         "tile-scores"; "decision-capture"; "minimap-units"
-        "action-logging"; "combat-logging"
+        "heatmaps"; "criterion-logging"
+        "los-tracking"; "action-logging"; "combat-logging"
     ]
     for ev in allDataEvents do
         if ge.Contains ev then printfn "%s" (on ev)
@@ -139,16 +140,22 @@ let main argv =
     let b = Config.Behaviour
     let activeNodes = b.Hooks |> Map.toSeq |> Seq.collect snd |> Set.ofSeq
     let isActive (names: string list) = names |> List.exists activeNodes.Contains
+    let rc = Nodes.RoamingBehaviour.cfg
     if isActive ["roaming-init"; "roaming-behaviour"] then
-        printfn "    Roaming:    base=%.0f utilFrac=%.1f engRadius=%.0f" b.Roaming.BaseUtility b.Roaming.UtilityFraction b.Roaming.EngagementRadius
+        printfn "    Roaming:    base=%.0f utilFrac=%.1f engRadius=%.0f" rc.BaseUtility rc.UtilityFraction rc.EngagementRadius
+    let rp = Nodes.RepositionBehaviour.cfg
     if isActive ["reposition-behaviour"] then
-        printfn "    Reposition: maxUBA=%.0f ubaFrac=%.1f approach=%.1f" b.Reposition.MaxUtilityByAttacks b.Reposition.UtilityByAttacksFraction b.Reposition.ApproachBias
+        printfn "    Reposition: maxUBA=%.0f ubaFrac=%.1f approach=%.1f" rp.MaxUtilityByAttacks rp.UtilityByAttacksFraction rp.ApproachBias
+    let pc = Nodes.PackBehaviour.cfg
     if isActive ["pack-init"; "pack-behaviour"] then
         printfn "    Pack:       r=%.0f peak=%.1f safety=%.0f sFrac=%.1f crowd=%.0f contact=%.1f init=%.1fx"
-            b.Pack.Radius b.Pack.Peak b.Pack.BaseSafety b.Pack.SafetyFraction b.Pack.CrowdPenalty b.Pack.ContactBonus b.Pack.InitMultiplier
+            pc.Radius pc.Peak pc.BaseSafety pc.SafetyFraction pc.CrowdPenalty pc.ContactBonus pc.InitMultiplier
+    let gc = Nodes.GuardVipBehaviour.cfg
     if isActive ["guard-vip-behaviour"] then
         printfn "    GuardVip:   r=%.0f safety=%.0f sFrac=%.1f weight=%.1f"
-            b.GuardVip.Radius b.GuardVip.BaseSafety b.GuardVip.SafetyFraction b.GuardVip.Weight
+            gc.Radius gc.BaseSafety gc.SafetyFraction gc.Weight
+    if isActive ["investigate-behaviour"] then
+        printfn "    Investigate: active"
     printfn "  %s" (dim "─────────────────────────────────")
     printfn ""
 
@@ -163,6 +170,7 @@ let main argv =
     Catalogue.register Nodes.PackBehaviour.initNode
     Catalogue.register Nodes.PackBehaviour.node
     Catalogue.register Nodes.GuardVipBehaviour.node
+    Catalogue.register Nodes.InvestigateBehaviour.node
 
     // Config-driven registration: hooks section defines which nodes run on which hook, in order
     for kv in b.Hooks do
@@ -267,10 +275,10 @@ let main argv =
 
     Messaging.addQueryHandler "features" (fun _ ->
         Microsoft.AspNetCore.Http.Results.Ok({|
-            heatmaps = Config.GameEvents.Contains "tile-scores"
+            heatmaps = Config.GameEvents.Contains "heatmaps"
             actionLogging = Config.GameEvents.Contains "action-logging"
             aiLogging = Config.GameEvents.Contains "decision-capture"
-            criterionLogging = Config.GameEvents.Contains "tile-scores"
+            criterionLogging = Config.GameEvents.Contains "criterion-logging"
         |}) :> Microsoft.AspNetCore.Http.IResult)
 
     HookHandlers.register routeCtx

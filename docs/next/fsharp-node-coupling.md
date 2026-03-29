@@ -123,6 +123,27 @@ The F# `StateStore` is the shared store for node data. But some state lives outs
 | `MessagingClient` | HttpClient + URL | No — infrastructure |
 | `EventBus` | Event queue | No — coordination mechanism |
 
-## Status
+## Prototype: InvestigateBehaviour
 
-Documented. The current system works but doesn't scale cleanly. Each tension has a path forward — the question is priority and implementation order.
+Refactored to be self-contained. Files touched to add a new node with its own event:
+
+| File | Change |
+|------|--------|
+| `Nodes/InvestigateBehaviour.fs` | Types, state key, config, hook handler, node, self-registration via `do register node` |
+| `behaviour.json5` | Hook chain + preset |
+| `TacticalEngine.fsproj` | Compile entry |
+| `HookHandlers.fs` | One-line dispatch: `hookDispatch.["investigate-event"] <- handleInvestigateEvent` |
+
+Down from 8 files to 5. Eliminated: GameTypes.fs, Keys.fs, Config.fs (BehaviourConfig field).
+
+Remaining coupling:
+- `Program.fs` — `Catalogue.register` (one line). F# module `do` blocks don't reliably self-register — module init is lazy and `ignore` doesn't guarantee it fires before config parsing.
+- `HookHandlers.fs` — one-line dispatch entry for nodes that receive C# events.
+
+## Current state
+
+New nodes follow the Investigate pattern: types, keys, config, and handler in the node file. Two remaining lines in other files: `Catalogue.register` in Program.fs and one dispatch entry in HookHandlers.fs.
+
+Existing nodes (Roaming, Reposition, Pack, GuardVip) use the old pattern with types in GameTypes.fs, keys in Keys.fs, and config in Config.fs BehaviourConfig. They're stable — migrating them would be churn with no immediate benefit. They can be migrated if needed.
+
+F# module `do` blocks for self-registration don't work reliably — module init is lazy and ordering isn't guaranteed before config parsing.

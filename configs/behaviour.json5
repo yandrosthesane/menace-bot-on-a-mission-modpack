@@ -11,7 +11,7 @@
 // "fraction" controls the multiplier: modifier = max(default, gameMaxScore * fraction).
 // The default value is the floor — game scaling only kicks in when it produces higher values.
 {
-  "configVersion": 7,
+  "configVersion": 8,
 
   // ── Hook Chains ──
   // Define which behaviour nodes run on each hook point, and in what order.
@@ -19,7 +19,7 @@
   // Remove a node from the list to disable it. Reorder to change execution priority.
   "hooks": {
     "OnTacticalReady": ["roaming-init", "pack-init"],
-    "OnTurnEnd": ["roaming-behaviour", "reposition-behaviour", "pack-behaviour"]
+    "OnTurnEnd": ["roaming-behaviour", "reposition-behaviour", "pack-behaviour", "investigate-behaviour"]
   },
 
   // ── Active Presets ──
