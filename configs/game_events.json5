@@ -7,7 +7,7 @@
 // Remove an entry from "active" to disable it.
 // Move an entry from "inactive" to "active" to enable it.
 {
-  "configVersion": 3,
+  "configVersion": 4,
 
   // ── Features ──
   // Each feature activates its required events automatically.
@@ -73,6 +73,7 @@
   // Move to "active" to enable.
   "inactive": [
     "objective-detection",
+    "los-tracking",
     "decision-capture",
     "action-logging",
     "combat-logging"

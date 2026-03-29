@@ -43,6 +43,7 @@
       "src/GameEvents/MinimapUnitsEvent.cs",
       "src/GameEvents/ActionLoggingEvent.cs",
       "src/GameEvents/CombatLoggingEvent.cs",
+      "src/GameEvents/LosTrackingEvent.cs",
       "src/Utils/JsonHelper.cs",
       "src/Utils/ColorParser.cs",
       "src/Utils/NamingHelper.cs",

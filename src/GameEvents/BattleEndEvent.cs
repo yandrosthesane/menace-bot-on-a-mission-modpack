@@ -8,6 +8,7 @@ static class BattleEndEvent
 
     internal static void Process()
     {
+        LosTrackingEvent.ClearCache();
         if (!IsActive) return;
         ThreadPool.QueueUserWorkItem(_ => QueryCommandClient.Hook("battle-end", "{}"));
     }

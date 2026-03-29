@@ -22,34 +22,47 @@ Faction-wide — all units in the faction respond. Multiple targets can coexist.
 
 ## Architecture
 
-### C# side — detect LOS loss on `Entity.SetTile`
+### C# side — new game event: `los-tracking`
 
-Attribute-based Harmony postfix on `Entity.SetTile`. Fires on every tile any entity crosses during movement.
+A new game event file `src/GameEvents/LosTrackingEvent.cs` following the standard contract:
 
-**Detection cache** — `Dictionary<int, Dictionary<IntPtr, (int x, int z)>>`: faction → player actor pointer → last seen position.
+- `IsActive` flag from `Boundary.GameEvents.LosTracking`
+- `Register(Harmony, Logger)` — patches `Entity.SetTile` (attribute-based)
+- Detection cache: `Dictionary<int, Dictionary<IntPtr, (int x, int z)>>` (faction → player actor → last seen position)
 
-**Postfix logic:**
-1. Skip if entity faction is not player (1) — uses `Entity.GetFactionID()`
+**Patch logic (postfix on Entity.SetTile):**
+1. Skip if `!IsActive` or entity faction is not player (1)
 2. Get tile position from entity
-3. For each non-player faction that has actors in the dramatis personae, check if any living member can see the player unit (`LineOfSight.CanActorSee` via `EntitySpawner.ListEntities`)
+3. For each non-player faction with actors, check if any living member can see the player unit (`LineOfSight.CanActorSee`)
 4. If seen: update last-seen position in cache
 5. If not seen but was in cache: LOS lost — push `investigate-event` via `QueryCommandClient.Hook`, remove from cache
 
-**Existing infrastructure used:**
-- `EntitySpawner.ListEntities(faction)` for enemy actor enumeration
-- `LineOfSight.CanActorSee` for LOS checks
-- `QueryCommandClient.Hook()` for pushing the event
-- `ActorRegistry` for faction classification (player = 1)
+**Config in game_events.json5:**
+- Add `"los-tracking"` to `inactive` list (not active by default)
+- Add `LosTracking` flag to `Boundary/GameEvents.cs`
+- Add `"los-tracking"` to `allDataEvents` in Program.fs banner
 
-**New file:** `src/Awareness/LosTracker.cs`
+**Feature dependency:**
+- Add to the `investigate` feature (future) or enable manually
 
-### F# side — command handler + node
+### F# side — hook handler + behaviour node
 
-**Command handler** (registered in HookHandlers):
+**Hook handler** (in HookHandlers.fs):
 
-Receives `investigate-event`, appends to the investigate targets list in the store.
+Receives `investigate-event`, appends to investigate targets in the store.
 
-**State key:**
+```fsharp
+let private handleInvestigateEvent (ctx: RouteContext) (root: JsonElement) =
+    let faction = tryInt root "faction" 0
+    let x = tryInt root "x" 0
+    let z = tryInt root "z" 0
+    let round = tryInt root "round" 0
+    let targets = ctx.Store.ReadOrDefault(investigateTargets, [])
+    ctx.Store.Write(investigateTargets, { Position = { X = x; Z = z }; Faction = faction; RoundCreated = round } :: targets)
+    Results.Ok({| hook = "investigate-event"; status = "ok" |}) :> IResult
+```
+
+**State key** (in Keys.fs):
 ```fsharp
 let investigateTargets : StateKey<InvestigateTarget list> = perSession "investigate-targets"
 ```
@@ -58,22 +71,36 @@ let investigateTargets : StateKey<InvestigateTarget list> = perSession "investig
 
 1. Read investigate targets, filter by actor's faction
 2. Prune expired targets (current round - roundCreated >= ttl)
-3. For each active target, compute directional utility: tiles closer to the target than the actor's current position get a boost
+3. For each active target, compute directional utility
 4. Write tile modifiers targeting Utility score
 
-**Score computation** — same directional pattern as reposition:
+**Score computation:**
 
 ```
 approach = currentDistToTarget - tileDistToTarget
 bonus(tile) = baseUtility * max(0, approach) / currentDistToTarget
 ```
 
-Only tiles that bring the unit closer score positive.
+### New files
 
-**New files:**
-- `boam_tactical_engine/Nodes/InvestigateBehaviour.fs`
+| File | Type |
+|------|------|
+| `src/GameEvents/LosTrackingEvent.cs` | C# game event (Entity.SetTile patch + detection cache) |
+| `src/Boundary/GameEvents.cs` | Add `LosTracking` flag + `Activate` case |
+| `boam_tactical_engine/Nodes/InvestigateBehaviour.fs` | F# behaviour node |
+| `boam_tactical_engine/Domain/GameTypes.fs` | Add `InvestigateTarget` type |
+| `boam_tactical_engine/Nodes/Keys.fs` | Add `investigateTargets` state key |
+| `boam_tactical_engine/Boundary/HookHandlers.fs` | Add `investigate-event` handler |
 
-## Configuration (behaviour.json5)
+### Config changes
+
+**game_events.json5:**
+- Add `"los-tracking"` to `inactive`
+- Add to hooks: `"on-turn-end": ["contact-state", "movement-budget"]` (no change — investigate is a standalone node, not an enrichment)
+
+**behaviour.json5:**
+- Add `investigate` preset section
+- Add `"investigate-behaviour"` to `inactiveDataEvents` comment or OnTurnEnd hook chain when ready
 
 ```json5
 "investigate": {
@@ -84,12 +111,6 @@ Only tiles that bring the unit closer score positive.
     }
 }
 ```
-
-| Field | Description |
-|-------|-------------|
-| `baseUtility` | Modifier strength floor |
-| `utilityFraction` | Scaling fraction against game max score |
-| `ttl` | Rounds before target expires (default: 2) |
 
 ## Lifecycle
 
@@ -102,4 +123,4 @@ Only tiles that bring the unit closer score positive.
 
 ## Status
 
-WIP — not active by default. Add `"investigate-behaviour"` to the OnTurnEnd hook chain to enable.
+WIP — not active by default. Requires `los-tracking` in active game events and `investigate-behaviour` in the OnTurnEnd hook chain.

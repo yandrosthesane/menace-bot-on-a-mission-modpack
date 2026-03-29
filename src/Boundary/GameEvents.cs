@@ -56,6 +56,9 @@ internal static class GameEvents
     internal static bool DecisionCapture;
     internal static bool MinimapUnits;
 
+    // Awareness
+    internal static bool LosTracking;
+
     // Logging
     internal static bool ActionLogging;
     internal static bool CombatLogging;
@@ -81,6 +84,7 @@ internal static class GameEvents
             case "tile-scores": TileScores = true; break;
             case "decision-capture": DecisionCapture = true; break;
             case "minimap-units": MinimapUnits = true; break;
+            case "los-tracking": LosTracking = true; break;
             case "action-logging": ActionLogging = true; break;
             case "combat-logging": CombatLogging = true; break;
         }
@@ -105,6 +109,7 @@ internal static class GameEvents
         TileScores = false;
         DecisionCapture = false;
         MinimapUnits = false;
+        LosTracking = false;
         ActionLogging = false;
         CombatLogging = false;
 

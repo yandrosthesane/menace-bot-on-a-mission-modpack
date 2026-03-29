@@ -11,7 +11,7 @@
 // "fraction" controls the multiplier: modifier = max(default, gameMaxScore * fraction).
 // The default value is the floor — game scaling only kicks in when it produces higher values.
 {
-  "configVersion": 6,
+  "configVersion": 7,
 
   // ── Hook Chains ──
   // Define which behaviour nodes run on each hook point, and in what order.
@@ -104,6 +104,23 @@
       "baseSafety": 400,
       "safetyFraction": 1.5,
       "weight": 2.0
+    }
+  },
+
+  // ── Investigate ── (targets Utility score) [WIP — not in hook chain by default]
+  // Directs AI units toward last known positions of player units that broke LOS.
+  // Requires "los-tracking" game event to be active.
+  // To enable, add "investigate-behaviour" to the OnTurnEnd hook chain above
+  // and add "los-tracking" to the active events in game_events.json5.
+  //
+  // baseUtility      — default modifier strength (floor for game score scaling)
+  // utilityFraction  — modifier as fraction of game max score
+  // ttl              — rounds before target expires
+  "investigate": {
+    "default": {
+      "baseUtility": 200,
+      "utilityFraction": 0.8,
+      "ttl": 2
     }
   }
 }
