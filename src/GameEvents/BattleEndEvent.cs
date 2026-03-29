@@ -8,7 +8,7 @@ static class BattleEndEvent
 
     internal static void Process()
     {
-        LosTrackingEvent.ClearCache();
+        Boundary.GameStore.Clear();
         if (!IsActive) return;
         ThreadPool.QueueUserWorkItem(_ => QueryCommandClient.Hook("battle-end", "{}"));
     }

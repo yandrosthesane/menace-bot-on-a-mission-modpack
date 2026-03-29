@@ -4,6 +4,16 @@ order: 10
 
 # Changelog
 
+## v2.2.0
+
+### Unified state
+
+- All per-battle C# state consolidated into `Boundary/GameStore.cs` — a shared untyped store cleared on battle end.
+- `TacticalMapState` data fields (map texture, tiles, heights, dirs, round, faction, active actor) backed by GameStore. Thread-safe unit access (lock + snapshot) stays local.
+- `TileModifierStore` modifier data backed by GameStore. Synchronization (ManualResetEventSlim) stays local.
+- `ActorRegistry` UUID mappings backed by GameStore.
+- F# `currentRound` moved from mutable in HookHandlers to StateStore.
+
 ## v2.1.0
 
 ### Game events

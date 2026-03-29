@@ -12,19 +12,27 @@ namespace BOAM;
 /// </summary>
 internal static class ActorRegistry
 {
-    private static System.Collections.Generic.Dictionary<int, string> _entityToUuid = new();
-    private static System.Collections.Generic.Dictionary<string, int> _uuidToEntity = new();
+    private static System.Collections.Generic.Dictionary<int, string> EntityToUuid
+    {
+        get => Boundary.GameStore.Read("actor-entity-to-uuid", new System.Collections.Generic.Dictionary<int, string>());
+        set => Boundary.GameStore.Write("actor-entity-to-uuid", value);
+    }
+    private static System.Collections.Generic.Dictionary<string, int> UuidToEntity
+    {
+        get => Boundary.GameStore.Read("actor-uuid-to-entity", new System.Collections.Generic.Dictionary<string, int>());
+        set => Boundary.GameStore.Write("actor-uuid-to-entity", value);
+    }
 
     /// Resolve entity ID to stable UUID. Returns "unknown.{entityId}" if not found.
     public static string GetUuid(int entityId)
     {
-        return _entityToUuid.TryGetValue(entityId, out var uuid) ? uuid : $"unknown.{entityId}";
+        return EntityToUuid.TryGetValue(entityId, out var uuid) ? uuid : $"unknown.{entityId}";
     }
 
     /// Resolve stable UUID to entity ID. Returns -1 if not found.
     public static int GetEntityId(string uuid)
     {
-        return _uuidToEntity.TryGetValue(uuid, out var id) ? id : -1;
+        return UuidToEntity.TryGetValue(uuid, out var id) ? id : -1;
     }
 
     /// Faction index to stable name for UUID computation.
@@ -203,8 +211,8 @@ internal static class ActorRegistry
             }
         }
 
-        _entityToUuid = newEntityToUuid;
-        _uuidToEntity = newUuidToEntity;
+        EntityToUuid = newEntityToUuid;
+        UuidToEntity = newUuidToEntity;
         log.Msg($"[BOAM] Dramatis personae: {newEntityToUuid.Count} actors registered");
 
         return result;

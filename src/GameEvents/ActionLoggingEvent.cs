@@ -13,13 +13,11 @@ static class ActionLoggingEvent
 {
     internal static bool IsActive => Boundary.GameEvents.ActionLogging;
 
-    private static string _pendingPlayerSkill;
-    private static string _pendingPlayerActor;
-    private static float _pendingSkillStartTime;
-
-    // Guard for duplicate EndTurn calls
-    private static int _lastActorId = -1;
-    private static int _lastRound = -1;
+    private static string _pendingPlayerSkill { get => Boundary.GameStore.Read<string>("pending-skill"); set => Boundary.GameStore.Write("pending-skill", value); }
+    private static string _pendingPlayerActor { get => Boundary.GameStore.Read<string>("pending-actor"); set => Boundary.GameStore.Write("pending-actor", value); }
+    private static float _pendingSkillStartTime { get => Boundary.GameStore.Read<float>("pending-start-time"); set => Boundary.GameStore.Write("pending-start-time", value); }
+    private static int _lastActorId { get => Boundary.GameStore.Read("endturn-last-actor", -1); set => Boundary.GameStore.Write("endturn-last-actor", value); }
+    private static int _lastRound { get => Boundary.GameStore.Read("endturn-last-round", -1); set => Boundary.GameStore.Write("endturn-last-round", value); }
 
     private static bool IsAiFaction(int factionId) =>
         factionId != (int)Menace.SDK.FactionType.Player && factionId != (int)Menace.SDK.FactionType.PlayerAI;
@@ -109,7 +107,11 @@ static class ActionLoggingEvent
 
     // --- Helpers called from other events ---
 
-    internal static float SkillAnimationEndTime;
+    internal static float SkillAnimationEndTime
+    {
+        get => Boundary.GameStore.Read<float>("skill-animation-end-time");
+        set => Boundary.GameStore.Write("skill-animation-end-time", value);
+    }
 
     internal static void StartPlayerSkillTimer(string actor, string skillName)
     {

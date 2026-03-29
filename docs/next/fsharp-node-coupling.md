@@ -66,6 +66,63 @@ No edits to GameTypes.fs, Keys.fs, HookHandlers.fs, or Program.fs.
 
 No edits to HookHandlers.fs dispatch table.
 
+## Practical first step: self-registering modules
+
+F# modules can run init code at module load time. If each node module calls `Catalogue.register` on itself during init, Program.fs doesn't need to list every node. Similarly, a hook handler module could register its dispatch entry, and types/keys could live alongside the node.
+
+A single node file could contain:
+
+```fsharp
+module BOAM.TacticalEngine.Nodes.InvestigateBehaviour
+
+// Types (node-specific, not in GameTypes.fs)
+type InvestigateTarget = { Position: TilePos; Faction: int; RoundCreated: int }
+
+// State key (not in Keys.fs)
+let investigateTargets = StateKey.perSession<InvestigateTarget list> "investigate-targets"
+
+// Config preset (not in Config.fs)
+// ... read from behaviour.json5 at module init
+
+// Hook handler (not in HookHandlers.fs)
+// ... registers itself in the dispatch table at module init
+
+// Node definition
+let node : NodeDef = { ... }
+
+// Self-registration
+do Catalogue.register node
+```
+
+This mirrors how C# game events are self-contained. The fsproj compile order entry is unavoidable in F# but is the only external change needed.
+
+## C# side: unified GameStore
+
+Event state has been moved to `Boundary/GameStore.cs` (untyped `Dictionary<string, object>`, cleared on battle end). Remaining state outside the store:
+
+| Current location | Data | Why not in GameStore yet |
+|-----------------|------|--------------------------|
+| `TileModifierStore._store` | Per-actor tile modifiers | Data should move to GameStore. `ManualResetEventSlim` (wait/signal) is coordination — stays in the event. |
+| `TileModifierStore._ready` | ManualResetEventSlim | Coordination, not data. Stays in event. |
+| `TacticalMapState` (all fields) | Units, map texture, tiles, round, active actor, battle/preview dirs | Data should move to GameStore. `_unitsLock` + snapshot cache is thread-safe access — stays in minimap renderer. |
+| `ActionLoggingEvent.SkillAnimationEndTime` | Command gate timer | Should move to GameStore. |
+| ~~`ActorRegistry`~~ | ~~Entity ID ↔ UUID mappings~~ | Done — moved to GameStore. |
+
+The pattern: stores should hold data. Synchronization and access patterns belong to the events/systems that use the data.
+
+## F# side: scattered state
+
+The F# `StateStore` is the shared store for node data. But some state lives outside it:
+
+| Location | Data | Move to StateStore? |
+|----------|------|---------------------|
+| `HookHandlers.currentRound` | Mutable round counter | Yes — quick win |
+| `ActionLog.currentBattleDir` | Mutable battle directory path | Yes — quick win |
+| `ActionLog` file handles | JSONL writers, I/O resources | No — not data |
+| `RenderJobCollector` | Accumulated render jobs | No — flush logic tied to the structure |
+| `MessagingClient` | HttpClient + URL | No — infrastructure |
+| `EventBus` | Event queue | No — coordination mechanism |
+
 ## Status
 
 Documented. The current system works but doesn't scale cleanly. Each tension has a path forward — the question is priority and implementation order.

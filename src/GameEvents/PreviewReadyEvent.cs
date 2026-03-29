@@ -8,8 +8,16 @@ static class PreviewReadyEvent
 {
     internal static bool IsActive => Boundary.GameEvents.PreviewReady;
 
-    private static Il2CppMenace.UI.Strategy.MissionPrepUIScreen _cachedInstance;
-    private static Il2CppMenace.Strategy.MissionPreviewResult _cachedResult;
+    private static Il2CppMenace.UI.Strategy.MissionPrepUIScreen _cachedInstance
+    {
+        get => Boundary.GameStore.Read<Il2CppMenace.UI.Strategy.MissionPrepUIScreen>("preview-instance");
+        set => Boundary.GameStore.Write("preview-instance", value);
+    }
+    private static Il2CppMenace.Strategy.MissionPreviewResult _cachedResult
+    {
+        get => Boundary.GameStore.Read<Il2CppMenace.Strategy.MissionPreviewResult>("preview-result");
+        set => Boundary.GameStore.Write("preview-result", value);
+    }
 
     internal static void Register(HarmonyLib.Harmony harmony, MelonLogger.Instance log)
     {

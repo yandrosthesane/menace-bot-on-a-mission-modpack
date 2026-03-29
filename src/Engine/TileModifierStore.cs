@@ -5,10 +5,6 @@ using System.Text.Json;
 
 namespace BOAM;
 
-/// <summary>
-/// Per-score-type modifier for a single tile.
-/// Each field targets a separate game score component independently.
-/// </summary>
 struct TileScoreModifier
 {
     public float Utility;
@@ -17,47 +13,36 @@ struct TileScoreModifier
     public float UtilityByAttacks;
 }
 
-/// <summary>
-/// Per-actor, per-tile score modifiers. The F# engine sends tile maps via the command server;
-/// PostProcessTileScores applies them. Simple lookup — all logic lives in the engine.
-/// </summary>
 static class TileModifierStore
 {
-    private static readonly ConcurrentDictionary<string, Dictionary<(int x, int z), TileScoreModifier>> _store = new();
+    private const string STORE_KEY = "tile-modifier-data";
     private static readonly System.Threading.ManualResetEventSlim _ready = new(true);
 
-    /// <summary>Block until the engine signals modifiers are ready.</summary>
-    internal static void WaitReady()
+    private static ConcurrentDictionary<string, Dictionary<(int x, int z), TileScoreModifier>> GetStore()
     {
-        _ready.Wait();
+        var store = Boundary.GameStore.Read<ConcurrentDictionary<string, Dictionary<(int x, int z), TileScoreModifier>>>(STORE_KEY);
+        if (store == null)
+        {
+            store = new ConcurrentDictionary<string, Dictionary<(int x, int z), TileScoreModifier>>();
+            Boundary.GameStore.Write(STORE_KEY, store);
+        }
+        return store;
     }
 
-    /// <summary>Mark modifiers as pending (engine is computing).</summary>
-    internal static void SetPending()
-    {
-        _ready.Reset();
-    }
-
-    /// <summary>Mark modifiers as ready (engine finished sending).</summary>
-    internal static void SetReady()
-    {
-        _ready.Set();
-    }
+    internal static void WaitReady() => _ready.Wait();
+    internal static void SetPending() => _ready.Reset();
+    internal static void SetReady() => _ready.Set();
 
     internal static bool TryGet(string actorUuid, out Dictionary<(int x, int z), TileScoreModifier> tileMap)
     {
-        return _store.TryGetValue(actorUuid, out tileMap);
+        return GetStore().TryGetValue(actorUuid, out tileMap);
     }
 
     internal static void Clear()
     {
-        _store.Clear();
+        GetStore().Clear();
     }
 
-    /// <summary>
-    /// Parse per-actor tile modifier map from JSON.
-    /// Format: {"actor":"uuid", "tiles":[{"x":1,"z":2,"u":150.0}, ...]}
-    /// </summary>
     internal static void SetFromJson(string json)
     {
         try
@@ -84,7 +69,7 @@ static class TileModifierStore
                 }
             }
 
-            _store[actor] = tileMap;
+            GetStore()[actor] = tileMap;
         }
         catch (Exception ex)
         {

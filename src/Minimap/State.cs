@@ -4,42 +4,85 @@ using UnityEngine;
 
 namespace BOAM.TacticalMap;
 
-/// <summary>
-/// Shared singleton state for the tactical minimap overlay.
-/// Updated by game hooks (tile-scores, movement-finished, actor-changed).
-/// Read by the IMGUI overlay for rendering.
-/// </summary>
 internal static class TacticalMapState
 {
-    // --- Map background ---
+    // --- Map background (GameStore-backed) ---
 
-    /// <summary>Captured map texture (set at OnPreviewReady, used by overlay + saved to battle session).</summary>
-    internal static Texture2D MapTexture;
+    internal static Texture2D MapTexture
+    {
+        get => Boundary.GameStore.Read<Texture2D>("map-texture");
+        set => Boundary.GameStore.Write("map-texture", value);
+    }
 
-    /// <summary>Tile grid dimensions.</summary>
-    internal static int TilesX, TilesZ;
+    internal static int TilesX
+    {
+        get => Boundary.GameStore.Read<int>("map-tiles-x");
+        set => Boundary.GameStore.Write("map-tiles-x", value);
+    }
 
-    /// <summary>Binary tile data for map generation (heights + flags).</summary>
-    internal static TileData[] TileDataArray;
-    internal static float HeightMin, HeightMax;
+    internal static int TilesZ
+    {
+        get => Boundary.GameStore.Read<int>("map-tiles-z");
+        set => Boundary.GameStore.Write("map-tiles-z", value);
+    }
 
-    /// <summary>Battle session directory — created at tactical-ready from preview data.</summary>
-    internal static string BattleSessionDir;
+    internal static TileData[] TileDataArray
+    {
+        get => Boundary.GameStore.Read<TileData[]>("map-tile-data");
+        set => Boundary.GameStore.Write("map-tile-data", value);
+    }
 
-    /// <summary>Fixed preview directory — map data written here at preview-ready, copied to battle report at tactical-ready.</summary>
-    internal static string PreviewDir;
+    internal static float HeightMin
+    {
+        get => Boundary.GameStore.Read<float>("map-height-min");
+        set => Boundary.GameStore.Write("map-height-min", value);
+    }
 
-    // --- Unit positions (updated by hooks) ---
+    internal static float HeightMax
+    {
+        get => Boundary.GameStore.Read("map-height-max", 1f);
+        set => Boundary.GameStore.Write("map-height-max", value);
+    }
 
-    /// <summary>Current known unit positions, keyed by actor UUID.</summary>
-    internal static readonly Dictionary<string, OverlayUnit> Units = new();
+    internal static string BattleSessionDir
+    {
+        get => Boundary.GameStore.Read<string>("battle-session-dir");
+        set => Boundary.GameStore.Write("battle-session-dir", value);
+    }
+
+    internal static string PreviewDir
+    {
+        get => Boundary.GameStore.Read<string>("preview-dir");
+        set => Boundary.GameStore.Write("preview-dir", value);
+    }
+
+    // --- Round tracking (GameStore-backed) ---
+
+    internal static int CurrentRound
+    {
+        get => Boundary.GameStore.Read<int>("minimap-round");
+        set => Boundary.GameStore.Write("minimap-round", value);
+    }
+
+    internal static int CurrentFaction
+    {
+        get => Boundary.GameStore.Read<int>("minimap-faction");
+        set => Boundary.GameStore.Write("minimap-faction", value);
+    }
+
+    internal static string ActiveActor
+    {
+        get => Boundary.GameStore.Read("minimap-active-actor", "");
+        set => Boundary.GameStore.Write("minimap-active-actor", value);
+    }
+
+    // --- Unit positions (thread-safe, local) ---
+
+    private static readonly Dictionary<string, OverlayUnit> Units = new();
     private static readonly object _unitsLock = new();
-
-    /// <summary>Dirty flag — set when units change, cleared when snapshot is taken.</summary>
     private static bool _unitsDirty;
     private static List<OverlayUnit> _cachedSnapshot = new();
 
-    /// <summary>Replace all unit positions (called from tile-scores hook which provides full unit list).</summary>
     internal static void SetUnits(List<OverlayUnit> units)
     {
         lock (_unitsLock)
@@ -51,7 +94,6 @@ internal static class TacticalMapState
         }
     }
 
-    /// <summary>Update a single unit's position (called from movement-finished, actor-changed).</summary>
     internal static void UpdateUnitPosition(string actor, int x, int z)
     {
         lock (_unitsLock)
@@ -66,7 +108,6 @@ internal static class TacticalMapState
         }
     }
 
-    /// <summary>Get a snapshot of current units for rendering. Only allocates when data changed.</summary>
     internal static List<OverlayUnit> GetUnitsSnapshot()
     {
         lock (_unitsLock)
@@ -80,27 +121,9 @@ internal static class TacticalMapState
         }
     }
 
-    // --- Round tracking ---
-
-    internal static int CurrentRound;
-    internal static int CurrentFaction;
-    internal static string ActiveActor = "";
-
-    // --- Lifecycle ---
-
-    /// <summary>Reset all state when leaving tactical scene.</summary>
     internal static void Reset()
     {
-        MapTexture = null;
-        TilesX = 0;
-        TilesZ = 0;
-        TileDataArray = null;
-        HeightMin = 0;
-        HeightMax = 1;
-        BattleSessionDir = null;
-        CurrentRound = 0;
-        CurrentFaction = 0;
-        ActiveActor = "";
-        lock (_unitsLock) { Units.Clear(); }
+        Boundary.GameStore.Clear();
+        lock (_unitsLock) { Units.Clear(); _unitsDirty = false; }
     }
 }
