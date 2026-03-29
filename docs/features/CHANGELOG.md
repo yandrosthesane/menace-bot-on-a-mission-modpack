@@ -4,6 +4,41 @@ order: 10
 
 # Changelog
 
+## v2.4.0
+
+### Behaviour fixes
+
+- Reposition idealRange now filters to `active.*` skills only. Vehicle ram skills (`special.*`) no longer drag ranged units to melee range.
+- Units without active skills (workers) skip reposition instead of repositioning toward enemies.
+- Reposition uses full AP budget when ideal attack range is unreachable. AP is only reserved for attacks when the unit can actually reach firing position this turn.
+- Investigate formula reworked: tiles score by approach toward the target position relative to move distance. Closest reachable tile to the target gets full utility. Produces strong directional pull that scales with proximity.
+- Investigate config values doubled (baseUtility 400, utilityFraction 1.6) to compete with pack behaviour.
+- Pack influence halved (baseSafety 280, safetyFraction 0.6, initMultiplier 1.5) to reduce passive grouping.
+
+### Diagnostic logging
+
+- TileModifier application now logs before/after best tile with full score breakdown (U/S/D/A) and the modifier contribution on the chosen tile. Shows "SHIFTED" when the modifier changes the game's tile choice.
+
+### Minimap
+
+- Unit labels now show the actor index (e.g. "11" for wildlife, "Carda.1" for named units) for cross-referencing with engine logs.
+
+### Self-contained node registration
+
+- All behaviour nodes self-register via `do Catalogue.register` in their module init. No explicit registration in Program.fs.
+- Nodes that receive C# events self-register their handler via `EventHandlerRegistry.registerHandler`. No edit to EventHandlers.fs needed for new nodes.
+- All node config reads directly from `behaviour.json5` with no fallback defaults. Missing config fields crash at startup instead of silently using stale values.
+
+### Naming cleanup
+
+- Wire protocol renamed: `"type": "hook"` / `"hook": "..."` to `"type": "event"` / `"event": "..."`
+- `HookHandlers.fs` renamed to `EventHandlers.fs`, `HookPayload.fs` to `EventPayload.fs`
+- C# `QueryCommandClient.Hook()` renamed to `SendEvent()`
+- Enrichment config key: `"hooks"` renamed to `"enrichments"` in game_events.json5
+- Log tag `[HOOK]` renamed to `[EVNT]`
+- Redundant `hook = "..."` fields removed from C# event payloads
+- `game_events.json5` config version bumped to 7, `behaviour.json5` to 9
+
 ## v2.2.0
 
 ### Unified state

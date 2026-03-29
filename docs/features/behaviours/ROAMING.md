@@ -37,24 +37,24 @@ Per-tile utility (only tiles within maxDistance):
 utility = baseUtility * (distance / maxDistance)
 ```
 
-Base utility scales with game scores when they exceed the default:
+Base utility scales with game scores:
 
 ```
-baseUtility = max(config.baseUtility, gameMaxScore * config.fraction)
+baseUtility = max(config.baseUtility, gameMaxScore * config.utilityFraction)
 ```
 
 ## Parameters
 
-| Parameter | Default | Effect |
-|-----------|---------|--------|
-| `baseUtility` | 100 | Floor modifier strength |
-| `fraction` | 1.0 | Scales base against game's max Combined score |
-| `engagementRadius` | 20 | Tiles — suppresses roaming when an engaged ally is within range |
+| Parameter | Effect |
+|-----------|--------|
+| `baseUtility` | Floor modifier strength |
+| `utilityFraction` | Scales base against game's max Combined score |
+| `engagementRadius` | Tiles — suppresses roaming when an engaged ally is within range |
 
 ## Presets
 
 ```json5
 "roaming": {
-  "default":    { "baseUtility": 100, "fraction": 1.0, "engagementRadius": 20 }
+  "default": { "baseUtility": 10, "utilityFraction": 1.0, "engagementRadius": 20 }
 }
 ```

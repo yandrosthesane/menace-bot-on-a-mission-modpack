@@ -1,9 +1,9 @@
 [size=5][b]BOAM — Bot On A Mission[/b][/size]
 
-[b]Version:[/b] 2.2.0 | [url=https://yandrosthesane.github.io/menace-bot-on-a-mission-modpack]Documentation[/url] | [url=https://yandrosthesane.github.io/menace-bot-on-a-mission-modpack/docs/features/CHANGELOG]Changelog[/url]
+[b]Version:[/b] 2.4.0 | [url=https://yandrosthesane.github.io/menace-bot-on-a-mission-modpack]Documentation[/url] | [url=https://yandrosthesane.github.io/menace-bot-on-a-mission-modpack/docs/features/CHANGELOG]Changelog[/url]
 
-AI behavior analysis and modification mod for Menace.
-Modifies enemy AI movement through configurable behaviour nodes, captures tactical data for offline heatmap rendering, provides a real-time in-game minimap overlay, and records full battle sessions (player actions + AI decisions + combat outcomes).
+AI behaviour modification mod for Menace.
+Injects per-tile score modifiers during the game's AI tile evaluation to steer enemy movement. Captures tactical data for offline heatmap rendering, provides a real-time in-game minimap overlay, and records full battle sessions (player actions + AI decisions + combat outcomes).
 
 [size=4][b]Features[/b][/size]
 
@@ -14,6 +14,19 @@ Modifies enemy AI movement through configurable behaviour nodes, captures tactic
 [*][url=https://yandrosthesane.github.io/menace-bot-on-a-mission-modpack/docs/features/README_BOAM_ENGINE][b]Action Logging[/b][/url] — Records player actions, AI decisions, and combat outcomes to JSONL battle logs
 [*][url=https://yandrosthesane.github.io/menace-bot-on-a-mission-modpack/docs/features/README_CONFIG][b]Configuration[/b][/url] — Versioned JSON5 configs with user/mod-default two-tier system
 [/list]
+
+[size=4][b]Current Behaviour Nodes[/b][/size]
+
+Four configurable nodes run in sequence during each AI actor's turn, modifying the game's tile scores to influence movement:
+
+[list]
+[*][b]Roaming[/b] (Utility) — Explore outward when idle. Suppressed near engagement so other behaviours take over.
+[*][b]Reposition[/b] (UtilityByAttacks) — Move toward the closest known opponent at ideal attack range. Uses full AP when firing range is unreachable, reserves AP for attacks when it is.
+[*][b]Pack[/b] (Safety) — Form groups around allies. Engaged allies attract harder. Crowd penalty when too dense (suppressed near combat).
+[*][b]Investigate[/b] (Utility) — Chase the last known position of player units that broke line of sight. Triggered by losing LOS on a player unit.
+[/list]
+
+Nodes are self-contained: types, keys, config, and registration all live in one file per node. All tuning is in [i]behaviour.json5[/i] — no code changes needed to adjust behaviour strength or add presets.
 
 [size=4][b]Components[/b][/size]
 
@@ -151,18 +164,38 @@ Two BOAM-engine variants are available:
 
 [size=4][b]Changelog[/b][/size]
 
+[size=3][b]v2.4.0[/b][/size]
+[list]
+[*][b]Investigate behaviour[/b] — AI units chase the last known position of player units that broke LOS. Strong directional pull that scales with proximity.
+[*][b]Reposition fixes[/b] — Filters to active skills only (vehicle ram no longer drags ranged units to melee). Uses full AP when attack range is unreachable.
+[*][b]Balance[/b] — Pack influence halved, investigate doubled. Unarmed units skip reposition.
+[*][b]Diagnostic logging[/b] — Before/after best tile with full score breakdown (U/S/D/A) on every modifier application.
+[*][b]Self-contained nodes[/b] — All registration, config, types, and event handlers live in one file per node.
+[*][b]Naming cleanup[/b] — Wire protocol and internal naming: hook to event throughout.
+[/list]
+
+[size=3][b]v2.2.0[/b][/size]
+[list]
+[*][b]Unified state[/b] — All per-battle C# state consolidated into GameStore, cleared on battle end.
+[/list]
+
+[size=3][b]v2.1.0[/b][/size]
+[list]
+[*][b]Game events[/b] — 19 independently gatable C# data gathering events. Features convenience layer auto-activates required events.
+[*][b]Config restructure[/b] — Separate game_events.json5, heatmaps.json5. Engine.json5 reduced to ports only.
+[/list]
+
 [size=3][b]v2.0.4[/b][/size]
 [list]
 [*][b]Tactical map reliability[/b] — Map capture uses a staging directory; loaded saves and continue now reliably produce the minimap background.
 [*][b]Score targeting[/b] — Behaviour modifiers target independent game score components (utility, safety, distance, utilityByAttacks) instead of all going through UtilityScore.
 [*][b]Reposition approach bias[/b] — New parameter breaks the symmetric ring around targets so melee units approach from the front.
-[*][b]Guard VIP node (WIP)[/b] — Draws units toward mission objective targets. Not active by default.
 [/list]
 
 [size=3][b]v2.0.0[/b][/size]
 [list]
-[*][b]AI behaviour system[/b] — Per-tile score modifiers injected during AI tile evaluation. Three behaviour nodes (roaming, reposition, pack) run in a configurable chain.
-[*][b]Configurable behaviour[/b] — Hook chains, named presets, node catalogue, adaptive score scaling — all driven by behaviour.json5.
+[*][b]AI behaviour system[/b] — Per-tile score modifiers injected during AI tile evaluation. Behaviour nodes (roaming, reposition, pack, investigate) run in a configurable chain.
+[*][b]Configurable behaviour[/b] — Execution chains, named presets, node catalogue, adaptive score scaling — all driven by behaviour.json5.
 [*][b]Symmetric protocol[/b] — C# bridge and F# engine communicate via POST /query (read-only) and POST /command (side effects). Replaces 15+ individual routes.
 [*][b]Architecture[/b] — Thread-safe StateStore, OnTacticalReady hook point, faction-aware pack scoring, static data pipeline, C# sync transforms, batch tile modifier flush.
 [*][b]Minimap[/b] — No-label display preset, all presets now show all fields.

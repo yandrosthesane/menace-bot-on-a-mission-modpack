@@ -24,97 +24,65 @@ Actor turn ends
     │   ├─ improvement = max(0, tileDensity - currentDensity)
     │   │   (directional: only tiles that improve cohesion score positive)
     │   │
-    │   └─ tile score += improvement
+    │   └─ tile safety score += improvement
     │
     ▼
 Tile scores added on top of roaming + reposition
-
-Ally influence per tile:
-    ┌─────────────────────────────────────────┐
-    │  influence = (1 - distance/radius)      │
-    │           * weight                      │
-    │                                         │
-    │  weight = anchoredWeight  (if acted)    │
-    │         | unactedWeight   (if not)      │
-    │         + contactBonus    (if engaged)  │
-    └─────────────────────────────────────────┘
-
-Crowd curve:
-    ┌─────────────────────────────────────────┐
-    │  score = attraction * min(density, peak)│
-    │        - crowdPenalty * excess           │
-    │                                         │
-    │  excess = max(0, density - peak)        │
-    │  (suppressed when any nearby ally is    │
-    │   engaged — crowding near threats is ok)│
-    └─────────────────────────────────────────┘
 ```
 
-## Init boost
-
-At battle start, `pack-init` runs with `initMultiplier` applied to density improvements. This forms packs aggressively before the first turn, then normal scoring takes over.
-
-## Formulas
-
-Per-ally influence at a tile:
+## Ally influence
 
 ```
 dist = euclidean distance from ally to tile
 influence = max(0, 1 - dist / radius) * weight
-```
 
-Weight per ally:
-
-```
 weight = (acted ? anchoredWeight : unactedWeight) + (engaged ? contactBonus : 0)
 ```
 
-Density at a tile:
+## Crowd curve
 
 ```
-density = sum of influence across all allies within radius
-```
-
-Crowd curve:
-
-```
-score = attraction * min(density, peak) - penalty
+score = baseSafety * min(density, peak) - penalty
 penalty = crowdPenalty * max(0, density - peak)   // 0 if any contributing ally is engaged
 ```
 
-Attraction scales with game scores:
+Safety scales with game scores:
 
 ```
-attraction = max(config.attraction, gameMaxScore * config.fraction)
+baseSafety = max(config.baseSafety, gameMaxScore * config.safetyFraction)
 ```
+
+## Init boost
+
+At battle start, `pack-init` runs with `initMultiplier` applied to density improvements. This forms packs before the first turn, then normal scoring takes over.
 
 ## Parameters
 
-| Parameter | Default | Effect |
-|-----------|---------|--------|
-| `radius` | 20 | Influence range per ally (tiles) |
-| `peak` | 4.0 | Ideal density — above this, crowd penalty applies |
-| `attraction` | 560 | Floor utility per density unit |
-| `fraction` | 1.2 | Scales attraction against game's max Combined score |
-| `crowdPenalty` | 120 | Penalty per density above peak (suppressed near engaged allies) |
-| `anchoredWeight` | 1.0 | Weight for allies that already acted this round |
-| `unactedWeight` | 0.3 | Weight for allies that haven't acted yet |
-| `contactBonus` | 1.5 | Extra weight for engaged allies |
-| `initMultiplier` | 3.0 | Boost for round 1 pack formation |
+| Parameter | Effect |
+|-----------|--------|
+| `radius` | Influence range per ally (tiles) |
+| `peak` | Ideal density — above this, crowd penalty applies |
+| `baseSafety` | Floor safety per density unit |
+| `safetyFraction` | Scales safety against game's max Combined score |
+| `crowdPenalty` | Penalty per density above peak (suppressed near engaged allies) |
+| `anchoredWeight` | Weight for allies that already acted this round |
+| `unactedWeight` | Weight for allies that haven't acted yet |
+| `contactBonus` | Extra weight for engaged allies |
+| `initMultiplier` | Boost for round 1 pack formation |
 
 ## Presets
 
 ```json5
 "pack": {
   "default": {
-    "radius": 20, "peak": 4.0, "attraction": 560, "fraction": 1.2,
-    "crowdPenalty": 120, "anchoredWeight": 1.0, "unactedWeight": 0.3,
-    "contactBonus": 1.5, "initMultiplier": 3.0
+    "radius": 20, "peak": 4.0, "baseSafety": 280, "safetyFraction": 0.6,
+    "crowdPenalty": 60, "anchoredWeight": 1.0, "unactedWeight": 0.3,
+    "contactBonus": 1.5, "initMultiplier": 1.5
   }
 }
 ```
 
-## Examples 
+## Examples
 
 Spawn - Round 1
 

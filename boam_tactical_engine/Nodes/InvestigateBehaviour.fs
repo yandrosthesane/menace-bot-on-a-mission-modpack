@@ -25,9 +25,14 @@ let investigateTargets : StateKey<InvestigateTarget list> = perSession "investig
 
 type InvestigateConfig = { BaseUtility: float32; UtilityFraction: float32; Ttl: int }
 
-let private defaultConfig = { BaseUtility = 200f; UtilityFraction = 0.8f; Ttl = 2 }
-
-let private loadConfig () = defaultConfig
+let private loadConfig () =
+    let root = Behaviour.Root |> Option.get
+    let active = activePreset root "investigate"
+    let presets = root.GetProperty("investigate")
+    pickPreset presets active (fun el ->
+        { BaseUtility = readFloat el "baseUtility"
+          UtilityFraction = readFloat el "utilityFraction"
+          Ttl = readInt el "ttl" })
 
 let cfg = loadConfig ()
 
@@ -81,16 +86,18 @@ let node : NodeDef = {
                 let updatedTiles =
                     actorTiles |> Map.map (fun pos existing ->
                         let mutable totalBonus = 0f
+                        let actorDx = float32 (a.Position.X - pos.X)
+                        let actorDz = float32 (a.Position.Z - pos.Z)
+                        let distFromActor = sqrt (actorDx * actorDx + actorDz * actorDz)
                         for target in activeTargets do
                             let currentDx = float32 (a.Position.X - target.Position.X)
                             let currentDz = float32 (a.Position.Z - target.Position.Z)
                             let currentDist = sqrt (currentDx * currentDx + currentDz * currentDz)
-                            if currentDist > 1f then
-                                let tileDx = float32 (pos.X - target.Position.X)
-                                let tileDz = float32 (pos.Z - target.Position.Z)
-                                let tileDist = sqrt (tileDx * tileDx + tileDz * tileDz)
-                                let approach = max 0f (currentDist - tileDist)
-                                totalBonus <- totalBonus + baseUtil * approach / currentDist
+                            let tileDx = float32 (pos.X - target.Position.X)
+                            let tileDz = float32 (pos.Z - target.Position.Z)
+                            let tileDist = sqrt (tileDx * tileDx + tileDz * tileDz)
+                            if tileDist < currentDist && distFromActor > 0f then
+                                totalBonus <- totalBonus + baseUtil * (currentDist - tileDist) / distFromActor
                         if totalBonus < minScore then minScore <- totalBonus
                         if totalBonus > maxScore then maxScore <- totalBonus
                         TileModifier.add existing (TileModifier.utility totalBonus))

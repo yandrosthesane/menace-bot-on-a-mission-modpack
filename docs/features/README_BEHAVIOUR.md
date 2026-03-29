@@ -15,10 +15,10 @@ BOAM modifies enemy AI movement by injecting per-tile score modifiers during the
 │  Actor turn ends                                 │
 │       │                                          │
 │       ▼                                          │
-│  Harmony hook (OnTurnEnd)                        │
+│  Harmony patch (OnTurnEnd)                       │
 │       │                                          │
 │       ├─ Gather actor status (AP, HP, position)  │
-│       ├─ SyncTransforms (contact, movement)      │
+│       ├─ Enrichments (contact, movement budget)  │
 │       │                                          │
 │ ──────┼────────── POST /command ─────────────────│── boundary ──
 │       │                                          │
@@ -26,16 +26,17 @@ BOAM modifies enemy AI movement by injecting per-tile score modifiers during the
         ▼
 ┌─────────────────── Engine (F#) ──────────────────┐
 │                                                  │
-│  HookHandlers receives turn-end event            │
+│  EventHandlers receives turn-end event           │
 │       │                                          │
 │       ├─ Store actor status + positions           │
 │       │                                          │
 │       ▼                                          │
 │  Walker runs registered node chain               │
 │       │                                          │
-│       ├─ 1. Roaming     ──► per-tile scores      │
-│       ├─ 2. Reposition  ──► per-tile scores      │
-│       ├─ 3. Pack        ──► per-tile scores      │
+│       ├─ 1. Roaming      ──► Utility scores      │
+│       ├─ 2. Reposition   ──► UtilityByAttacks    │
+│       ├─ 3. Pack         ──► Safety scores        │
+│       ├─ 4. Investigate  ──► Utility scores      │
 │       │                                          │
 │       ▼                                          │
 │  Scores accumulated on same tile map             │
@@ -52,6 +53,7 @@ BOAM modifies enemy AI movement by injecting per-tile score modifiers during the
 │  Next AI evaluation: PostProcessTileScores       │
 │       │                                          │
 │       ├─ For each tile: score += modifier[(x,z)] │
+│       │  (per dimension: U, S, D, UBA)           │
 │       │                                          │
 │       ▼                                          │
 │  Game picks highest-scoring tile as usual         │
@@ -59,24 +61,25 @@ BOAM modifies enemy AI movement by injecting per-tile score modifiers during the
 └──────────────────────────────────────────────────┘
 ```
 
-The node chain is configurable. Each node reads from and writes to the same tile modifier map. Scores accumulate.
+The node chain is configurable. Each node reads from and writes to the same tile modifier map. Scores accumulate across nodes, each targeting independent score dimensions.
 
 - [Roaming](behaviours/ROAMING.md) — explore outward when idle, disabled near engagement
 - [Reposition](behaviours/REPOSITION.md) — move toward closest enemy at ideal attack range
 - [Pack](behaviours/PACK.md) — pull toward allies, converge on engaged ones
+- [Investigate](behaviours/investigate-behaviour.md) — chase last known position after losing LOS
 
 ## Configuration
 
-All parameters live in `configs/behaviour.json5`.
+All parameters live in `configs/behaviour.json5`. Config is the single source of truth — there are no fallback defaults in code.
 
-### Hook chains
+### Execution chains
 
 Which nodes run on each game event, in what order:
 
 ```json5
 "hooks": {
   "OnTacticalReady": ["roaming-init", "pack-init"],
-  "OnTurnEnd": ["roaming-behaviour", "reposition-behaviour", "pack-behaviour"]
+  "OnTurnEnd": ["roaming-behaviour", "reposition-behaviour", "pack-behaviour", "investigate-behaviour"]
 }
 ```
 
@@ -84,19 +87,33 @@ Remove a node from the list to disable it. Reorder to change priority.
 
 ### Active presets
 
-Each behaviour has named presets. The `active` block selects which to use:
+Each behaviour has named presets. The `activePresets` block selects which to use:
 
 ```json5
-"active": {
+"activePresets": {
   "roaming": "default",
-  "reposition": "aggressive",
-  "pack": "tight"
+  "reposition": "default",
+  "pack": "default",
+  "investigate": "default"
 }
 ```
 
 ### Preset definitions
 
 Each behaviour section contains named presets with all tuning parameters. See the individual docs for details.
+
+### Diagnostic logging
+
+The C# modifier patch logs before/after best tile with full score breakdown on every application:
+
+```
+[BOAM] TileModifier actor: 50/80 tiles
+  before=(10,5) U=200 S=400 D=142 A=100
+  after=(12,8) U=200 S=350 D=142 A=218
+  mod=U+0 S+0 D+0 A+118 SHIFTED
+```
+
+`SHIFTED` indicates the modifier changed the game's tile choice.
 
 ## Limitations
 
@@ -106,4 +123,4 @@ Each behaviour section contains named presets with all tuning parameters. See th
 
 ## Adding new behaviours
 
-See [Adding Nodes](behaviours/ADDING_A_BEHAVIOR_NODE).
+See [Adding Nodes](behaviours/ADDING_A_BEHAVIOR_NODE.md).

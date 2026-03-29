@@ -12,21 +12,15 @@ open BOAM.TacticalEngine.Config
 
 type GuardVipConfig = { Radius: float32; BaseSafety: float32; SafetyFraction: float32; Weight: float32 }
 
-let private defaultCfg = { Radius = 15f; BaseSafety = 400f; SafetyFraction = 1.5f; Weight = 2.0f }
-
 let private loadCfg () =
-    match Behaviour.Root with
-    | Some root ->
-        let active = activePreset root "guard-vip"
-        match root.TryGetProperty("guard-vip") with
-        | true, presets ->
-            pickPreset presets active (fun el ->
-                { Radius = readFloat el "radius" defaultCfg.Radius
-                  BaseSafety = readFloat el "baseSafety" defaultCfg.BaseSafety
-                  SafetyFraction = readFloat el "safetyFraction" defaultCfg.SafetyFraction
-                  Weight = readFloat el "weight" defaultCfg.Weight }) defaultCfg
-        | _ -> defaultCfg
-    | None -> defaultCfg
+    let root = Behaviour.Root |> Option.get
+    let active = activePreset root "guard-vip"
+    let presets = root.GetProperty("guard-vip")
+    pickPreset presets active (fun el ->
+        { Radius = readFloat el "radius"
+          BaseSafety = readFloat el "baseSafety"
+          SafetyFraction = readFloat el "safetyFraction"
+          Weight = readFloat el "weight" })
 
 let cfg = loadCfg ()
 

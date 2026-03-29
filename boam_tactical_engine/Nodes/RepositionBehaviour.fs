@@ -12,20 +12,14 @@ open BOAM.TacticalEngine.Config
 
 type RepositionConfig = { MaxUtilityByAttacks: float32; UtilityByAttacksFraction: float32; ApproachBias: float32 }
 
-let private defaultCfg = { MaxUtilityByAttacks = 600f; UtilityByAttacksFraction = 2.0f; ApproachBias = 0.5f }
-
 let private loadCfg () =
-    match Behaviour.Root with
-    | Some root ->
-        let active = activePreset root "reposition"
-        match root.TryGetProperty("reposition") with
-        | true, presets ->
-            pickPreset presets active (fun el ->
-                { MaxUtilityByAttacks = readFloat el "maxUtilityByAttacks" defaultCfg.MaxUtilityByAttacks
-                  UtilityByAttacksFraction = readFloat el "utilityByAttacksFraction" defaultCfg.UtilityByAttacksFraction
-                  ApproachBias = readFloat el "approachBias" defaultCfg.ApproachBias }) defaultCfg
-        | _ -> defaultCfg
-    | None -> defaultCfg
+    let root = Behaviour.Root |> Option.get
+    let active = activePreset root "reposition"
+    let presets = root.GetProperty("reposition")
+    pickPreset presets active (fun el ->
+        { MaxUtilityByAttacks = readFloat el "maxUtilityByAttacks"
+          UtilityByAttacksFraction = readFloat el "utilityByAttacksFraction"
+          ApproachBias = readFloat el "approachBias" })
 
 let cfg = loadCfg ()
 let private mapSize = 42
@@ -120,7 +114,15 @@ let node : NodeDef = {
                         |> List.filter (fun r -> r > 0)
                         |> function [] -> 1 | rs -> List.min rs
                     | None -> 1
-                let moveBudget = a.ApStart - a.CheapestAttack
+                let distToTarget =
+                    let dx = float32 (a.Position.X - target.X)
+                    let dz = float32 (a.Position.Z - target.Z)
+                    sqrt (dx * dx + dz * dz)
+                let distToIdeal = max 0f (distToTarget - float32 idealRange)
+                let attackBudget = a.ApStart - a.CheapestAttack
+                let attackDist = if a.CostPerTile > 0 then attackBudget / a.CostPerTile else 3
+                let canReachAttackRange = float32 attackDist >= distToIdeal
+                let moveBudget = if canReachAttackRange then attackBudget else a.ApStart
                 let maxDist = if a.CostPerTile > 0 then moveBudget / a.CostPerTile else 3
                 let maxUtil = match Map.tryFind a.Actor scales with Some s -> max cfg.MaxUtilityByAttacks (s * cfg.UtilityByAttacksFraction) | None -> cfg.MaxUtilityByAttacks
                 let tileMap = computeRepositionTiles a.Position target idealRange maxDist maxUtil cfg.ApproachBias

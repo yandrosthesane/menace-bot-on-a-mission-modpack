@@ -182,15 +182,17 @@ let Current = load ()
 
 // --- Behaviour presets (behaviour.json5) ---
 
-/// Read a float from a JSON element with fallback.
-let readFloat (el: JsonElement) (key: string) (fallback: float32) =
-    match el.TryGetProperty(key) with | true, v -> v.GetSingle() | _ -> fallback
+/// Read a float from a JSON element. Fails if key is missing.
+let readFloat (el: JsonElement) (key: string) =
+    el.GetProperty(key).GetSingle()
 
-/// Pick a preset by name from a presets object, falling back to defaults.
-let pickPreset (presets: JsonElement) (name: string) (parse: JsonElement -> 'a) (defaults: 'a) =
-    match presets.TryGetProperty(name) with
-    | true, el -> parse el
-    | _ -> defaults
+/// Read an int from a JSON element. Fails if key is missing.
+let readInt (el: JsonElement) (key: string) =
+    el.GetProperty(key).GetInt32()
+
+/// Pick a preset by name from a presets object. Fails if preset is missing.
+let pickPreset (presets: JsonElement) (name: string) (parse: JsonElement -> 'a) =
+    parse (presets.GetProperty(name))
 
 /// Read the active preset name for a behaviour section.
 let activePreset (root: JsonElement) (section: string) =

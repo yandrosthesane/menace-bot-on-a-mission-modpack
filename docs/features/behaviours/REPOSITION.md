@@ -11,26 +11,25 @@ Move units toward their ideal attack range from the closest known opponent. Mele
 ```
 Actor turn ends (near engagement)
     │
-    ├─ Find closest known opponent position
-    │   │
-    │   └─ None found → skip (no modifiers)
+    ├─ Has active skills (prefix "active.")?
+    │   └─ NO → skip (unarmed units don't reposition)
     │
-    ├─ Look up actor's idealRange from skills
-    │   (smallest IdealRange across all attacks, read from game templates)
+    ├─ Find closest known opponent position
+    │   └─ None found → skip
+    │
+    ├─ Look up idealRange from active skills only
+    │   (smallest IdealRange across "active.*" skills — excludes vehicle ram etc.)
     │
     ├─ Already within 0.5 tiles of ideal range?
-    │   │
     │   └─ YES → skip (already positioned)
     │
+    ├─ Can we reach ideal range with attack AP reserved?
+    │   ├─ YES → use (apStart - cheapestAttack) as move budget
+    │   └─ NO  → use full apStart as move budget (close distance first)
+    │
     └─ Score each reachable tile by improvement:
-        how much closer to ideal range does this tile get us
-        vs staying in place?
-
-        Utility is scaled by 1/idealRange — lower range = higher urgency
-        (a melee unit is useless at distance, a ranged unit can still contribute)
-
-        ▼
-Tile scores merged into existing map (additive with roaming zeros + pack)
+        how much closer to ideal range does this tile get us?
+        Approach bias favors near-side tiles over far-side.
 ```
 
 ## Formulas
@@ -43,30 +42,33 @@ tileDeviation    = |tileDistanceToTarget - idealRange|
 improvement      = currentDeviation - tileDeviation
 ```
 
-Per-tile utility (only tiles with positive improvement):
+Per-tile score (only tiles with positive improvement):
 
 ```
-rangeScale = maxUtility / idealRange
-utility    = rangeScale * (improvement / currentDeviation)
+rangeScale    = maxUtilityByAttacks / idealRange
+baseScore     = rangeScale * (improvement / currentDeviation)
+proximity     = 1 - (distFromActor / maxDist)
+utilityByAttacks = baseScore * (1 - approachBias + approachBias * proximity)
 ```
 
 Max utility scales with game scores:
 
 ```
-maxUtility = max(config.maxUtility, gameMaxScore * config.fraction)
+maxUtilityByAttacks = max(config.maxUtilityByAttacks, gameMaxScore * config.utilityByAttacksFraction)
 ```
 
 ## Parameters
 
-| Parameter | Default | Effect |
-|-----------|---------|--------|
-| `maxUtility` | 600 | Floor strength for melee. Ranged gets `maxUtility / idealRange`. |
-| `fraction` | 2.0 | Scales max against game's max Combined score |
+| Parameter | Effect |
+|-----------|--------|
+| `maxUtilityByAttacks` | Floor strength for melee. Ranged gets divided by idealRange. |
+| `utilityByAttacksFraction` | Scales max against game's max Combined score |
+| `approachBias` | 0.0-1.0: favor near-side tiles over far-side with equal improvement |
 
 ## Presets
 
 ```json5
 "reposition": {
-  "default":    { "maxUtility": 600, "fraction": 2.0 }
+  "default": { "maxUtilityByAttacks": 300, "utilityByAttacksFraction": 1.0, "approachBias": 0.5 }
 }
 ```

@@ -1,10 +1,10 @@
 # BOAM — Bot On A Mission
 
-**v2.2.0** | [Documentation](https://yandrosthesane.github.io/menace-bot-on-a-mission-modpack) | [Changelog](docs/features/CHANGELOG.md)
+**v2.4.0** | [Documentation](https://yandrosthesane.github.io/menace-bot-on-a-mission-modpack) | [Changelog](docs/features/CHANGELOG.md)
 
-AI behavior analysis and modification mod for Menace.
-Modifies enemy AI movement through configurable behaviour nodes,
-captures tactical data for offline heatmap rendering,
+AI behaviour modification mod for Menace.
+Injects per-tile score modifiers during the game's AI tile evaluation to steer enemy movement.
+Captures tactical data for offline heatmap rendering,
 provides a real-time in-game minimap overlay,
 and records full battle sessions (player actions + AI decisions + combat outcomes).
 
@@ -17,6 +17,21 @@ and records full battle sessions (player actions + AI decisions + combat outcome
 | [Heatmap Renderer](docs/features/README_HEATMAPS.md) | Offline heatmap generation from deferred render jobs — tile scores, decisions, movement |
 | [Action Logging](docs/features/README_BOAM_ENGINE.md) | Records player actions, AI decisions, and combat outcomes to JSONL battle logs |
 | [Configuration](docs/features/README_CONFIG.md) | Versioned JSON5 configs with user/mod-default two-tier system |
+
+## Current Behaviour Nodes
+
+Five configurable nodes run in sequence during each AI actor's turn, modifying the game's tile scores to influence movement:
+
+| Node | Score target | Effect                                                                                                                                           |
+|------|-------------|--------------------------------------------------------------------------------------------------------------------------------------------------|
+| Roaming | Utility | Explore outward when idle. Suppressed near engagement so other behaviours take over.                                                             |
+| Reposition | UtilityByAttacks | Move toward the closest known opponent at ideal attack range. Uses full AP when firing range is unreachable, reserves AP for attacks when it is. |
+| Pack | Safety | Form groups around allies. Engaged allies attract harder. Crowd penalty when too dense (suppressed near combat).                                 |
+| Investigate | Utility | Chase the last known position of player units that broke line of sight. Triggered by losing LOS on a player unit            |
+
+Nodes are self-contained: types, keys, config, and registration all live in one file per node. See [Adding a Behaviour Node](docs/features/behaviours/ADDING_A_BEHAVIOR_NODE.md).
+
+All tuning is in `behaviour.json5` — no code changes needed to adjust behaviour strength or add presets.
 
 ## Components
 

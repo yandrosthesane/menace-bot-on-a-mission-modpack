@@ -308,7 +308,10 @@ internal class TacticalMapOverlay
                     // Cached label
                     if (!_actorLabelCache.TryGetValue(unit.Actor, out var label))
                     {
-                        label = NamingHelper.ShortLabel(unit.Label);
+                        var shortName = NamingHelper.ShortLabel(unit.Label);
+                        var lastDot = unit.Actor.LastIndexOf('.');
+                        var idx = lastDot >= 0 ? unit.Actor.Substring(lastDot + 1) : "";
+                        label = string.IsNullOrEmpty(shortName) ? idx : $"{shortName}.{idx}";
                         _actorLabelCache[unit.Actor] = label;
                     }
                     _labelStyle.normal.textColor = GetFactionColor(unit.FactionIndex);

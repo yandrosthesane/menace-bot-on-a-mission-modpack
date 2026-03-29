@@ -16,30 +16,20 @@ type PackConfig = {
     ContactBonus: float32; InitMultiplier: float32
 }
 
-let private defaultCfg : PackConfig = {
-    Radius = 20f; Peak = 4.0f; BaseSafety = 560f; SafetyFraction = 1.2f
-    CrowdPenalty = 120f; AnchoredWeight = 1.0f; UnactedWeight = 0.3f
-    ContactBonus = 1.5f; InitMultiplier = 3.0f
-}
-
 let private loadCfg () =
-    match Behaviour.Root with
-    | Some root ->
-        let active = activePreset root "pack"
-        match root.TryGetProperty("pack") with
-        | true, presets ->
-            pickPreset presets active (fun el ->
-                { Radius = readFloat el "radius" defaultCfg.Radius
-                  Peak = readFloat el "peak" defaultCfg.Peak
-                  BaseSafety = readFloat el "baseSafety" defaultCfg.BaseSafety
-                  SafetyFraction = readFloat el "safetyFraction" defaultCfg.SafetyFraction
-                  CrowdPenalty = readFloat el "crowdPenalty" defaultCfg.CrowdPenalty
-                  AnchoredWeight = readFloat el "anchoredWeight" defaultCfg.AnchoredWeight
-                  UnactedWeight = readFloat el "unactedWeight" defaultCfg.UnactedWeight
-                  ContactBonus = readFloat el "contactBonus" defaultCfg.ContactBonus
-                  InitMultiplier = readFloat el "initMultiplier" defaultCfg.InitMultiplier }) defaultCfg
-        | _ -> defaultCfg
-    | None -> defaultCfg
+    let root = Behaviour.Root |> Option.get
+    let active = activePreset root "pack"
+    let presets = root.GetProperty("pack")
+    pickPreset presets active (fun el ->
+        { Radius = readFloat el "radius"
+          Peak = readFloat el "peak"
+          BaseSafety = readFloat el "baseSafety"
+          SafetyFraction = readFloat el "safetyFraction"
+          CrowdPenalty = readFloat el "crowdPenalty"
+          AnchoredWeight = readFloat el "anchoredWeight"
+          UnactedWeight = readFloat el "unactedWeight"
+          ContactBonus = readFloat el "contactBonus"
+          InitMultiplier = readFloat el "initMultiplier" })
 
 let cfg = loadCfg ()
 

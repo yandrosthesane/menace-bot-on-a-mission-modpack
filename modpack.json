@@ -1,7 +1,7 @@
 {
   "manifestVersion": 2,
   "name": "BOAM",
-  "version": "2.2.0",
+  "version": "2.4.0",
   "author": "YandrosTheSane",
   "description": "Bot On A Mission — AI behaviour modification, in-game minimap, offline heatmap rendering, and tactical logging for Menace.",
   "loadOrder": 102,

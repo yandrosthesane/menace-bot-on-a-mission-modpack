@@ -14,20 +14,14 @@ open BOAM.TacticalEngine.Config
 
 type RoamingConfig = { BaseUtility: float32; UtilityFraction: float32; EngagementRadius: float32 }
 
-let private defaultCfg = { BaseUtility = 100f; UtilityFraction = 1.0f; EngagementRadius = 20f }
-
 let private loadCfg () =
-    match Behaviour.Root with
-    | Some root ->
-        let active = activePreset root "roaming"
-        match root.TryGetProperty("roaming") with
-        | true, presets ->
-            pickPreset presets active (fun el ->
-                { BaseUtility = readFloat el "baseUtility" defaultCfg.BaseUtility
-                  UtilityFraction = readFloat el "utilityFraction" defaultCfg.UtilityFraction
-                  EngagementRadius = readFloat el "engagementRadius" defaultCfg.EngagementRadius }) defaultCfg
-        | _ -> defaultCfg
-    | None -> defaultCfg
+    let root = Behaviour.Root |> Option.get
+    let active = activePreset root "roaming"
+    let presets = root.GetProperty("roaming")
+    pickPreset presets active (fun el ->
+        { BaseUtility = readFloat el "baseUtility"
+          UtilityFraction = readFloat el "utilityFraction"
+          EngagementRadius = readFloat el "engagementRadius" })
 
 let cfg = loadCfg ()
 let private mapSize = 42
