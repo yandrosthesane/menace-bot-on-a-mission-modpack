@@ -10,7 +10,7 @@ namespace BOAM.Boundary;
 /// Static flags per data event, read from the "dataEvents" list in behaviour.json5.
 /// Hooks check these flags before gathering data.
 /// </summary>
-internal static class DataEvents
+internal static class GameEvents
 {
     // Core
     internal static bool OnTurnStart;
@@ -65,13 +65,13 @@ internal static class DataEvents
         {
             var persistentDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "UserData", "BOAM");
 
-            var userPath = Path.Combine(persistentDir, "configs", "behaviour.json5");
-            var defaultPath = Path.Combine(modFolder, "configs", "behaviour.json5");
+            var userPath = Path.Combine(persistentDir, "configs", "game_events.json5");
+            var defaultPath = Path.Combine(modFolder, "configs", "game_events.json5");
 
-            var configPath = ConfigResolver.Resolve(userPath, defaultPath, "behaviour config", log);
+            var configPath = ConfigResolver.Resolve(userPath, defaultPath, "game events config", log);
             var json = StripJsonComments(File.ReadAllText(configPath));
 
-            var eventsArray = ReadArray(json, "dataEvents");
+            var eventsArray = ReadArray(json, "active");
             if (eventsArray != null)
             {
                 foreach (Match m in Regex.Matches(eventsArray, "\"([^\"]+)\""))
@@ -101,11 +101,11 @@ internal static class DataEvents
                 }
             }
 
-            log.Msg($"[BOAM] DataEvents: contact={ContactState} movement={MovementBudget} objectives={ObjectiveDetection} modifiers={TileModifiers} opponents={OpponentTracking} tileScores={TileScores} decisions={DecisionCapture} minimapUnits={MinimapUnits} actionLog={ActionLogging} combatLog={CombatLogging}");
+            log.Msg($"[BOAM] GameEvents: contact={ContactState} movement={MovementBudget} objectives={ObjectiveDetection} modifiers={TileModifiers} opponents={OpponentTracking} tileScores={TileScores} decisions={DecisionCapture} minimapUnits={MinimapUnits} actionLog={ActionLogging} combatLog={CombatLogging}");
         }
         catch (Exception ex)
         {
-            log.Warning($"[BOAM] DataEvents init failed, all disabled: {ex.Message}");
+            log.Warning($"[BOAM] GameEvents init failed, all disabled: {ex.Message}");
         }
     }
 }

@@ -128,7 +128,10 @@ let main argv =
         printfn "  Behaviour: %s %s" (cyan (sprintf "%s (v%d)" bSrc.Label bSrc.Version)) (dim bSrc.Path)
     else
         printfn "  Behaviour: %s" (dim "builtin defaults")
-    let b = Config.Behaviour
+    let geSrc = Config.GameEventsSource
+    if geSrc.Path <> "" then
+        printfn "  Events:    %s %s" (cyan (sprintf "%s (v%d)" geSrc.Label geSrc.Version)) (dim geSrc.Path)
+    let ge = Config.GameEvents
     let allDataEvents = [
         "on-turn-start"; "on-turn-end"; "movement-finished"; "actor-changed"
         "scene-change"; "battle-start"; "battle-end"; "tactical-ready"; "preview-ready"
@@ -137,9 +140,10 @@ let main argv =
         "action-logging"; "combat-logging"
     ]
     for ev in allDataEvents do
-        if b.DataEvents.Contains ev then printfn "%s" (on ev)
+        if ge.Contains ev then printfn "%s" (on ev)
         else printfn "%s" (off ev)
     printfn "  %s" (dim "─────────────────────────────────")
+    let b = Config.Behaviour
     let activeNodes = b.Hooks |> Map.toSeq |> Seq.collect snd |> Set.ofSeq
     let isActive (names: string list) = names |> List.exists activeNodes.Contains
     if isActive ["roaming-init"; "roaming-behaviour"] then

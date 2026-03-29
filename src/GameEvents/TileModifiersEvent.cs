@@ -2,18 +2,31 @@ using System;
 using HarmonyLib;
 using Il2CppMenace.Tactical.AI;
 
-namespace BOAM;
+namespace BOAM.GameEvents;
 
-/// <summary>
-/// Applies engine-computed per-tile utility modifiers during PostProcessTileScores.
-/// Pure lookup — all scoring logic lives in the F# engine.
-/// </summary>
+static class TileModifiersEvent
+{
+    internal static bool IsActive => Boundary.GameEvents.TileModifiers;
+
+    internal static void SetPending()
+    {
+        if (!IsActive) return;
+        TileModifierStore.SetPending();
+    }
+
+    internal static void WaitReady()
+    {
+        if (!IsActive) return;
+        TileModifierStore.WaitReady();
+    }
+}
+
 [HarmonyPatch(typeof(Agent), "PostProcessTileScores")]
 static class TileModifierPatch
 {
     static void Postfix(Agent __instance)
     {
-        if (!DataEvents.TileModifiersEvent.IsActive) return;
+        if (!TileModifiersEvent.IsActive) return;
         try
         {
             var actor = __instance.m_Actor;

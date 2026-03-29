@@ -10,6 +10,7 @@
   <ItemGroup>
     <None Include="../configs/engine.json5" CopyToOutputDirectory="PreserveNewest" Link="configs/engine.json5" />
     <None Include="../configs/behaviour.json5" CopyToOutputDirectory="PreserveNewest" Link="configs/behaviour.json5" />
+    <None Include="../configs/game_events.json5" CopyToOutputDirectory="PreserveNewest" Link="configs/game_events.json5" />
   </ItemGroup>
 
   <ItemGroup>

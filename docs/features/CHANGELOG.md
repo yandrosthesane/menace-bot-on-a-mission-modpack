@@ -4,6 +4,20 @@ order: 10
 
 # Changelog
 
+## Unreleased
+
+### Data events
+
+- All C# data gathering is now gated by a `dataEvents` list in `behaviour.json5`. Each event can be independently enabled or disabled. 19 events covering core hooks, behaviour transforms, observation, and logging.
+- Inactive events produce no log output and skip all associated work.
+- See [Adding a Data Event](ADDING_A_DATA_EVENT) for the full guide.
+
+### Cleanup
+
+- Removed unused `BOAM_PERSISTENT_ASSETS` environment variable (all paths derive from game directory)
+- Removed unused `opponent_filter` config field
+- Diagnostic logging moved under the `action-logging` data event
+
 ## v2.0.4
 
 ### Tactical map reliability

@@ -244,7 +244,6 @@ let private pickPreset (presets: JsonElement) (name: string) (parse: JsonElement
     | _ -> defaults
 
 type BehaviourConfig = {
-    DataEvents: Set<string>          // active C# data events
     Hooks: Map<string, string list>  // hook point name → ordered list of node names
     Roaming: RoamingPreset
     Reposition: RepositionPreset
@@ -296,20 +295,12 @@ let private loadBehaviour () : BehaviourConfig =
         "OnTurnEnd", ["roaming-behaviour"; "reposition-behaviour"; "pack-behaviour"; "guard-vip-behaviour"]
     ]
 
-    let defaultDataEvents = Set.empty
-
     if configPath = "" then
-        { DataEvents = defaultDataEvents; Hooks = defaultHooks; Roaming = defaultRoaming; Reposition = defaultReposition; Pack = defaultPack; GuardVip = defaultGuardVip }
+        { Hooks = defaultHooks; Roaming = defaultRoaming; Reposition = defaultReposition; Pack = defaultPack; GuardVip = defaultGuardVip }
     else
         let json = stripComments (File.ReadAllText(configPath))
         let doc = JsonDocument.Parse(json)
         let root = doc.RootElement
-
-        // Read data events
-        let dataEvents =
-            match root.TryGetProperty("dataEvents") with
-            | true, arr -> [ for item in arr.EnumerateArray() -> item.GetString() ] |> Set.ofList
-            | _ -> defaultDataEvents
 
         // Read active preset names
         let activeRoaming = match root.TryGetProperty("active") with | true, a -> match a.TryGetProperty("roaming") with | true, v -> v.GetString() | _ -> "default" | _ -> "default"
@@ -344,7 +335,56 @@ let private loadBehaviour () : BehaviourConfig =
             | true, presets -> pickPreset presets activeGuardVip (fun el -> parseGuardVip el defaultGuardVip) defaultGuardVip
             | _ -> defaultGuardVip
 
-        { DataEvents = dataEvents; Hooks = hooks; Roaming = roaming; Reposition = reposition; Pack = pack; GuardVip = guard }
+        { Hooks = hooks; Roaming = roaming; Reposition = reposition; Pack = pack; GuardVip = guard }
 
 /// Singleton behaviour config.
 let Behaviour = loadBehaviour ()
+
+// --- Game events (game_events.json5) ---
+
+let mutable GameEventsSource : ConfigSource = { Path = ""; Label = ""; Version = 0 }
+
+let private loadGameEvents () : Set<string> =
+    let exeDir = AppDomain.CurrentDomain.BaseDirectory
+    let gameDir =
+        Environment.GetEnvironmentVariable("MENACE_GAME_DIR")
+        |> Option.ofObj
+        |> Option.defaultValue (Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            ".steam/steam/steamapps/common/Menace"))
+    let persistentDir = Path.Combine(gameDir, "UserData", "BOAM")
+    let userPath = Path.Combine(persistentDir, "configs", "game_events.json5")
+    let modDir = Path.GetDirectoryName(exeDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
+    let defaultPath = Path.Combine(modDir, "configs", "game_events.json5")
+
+    if not (File.Exists(userPath)) && File.Exists(defaultPath) then
+        try
+            Directory.CreateDirectory(Path.GetDirectoryName(userPath)) |> ignore
+            File.Copy(defaultPath, userPath)
+        with _ -> ()
+
+    let configPath =
+        if File.Exists(userPath) then
+            let userVer = readVersion userPath
+            let defaultVer = if File.Exists(defaultPath) then readVersion defaultPath else 0
+            if userVer >= defaultVer then
+                GameEventsSource <- { Path = userPath; Label = "user"; Version = userVer }
+                userPath
+            else
+                GameEventsSource <- { Path = defaultPath; Label = "default"; Version = defaultVer }
+                defaultPath
+        elif File.Exists(defaultPath) then
+            GameEventsSource <- { Path = defaultPath; Label = "default"; Version = readVersion defaultPath }
+            defaultPath
+        else ""
+
+    if configPath = "" then Set.empty
+    else
+        let json = stripComments (File.ReadAllText(configPath))
+        let doc = JsonDocument.Parse(json)
+        let root = doc.RootElement
+        match root.TryGetProperty("active") with
+        | true, arr -> [ for item in arr.EnumerateArray() -> item.GetString() ] |> Set.ofList
+        | _ -> Set.empty
+
+/// Active game events set.
+let GameEvents = loadGameEvents ()

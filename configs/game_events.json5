@@ -1,0 +1,66 @@
+// BOAM Game Events — C# data gathering configuration
+//
+// This is the mod default. To customise, copy to:
+//   <game_dir>/UserData/BOAM/configs/game_events.json5
+//
+// Each event controls a specific piece of C# data gathering.
+// Remove an entry from "active" to disable it.
+// Move an entry from "inactive" to "active" to enable it.
+{
+  "configVersion": 1,
+
+  // Active events — C# gathers and sends this data.
+  //
+  // Core:
+  //   on-turn-start        — faction state sent to engine at AI turn start
+  //   on-turn-end          — actor status sent to engine at turn end
+  //   movement-finished    — position update sent to engine after movement
+  //   actor-changed        — active actor notification sent to engine
+  //   scene-change         — scene transition notification
+  //   battle-start         — battle session init
+  //   battle-end           — battle session cleanup
+  //   tactical-ready       — dramatis personae + init sent to engine
+  //   preview-ready        — map capture signal
+  //
+  // Behaviour:
+  //   contact-state        — per-actor detection state (roaming, reposition)
+  //   movement-budget      — AP/skill/movement cost (roaming, reposition)
+  //   objective-detection  — mission objective targets (guard-vip)
+  //   tile-modifiers       — tile score modifier pipeline (any behaviour node)
+  //   opponent-tracking    — faction opponent list at turn-start (reposition)
+  //
+  // Observation:
+  //   tile-scores          — tile evaluation data sent to engine (scoring, heatmaps, criterion logging)
+  //   decision-capture     — AI behaviour decisions sent to engine (logging, heatmaps)
+  //   minimap-units        — unit positions from tile evaluation
+  //
+  // Logging:
+  //   action-logging       — player and AI action events
+  //   combat-logging       — damage / element hit events
+  "active": [
+    "on-turn-start",
+    "on-turn-end",
+    "movement-finished",
+    "actor-changed",
+    "scene-change",
+    "battle-start",
+    "battle-end",
+    "tactical-ready",
+    "preview-ready",
+    "contact-state",
+    "movement-budget",
+    "tile-modifiers",
+    "opponent-tracking",
+    "tile-scores",
+    "minimap-units"
+  ],
+
+  // Inactive events — recognized but disabled by default.
+  // Move to "active" to enable.
+  "inactive": [
+    "objective-detection",
+    "decision-capture",
+    "action-logging",
+    "combat-logging"
+  ]
+}

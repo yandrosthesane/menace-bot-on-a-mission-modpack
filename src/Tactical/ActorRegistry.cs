@@ -117,7 +117,7 @@ internal static class ActorRegistry
             return result;
         }
 
-        var objectiveTargets = DataEvents.ObjectiveDetectionEvent.GetTargets(log);
+        var objectiveTargets = GameEvents.ObjectiveDetectionEvent.GetTargets(log);
 
         var newEntityToUuid = new System.Collections.Generic.Dictionary<int, string>();
         var newUuidToEntity = new System.Collections.Generic.Dictionary<string, int>();

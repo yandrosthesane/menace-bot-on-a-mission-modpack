@@ -2,13 +2,13 @@ using System;
 using System.Collections.Generic;
 using MelonLoader;
 
-namespace BOAM.DataEvents;
+namespace BOAM.GameEvents;
 
 static class ObjectiveDetectionEvent
 {
     internal static HashSet<IntPtr> GetTargets(MelonLogger.Instance log)
     {
-        if (!Boundary.DataEvents.ObjectiveDetection)
+        if (!Boundary.GameEvents.ObjectiveDetection)
             return new HashSet<IntPtr>();
 
         var targets = new HashSet<IntPtr>();
