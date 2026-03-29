@@ -22,10 +22,6 @@ type TacticalEngineConfig = {
     Port: int
     BridgePort: int
     CommandPort: int
-    Heatmaps: bool
-    ActionLogging: bool
-    AiLogging: bool
-    CriterionLogging: bool
     Rendering: RenderingConfig
 }
 
@@ -152,6 +148,43 @@ let private resolveConfigPath () =
 /// The resolved config source (available after load).
 let mutable Source : ConfigSource = { Path = ""; Label = ""; Version = 0 }
 
+let private loadRendering (gameDir: string) : RenderingConfig =
+    let persistentDir = Path.Combine(gameDir, "UserData", "BOAM")
+    let userPath = Path.Combine(persistentDir, "configs", "heatmaps.json5")
+    let exeDir = AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+    let modDir = Path.GetDirectoryName(exeDir)
+    let defaultPath = Path.Combine(modDir, "configs", "heatmaps.json5")
+
+    let heatmapPath =
+        if File.Exists(userPath) then userPath
+        elif File.Exists(defaultPath) then defaultPath
+        else ""
+
+    if heatmapPath = "" then
+        // Defaults
+        { MinTilePixels = 64; Gamma = 0.35f; FontFamily = "DejaVu Sans Mono"
+          ScoreFontScale = 0.32f; LabelFontScale = 0.33f
+          ActorBorder = { Margin = 2; Thickness = 3; Color = [|255uy; 50uy; 50uy; 220uy|] }
+          BestTileBorder = { Margin = 1; Thickness = 2; Color = [|50uy; 255uy; 50uy; 230uy|] }
+          MoveDestBorder = { Margin = 3; Thickness = 2; Color = [|60uy; 140uy; 255uy; 230uy|] }
+          VisionColor = [|255uy; 220uy; 50uy; 200uy|]
+          FactionColors = Map.empty }
+    else
+        let json = stripComments (File.ReadAllText(heatmapPath))
+        let doc = JsonDocument.Parse(json)
+        let r = doc.RootElement
+        let borders = r.GetProperty("borders")
+        { MinTilePixels = r.GetProperty("minTilePixels").GetInt32()
+          Gamma = r.GetProperty("gamma").GetSingle()
+          FontFamily = r.GetProperty("fontFamily").GetString()
+          ScoreFontScale = r.GetProperty("scoreFontScale").GetSingle()
+          LabelFontScale = r.GetProperty("labelFontScale").GetSingle()
+          ActorBorder = parseBorder (borders.GetProperty("actor"))
+          BestTileBorder = parseBorder (borders.GetProperty("bestTile"))
+          MoveDestBorder = parseBorder (borders.GetProperty("moveDest"))
+          VisionColor = parseColorArray (borders.GetProperty("vision"))
+          FactionColors = parseFactionColors (r.GetProperty("factionColors")) }
+
 let private load () : TacticalEngineConfig =
     let source = resolveConfigPath ()
     Source <- source
@@ -160,28 +193,17 @@ let private load () : TacticalEngineConfig =
     let json = stripComments (File.ReadAllText(configPath))
     let doc = JsonDocument.Parse(json)
     let root = doc.RootElement
-    let r = root.GetProperty("rendering")
-    let borders = r.GetProperty("borders")
+
+    let gameDir =
+        Environment.GetEnvironmentVariable("MENACE_GAME_DIR")
+        |> Option.ofObj
+        |> Option.defaultValue (Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            ".steam/steam/steamapps/common/Menace"))
 
     { Port = root.GetProperty("port").GetInt32()
       BridgePort = match root.TryGetProperty("bridge_port") with | true, v -> v.GetInt32() | _ -> 7655
       CommandPort = match root.TryGetProperty("command_port") with | true, v -> v.GetInt32() | _ -> 7661
-      Heatmaps = match root.TryGetProperty("heatmaps") with | true, v -> v.GetBoolean() | _ -> false
-      ActionLogging = match root.TryGetProperty("action_logging") with | true, v -> v.GetBoolean() | _ -> false
-      AiLogging = match root.TryGetProperty("ai_logging") with | true, v -> v.GetBoolean() | _ -> false
-      CriterionLogging = match root.TryGetProperty("criterion_logging") with | true, v -> v.GetBoolean() | _ -> false
-      Rendering = {
-        MinTilePixels = r.GetProperty("minTilePixels").GetInt32()
-        Gamma = r.GetProperty("gamma").GetSingle()
-        FontFamily = r.GetProperty("fontFamily").GetString()
-        ScoreFontScale = r.GetProperty("scoreFontScale").GetSingle()
-        LabelFontScale = r.GetProperty("labelFontScale").GetSingle()
-        ActorBorder = parseBorder (borders.GetProperty("actor"))
-        BestTileBorder = parseBorder (borders.GetProperty("bestTile"))
-        MoveDestBorder = parseBorder (borders.GetProperty("moveDest"))
-        VisionColor = parseColorArray (borders.GetProperty("vision"))
-        FactionColors = parseFactionColors (r.GetProperty("factionColors"))
-      } }
+      Rendering = loadRendering gameDir }
 
 /// Singleton config — loaded once at module init.
 let Current = load ()

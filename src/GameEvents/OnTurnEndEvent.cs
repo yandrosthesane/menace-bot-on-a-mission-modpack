@@ -12,6 +12,27 @@ static class OnTurnEndEvent
 {
     internal static bool IsActive => Boundary.GameEvents.OnTurnEnd;
 
+    internal delegate void Enrichment(GameObj gameObj, Actor actor, Entity entity, int vision, int factionId, Dictionary<string, object> payload);
+
+    private static readonly List<Enrichment> _enrichments = new();
+
+    private static readonly Dictionary<string, Enrichment> _enrichmentRegistry = new()
+    {
+        ["contact-state"] = (go, a, e, v, f, p) => ContactStateEvent.Enrich(go, v, f, p),
+        ["movement-budget"] = (go, a, e, v, f, p) => MovementBudgetEvent.Enrich(a, e, p),
+    };
+
+    internal static void InitHooks()
+    {
+        _enrichments.Clear();
+        if (Boundary.GameEvents.Hooks.TryGetValue("on-turn-end", out var names))
+        {
+            foreach (var name in names)
+                if (_enrichmentRegistry.TryGetValue(name, out var cb))
+                    _enrichments.Add(cb);
+        }
+    }
+
     internal static void Register(HarmonyLib.Harmony harmony, MelonLogger.Instance log)
     {
         try
@@ -91,8 +112,8 @@ static class OnTurnEndEvent
                 }
             };
 
-            ContactStateEvent.Enrich(gameObj, vision, factionId, turnEndData);
-            MovementBudgetEvent.Enrich(actor, entity, turnEndData);
+            foreach (var enrich in _enrichments)
+                enrich(gameObj, actor, entity, vision, factionId, turnEndData);
 
             var turnEndPayload = JsonSerializer.Serialize(turnEndData);
             TileModifiersEvent.SetPending();

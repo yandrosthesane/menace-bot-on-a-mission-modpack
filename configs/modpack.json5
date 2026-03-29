@@ -1,8 +1,0 @@
-// BOAM Modpack — in-game mod configuration
-//
-// This is the mod default. To customise, copy to:
-//   <game_dir>/UserData/BOAM/configs/modpack.json5
-{
-  "configVersion": 1,
-
-}

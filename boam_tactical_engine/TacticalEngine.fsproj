@@ -4,12 +4,13 @@
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
     <AssemblyName>TacticalEngine</AssemblyName>
-    <Version>2.0.4</Version>
+    <Version>2.1.0</Version>
   </PropertyGroup>
 
   <ItemGroup>
     <None Include="../configs/engine.json5" CopyToOutputDirectory="PreserveNewest" Link="configs/engine.json5" />
     <None Include="../configs/behaviour.json5" CopyToOutputDirectory="PreserveNewest" Link="configs/behaviour.json5" />
+    <None Include="../configs/heatmaps.json5" CopyToOutputDirectory="PreserveNewest" Link="configs/heatmaps.json5" />
     <None Include="../configs/game_events.json5" CopyToOutputDirectory="PreserveNewest" Link="configs/game_events.json5" />
   </ItemGroup>
 

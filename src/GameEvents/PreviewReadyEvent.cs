@@ -211,4 +211,63 @@ static class PreviewReadyEvent
             BoamBridge.Logger.Warning($"[BOAM] Failed to save tile data: {ex.Message}");
         }
     }
+
+    internal static void ReloadFromDisk(MelonLogger.Instance log)
+    {
+        try
+        {
+            var previewDir = TacticalMap.TacticalMapState.PreviewDir;
+            if (string.IsNullOrEmpty(previewDir) || !System.IO.Directory.Exists(previewDir))
+            {
+                log.Warning("[BOAM] TacticalMap — No preview dir, cannot reload map");
+                return;
+            }
+
+            var previewBg = System.IO.Path.Combine(previewDir, "mapbg.png");
+            var previewInfo = System.IO.Path.Combine(previewDir, "mapbg.info");
+            var previewData = System.IO.Path.Combine(previewDir, "mapdata.bin");
+
+            if (!System.IO.File.Exists(previewBg))
+            {
+                log.Warning("[BOAM] TacticalMap — mapbg.png missing from preview dir");
+                return;
+            }
+
+            var persistentDir = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "UserData", "BOAM");
+            var ts = DateTime.Now.ToString("yyyy_MM_dd_HH_mm");
+            var sessionDir = System.IO.Path.Combine(persistentDir, "battle_reports", $"battle_{ts}");
+            System.IO.Directory.CreateDirectory(sessionDir);
+            TacticalMap.TacticalMapState.BattleSessionDir = sessionDir;
+
+            var bgPath = System.IO.Path.Combine(sessionDir, "mapbg.png");
+            var infoPath = System.IO.Path.Combine(sessionDir, "mapbg.info");
+            var dataPath = System.IO.Path.Combine(sessionDir, "mapdata.bin");
+
+            System.IO.File.Copy(previewBg, bgPath, true);
+            if (System.IO.File.Exists(previewInfo)) System.IO.File.Copy(previewInfo, infoPath, true);
+            if (System.IO.File.Exists(previewData)) System.IO.File.Copy(previewData, dataPath, true);
+
+            log.Msg($"[BOAM] TacticalMap — Copied preview data to {sessionDir}");
+
+            var data = TacticalMap.MapDataLoader.Load(bgPath, infoPath, dataPath, log);
+            if (data.BackgroundTexture != null)
+            {
+                TacticalMap.TacticalMapState.MapTexture = data.BackgroundTexture;
+                TacticalMap.TacticalMapState.TilesX = data.TotalX;
+                TacticalMap.TacticalMapState.TilesZ = data.TotalZ;
+                TacticalMap.TacticalMapState.TileDataArray = data.Tiles;
+                TacticalMap.TacticalMapState.HeightMin = data.HeightMin;
+                TacticalMap.TacticalMapState.HeightMax = data.HeightMax;
+                log.Msg($"[BOAM] TacticalMap — Reloaded map from disk: {data.TotalX}x{data.TotalZ}");
+            }
+            else
+            {
+                log.Warning("[BOAM] TacticalMap — Failed to load map from copied files");
+            }
+        }
+        catch (Exception ex)
+        {
+            log.Error($"[BOAM] ReloadMapFromDisk error: {ex.Message}");
+        }
+    }
 }

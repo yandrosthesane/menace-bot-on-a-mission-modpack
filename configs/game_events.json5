@@ -7,9 +7,23 @@
 // Remove an entry from "active" to disable it.
 // Move an entry from "inactive" to "active" to enable it.
 {
-  "configVersion": 1,
+  "configVersion": 3,
+
+  // ── Features ──
+  // Each feature activates its required events automatically.
+  // The "active" list below is additive — features and active are merged.
+  //
+  //   behaviour → on-turn-start, on-turn-end, contact-state, movement-budget,
+  //               tile-modifiers, opponent-tracking, tile-scores,
+  //               battle-start, battle-end, tactical-ready, scene-change
+  //   minimap   → minimap-units, actor-changed, movement-finished, preview-ready
+  //   heatmaps  → tile-scores, decision-capture
+  //   logging   → action-logging, combat-logging, decision-capture
+  "features": ["behaviour", "minimap"],
 
   // Active events — C# gathers and sends this data.
+  // Events activated by features above are always included.
+  // Add events here for additional activation beyond features.
   //
   // Core:
   //   on-turn-start        — faction state sent to engine at AI turn start
@@ -62,5 +76,21 @@
     "decision-capture",
     "action-logging",
     "combat-logging"
-  ]
+  ],
+
+  // ── Enrichment Hooks ──
+  // Events that enrich a host event's data before it is sent.
+  // Order in the list = execution order.
+  "hooks": {
+    "on-turn-start": [],
+    "on-turn-end": ["contact-state", "movement-budget"],
+    "movement-finished": [],
+    "actor-changed": [],
+    "tile-scores": ["minimap-units"],
+    "battle-start": [],
+    "battle-end": [],
+    "tactical-ready": [],
+    "preview-ready": [],
+    "scene-change": []
+  }
 }

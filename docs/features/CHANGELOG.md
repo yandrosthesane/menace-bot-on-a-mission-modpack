@@ -4,19 +4,41 @@ order: 10
 
 # Changelog
 
-## Unreleased
+## v2.1.0
 
-### Data events
+### Game events
 
-- All C# data gathering is now gated by a `dataEvents` list in `behaviour.json5`. Each event can be independently enabled or disabled. 19 events covering core hooks, behaviour transforms, observation, and logging.
+- All C# data gathering is now gated by an `active` list in `game_events.json5` (separate config from behaviour.json5). 19 events, each independently enabled or disabled.
+- Each event is self-contained in its own file under `src/GameEvents/` — owns its Harmony patches, data gathering, and sending.
+- Manual patch registration moved from BoamBridge into each event's `Register()` method. BoamBridge.OnInitialize reduced to 5 Register calls.
 - Inactive events produce no log output and skip all associated work.
+- Eliminated `src/Hooks/` directory — AiObservationPatches, AiActionPatches, PlayerActionPatches, DiagnosticPatches, TileModifierPatch all absorbed into event files.
 - See [Adding a Data Event](ADDING_A_DATA_EVENT) for the full guide.
+
+### Features
+
+- `game_events.json5` gains a `features` array: `["behaviour", "minimap"]` automatically activates all required events. The `active` list is additive on top.
+- Available features: `behaviour`, `minimap`, `heatmaps`, `logging`
+
+### Config restructure
+
+- `modpack.json5` deleted (was empty)
+- Rendering settings extracted from `engine.json5` into `heatmaps.json5`
+- `engine.json5` reduced to network ports only
+- F# feature flags (`heatmaps`, `action_logging`, `ai_logging`, `criterion_logging`) removed — derived from active game events
+- Config-driven enrichment hooks: `game_events.json5` `hooks` section controls which events enrich which host events
+
+### Icons
+
+- Added pirate, vehicle, construct T2, rogue weapon team, and squad badge mappings to icon-config.json5 (86 icons total)
 
 ### Cleanup
 
 - Removed unused `BOAM_PERSISTENT_ASSETS` environment variable (all paths derive from game directory)
-- Removed unused `opponent_filter` config field
-- Diagnostic logging moved under the `action-logging` data event
+- Removed unused `opponent_filter` config field and `ModpackConfig.cs`
+- `SyncTransforms.cs` deleted — logic moved into ContactStateEvent and MovementBudgetEvent
+- Lifecycle logic moved from BoamBridge into event Process() methods
+- Diagnostic logging moved under the `action-logging` game event
 
 ## v2.0.4
 

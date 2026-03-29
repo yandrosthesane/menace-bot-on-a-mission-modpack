@@ -185,7 +185,7 @@ chmod +x "$GAME_MOD_DIR/boam-launch.sh"
 
 # Default configs
 mkdir -p "$GAME_MOD_DIR/configs"
-cp configs/engine.json5 configs/modpack.json5 configs/tactical_map.json5 configs/tactical_map_presets.json5 configs/game_events.json5 "$GAME_MOD_DIR/configs/"
+cp configs/engine.json5 configs/heatmaps.json5 configs/tactical_map.json5 configs/tactical_map_presets.json5 configs/game_events.json5 "$GAME_MOD_DIR/configs/"
 cp configs/icon-config.json5 "$GAME_MOD_DIR/configs/icon-config.json5"
 echo "    All configs installed to configs/"
 
@@ -198,15 +198,7 @@ rm -rf "$PUBLISH_ENGINE" "$PUBLISH_ICONS"
 # Step 7: Regenerate icons
 # ─────────────────────────────────────────────
 echo "==> Regenerating icons..."
-# Use user icon-config from UserData/BOAM/configs if it exists
-USER_ICON_CONFIG="$GAME_DIR/UserData/BOAM/configs/icon-config.json5"
-DEFAULT_ICON_CONFIG="$GAME_MOD_DIR/configs/icon-config.json5"
-if [ -f "$USER_ICON_CONFIG" ]; then
-    ICON_CONFIG="$USER_ICON_CONFIG"
-    echo "    Using user icon-config: $ICON_CONFIG"
-else
-    ICON_CONFIG="$DEFAULT_ICON_CONFIG"
-fi
+ICON_CONFIG="$GAME_MOD_DIR/configs/icon-config.json5"
 "$GAME_MOD_DIR/boam-icons" --force --config "$ICON_CONFIG" 2>&1 | tail -5
 echo "    Icons regenerated."
 

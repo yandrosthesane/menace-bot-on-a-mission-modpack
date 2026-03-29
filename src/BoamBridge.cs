@@ -109,8 +109,9 @@ public class BoamBridge : IModpackPlugin
 
         // Load modpack config (independent from engine)
         var modFolder = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Mods", "BOAM");
-        Boundary.ModpackConfig.Load(modFolder, Logger);
         Boundary.GameEvents.Init(modFolder, Logger);
+        GameEvents.OnTurnEndEvent.InitHooks();
+        GameEvents.TileScoresEvent.InitHooks();
 
         // Initialize tactical map overlay
         _tacticalMap = new TacticalMap.TacticalMapOverlay();
@@ -131,12 +132,8 @@ public class BoamBridge : IModpackPlugin
             thread.Start();
         }
 
-        // Notify tactical engine of every scene change
-        if (_engineAvailable && !string.IsNullOrEmpty(sceneName) && GameEvents.SceneChangeEvent.IsActive)
-        {
-            var scenePayload = JsonSerializer.Serialize(new { scene = sceneName });
-            ThreadPool.QueueUserWorkItem(_ => QueryCommandClient.Hook("scene-change", scenePayload));
-        }
+        if (_engineAvailable)
+            GameEvents.SceneChangeEvent.Process(sceneName);
 
         _tacticalMap?.OnSceneLoaded(sceneName);
 
@@ -151,8 +148,7 @@ public class BoamBridge : IModpackPlugin
         {
             if (_inTactical)
             {
-                if (GameEvents.BattleEndEvent.IsActive)
-                    ThreadPool.QueueUserWorkItem(_ => QueryCommandClient.Hook("battle-end", "{}"));
+                GameEvents.BattleEndEvent.Process();
                 TacticalMap.TacticalMapState.Reset();
             }
             _inTactical = false;
@@ -174,21 +170,12 @@ public class BoamBridge : IModpackPlugin
             Logger.Msg("[BOAM] Tactical ready, engine hooks active");
             // BuildDramatisPersonae must run first — it registers actor UUIDs
             var dp = ActorRegistry.BuildDramatisPersonae(Logger);
-            PopulateInitialUnits();
-            ReloadMapFromDisk(); // copies preview → battle report, sets BattleSessionDir
+            GameEvents.MinimapUnitsEvent.PopulateInitial(Round);
+            GameEvents.PreviewReadyEvent.ReloadFromDisk(Logger);
             _tacticalMap?.OnTacticalReady();
-            // battle-start after ReloadMapFromDisk so BattleSessionDir is set
-            if (GameEvents.BattleStartEvent.IsActive)
-            {
-                var sessionDir = TacticalMap.TacticalMapState.BattleSessionDir ?? "";
-                var startPayload = JsonSerializer.Serialize(new { sessionDir });
-                ThreadPool.QueueUserWorkItem(_ => QueryCommandClient.Hook("battle-start", startPayload));
-            }
-            if (_engineAvailable && GameEvents.TacticalReadyEvent.IsActive)
-            {
-                var payload = JsonSerializer.Serialize(new { dramatis_personae = dp });
-                ThreadPool.QueueUserWorkItem(_ => QueryCommandClient.Hook("tactical-ready", payload));
-            }
+            GameEvents.BattleStartEvent.Process();
+            if (_engineAvailable)
+                GameEvents.TacticalReadyEvent.Process(dp);
         }
 
         // Drain execute command queue
@@ -243,127 +230,7 @@ public class BoamBridge : IModpackPlugin
         Logger.Warning("[BOAM] Tactical engine not available — AI hooks will be no-ops");
     }
 
-    private void ReloadMapFromDisk()
-    {
-        try
-        {
-            var previewDir = TacticalMap.TacticalMapState.PreviewDir;
-            if (string.IsNullOrEmpty(previewDir) || !System.IO.Directory.Exists(previewDir))
-            {
-                Logger.Warning("[BOAM] TacticalMap — No preview dir, cannot reload map");
-                return;
-            }
 
-            var previewBg = System.IO.Path.Combine(previewDir, "mapbg.png");
-            var previewInfo = System.IO.Path.Combine(previewDir, "mapbg.info");
-            var previewData = System.IO.Path.Combine(previewDir, "mapdata.bin");
-
-            if (!System.IO.File.Exists(previewBg))
-            {
-                Logger.Warning("[BOAM] TacticalMap — mapbg.png missing from preview dir");
-                return;
-            }
-
-            // Create the real battle report dir (timestamped)
-            var persistentDir = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "UserData", "BOAM");
-
-            var ts = DateTime.Now.ToString("yyyy_MM_dd_HH_mm");
-            var sessionDir = System.IO.Path.Combine(persistentDir, "battle_reports", $"battle_{ts}");
-            System.IO.Directory.CreateDirectory(sessionDir);
-            TacticalMap.TacticalMapState.BattleSessionDir = sessionDir;
-
-            // Copy preview files to battle report
-            var bgPath = System.IO.Path.Combine(sessionDir, "mapbg.png");
-            var infoPath = System.IO.Path.Combine(sessionDir, "mapbg.info");
-            var dataPath = System.IO.Path.Combine(sessionDir, "mapdata.bin");
-
-            System.IO.File.Copy(previewBg, bgPath, true);
-            if (System.IO.File.Exists(previewInfo)) System.IO.File.Copy(previewInfo, infoPath, true);
-            if (System.IO.File.Exists(previewData)) System.IO.File.Copy(previewData, dataPath, true);
-
-            Logger.Msg($"[BOAM] TacticalMap — Copied preview data to {sessionDir}");
-
-            // Load into state
-            var data = TacticalMap.MapDataLoader.Load(bgPath, infoPath, dataPath, Logger);
-            if (data.BackgroundTexture != null)
-            {
-                TacticalMap.TacticalMapState.MapTexture = data.BackgroundTexture;
-                TacticalMap.TacticalMapState.TilesX = data.TotalX;
-                TacticalMap.TacticalMapState.TilesZ = data.TotalZ;
-                TacticalMap.TacticalMapState.TileDataArray = data.Tiles;
-                TacticalMap.TacticalMapState.HeightMin = data.HeightMin;
-                TacticalMap.TacticalMapState.HeightMax = data.HeightMax;
-                Logger.Msg($"[BOAM] TacticalMap — Reloaded map from disk: {data.TotalX}x{data.TotalZ}");
-            }
-            else
-            {
-                Logger.Warning("[BOAM] TacticalMap — Failed to load map from copied files");
-            }
-        }
-        catch (Exception ex)
-        {
-            Logger.Error($"[BOAM] ReloadMapFromDisk error: {ex.Message}");
-        }
-    }
-
-    private void PopulateInitialUnits()
-    {
-        try
-        {
-            var units = new System.Collections.Generic.List<TacticalMap.OverlayUnit>();
-            var allActors = Menace.SDK.EntitySpawner.ListEntities(-1);
-            if (allActors == null) return;
-            foreach (var a in allActors)
-            {
-                var info = Menace.SDK.EntitySpawner.GetEntityInfo(a);
-                if (info == null || !info.IsAlive) continue;
-                var pos = Menace.SDK.EntityMovement.GetPosition(a);
-                if (pos == null) continue;
-
-                int vis = Menace.SDK.LineOfSight.GetVisibilityState(a);
-                bool playerSide = info.FactionIndex == 1 || info.FactionIndex == 2 || info.FactionIndex == 4;
-                bool known = playerSide || vis == 1 || vis == 3;
-
-                // Get template name for icon lookup
-                var go = new Menace.SDK.GameObj(a.Pointer);
-                var tplObj = go.ReadObj("m_Template");
-                var templateName = tplObj.IsNull ? "" : (tplObj.GetName() ?? "");
-
-                var leaderName = "";
-                try
-                {
-                    var unitActor = new Il2CppMenace.Tactical.UnitActor(a.Pointer);
-                    var leader = unitActor.GetLeader();
-                    if (leader != null)
-                    {
-                        var nn = leader.GetNickname();
-                        if (nn != null) leaderName = nn.GetTranslated() ?? "";
-                    }
-                }
-                catch { }
-
-                var uuid = ActorRegistry.GetUuid(info.EntityId);
-                units.Add(new TacticalMap.OverlayUnit
-                {
-                    Actor = uuid,
-                    Label = uuid, // same as heatmap: stable UUID
-                    FactionIndex = info.FactionIndex,
-                    X = pos.Value.x,
-                    Y = pos.Value.y,
-                    KnownToPlayer = known,
-                    Template = templateName,
-                    Leader = leaderName
-                });
-            }
-            TacticalMap.TacticalMapState.SetUnits(units);
-            TacticalMap.TacticalMapState.CurrentRound = Round;
-            Logger.Msg($"[BOAM] TacticalMap — Initial population: {units.Count} units");
-        }
-        catch (Exception ex)
-        {
-            Logger.Error($"[BOAM] PopulateInitialUnits error: {ex.Message}");
-        }
-    }
 
     public int Round => Menace.SDK.TacticalController.GetCurrentRound();
     public void ShowToast(string text, float seconds = 3f) => Toast.Show(text, seconds);

@@ -9,7 +9,7 @@
 // To customise, copy to:
 //   <game_dir>/UserData/BOAM/configs/icon-config.json5
 {
-  "configVersion": 2,
+  "configVersion": 3,
   "defaults": {
     "size": 64,
     // Output directory (relative paths resolve to UserData/)
@@ -66,7 +66,42 @@
     { "dir": "native", "source": "Resources/ui/sprites/badges/badge_rogue_artillery_234x234.png",       "output": "templates/rogue_artillery.png" },
     { "dir": "native", "source": "Resources/ui/sprites/badges/badge_rogue_assault_tank_234x234.png",    "output": "templates/rogue_assault_tank.png" },
     { "dir": "native", "source": "Resources/ui/sprites/badges/badge_rogue_officer_234x234.png",         "output": "templates/rogue_officer.png" },
-    { "dir": "native", "source": "Resources/ui/sprites/badges/badge_rogue_walker_laser_234x234.png",    "output": "templates/rogue_walker_laser.png" }
+    { "dir": "native", "source": "Resources/ui/sprites/badges/badge_rogue_walker_laser_234x234.png",    "output": "templates/rogue_walker_laser.png" },
+    { "dir": "native", "source": "Resources/ui/sprites/badges/badge_emp_234x234.png",                  "output": "templates/pirate_emp_team.png" },
+    { "dir": "native", "source": "Resources/ui/sprites/badges/badge_chaingun_team_234x234.png",        "output": "templates/pirate_saboteur_chaingun_team.png" },
+    { "dir": "native", "source": "Resources/ui/sprites/badges/squad_badge_ringleader_234x234.png",     "output": "templates/pirate_saboteurs_scavenger_ringleader.png" },
+    { "dir": "native", "source": "Resources/ui/sprites/badges/badge_scavenger_234x234.png",            "output": "templates/pirate_saboteurs_scavengers.png" },
+    { "dir": "native", "source": "Resources/ui/sprites/badges/badge_chaingun_truck_234x234.png",       "output": "templates/chaingun_guntruck.png" },
+    { "dir": "native", "source": "Resources/ui/sprites/badges/badge_allied_infantry_234x234.png",      "output": "templates/militia.png" },
+    { "dir": "native", "source": "Resources/ui/sprites/badges/badge_allied_pirates_234x234.png",      "output": "templates/allied_pirates.png" },
+    { "dir": "native", "source": "Resources/ui/sprites/badges/badge_boarding_234x234.png",            "output": "templates/boarding.png" },
+    { "dir": "native", "source": "Resources/ui/sprites/badges/badge_bombmaker_234x234.png",           "output": "templates/bombmaker.png" },
+    { "dir": "native", "source": "Resources/ui/sprites/badges/badge_captain_234x234.png",             "output": "templates/captain.png" },
+    { "dir": "native", "source": "Resources/ui/sprites/badges/badge_chaingun_turret_234x234.png",     "output": "templates/chaingun_turret.png" },
+    { "dir": "native", "source": "Resources/ui/sprites/badges/badge_flame_truck_234x234.png",         "output": "templates/flame_truck.png" },
+    { "dir": "native", "source": "Resources/ui/sprites/badges/badge_laser_truck_234x234.png",         "output": "templates/laser_truck.png" },
+    { "dir": "native", "source": "Resources/ui/sprites/badges/badge_rocket_truck_234x234.png",        "output": "templates/rocket_truck.png" },
+    { "dir": "native", "source": "Resources/ui/sprites/badges/badge_emp_turret_234x234.png",          "output": "templates/emp_turret.png" },
+    { "dir": "native", "source": "Resources/ui/sprites/badges/badge_construct_guncrawler_T2_234x234.png", "output": "templates/construct_guncrawler_t2.png" },
+    { "dir": "native", "source": "Resources/ui/sprites/badges/badge_construct_skirmisher_234x234.png",    "output": "templates/construct_skirmisher.png" },
+    { "dir": "native", "source": "Resources/ui/sprites/badges/badge_construct_soldier_T2_234x234.png",    "output": "templates/construct_soldier_t2.png" },
+    { "dir": "native", "source": "Resources/ui/sprites/badges/badge_rogue_weapon_team_atgm_234x234.png",        "output": "templates/rogue_weapon_team_atgm.png" },
+    { "dir": "native", "source": "Resources/ui/sprites/badges/badge_rogue_weapon_team_autocannon_234x234.png",   "output": "templates/rogue_weapon_team_autocannon.png" },
+    { "dir": "native", "source": "Resources/ui/sprites/badges/badge_rogue_weapon_team_machinegun_234x234.png",   "output": "templates/rogue_weapon_team_machinegun.png" },
+    { "dir": "native", "source": "Resources/ui/sprites/badges/badge_rogue_weapon_team_mortar_234x234.png",       "output": "templates/rogue_weapon_team_mortar.png" },
+    { "dir": "native", "source": "Resources/ui/sprites/badges/squad_badge_flamethrower_234x234.png",     "output": "templates/flamethrower.png" },
+    { "dir": "native", "source": "Resources/ui/sprites/badges/squad_badge_heavy_infantry_234x234.png",   "output": "templates/heavy_infantry.png" },
+    { "dir": "native", "source": "Resources/ui/sprites/badges/squad_badge_heavy_truck_mg_234x234.png",   "output": "templates/heavy_truck_mg.png" },
+    { "dir": "native", "source": "Resources/ui/sprites/badges/squad_badge_mercenary_walker_234x234.png", "output": "templates/mercenary_walker.png" },
+    { "dir": "native", "source": "Resources/ui/sprites/badges/squad_badge_outcasts_234x234.png",         "output": "templates/outcasts.png" },
+    { "dir": "native", "source": "Resources/ui/sprites/badges/squad_badge_scavenger_tier2_234x234.png",  "output": "templates/scavenger_tier2.png" },
+    { "dir": "native", "source": "Resources/ui/sprites/badges/squad_badge_sniper_234x234.png",           "output": "templates/sniper.png" },
+    { "dir": "native", "source": "Resources/ui/sprites/badges/squad_conscripts_234x234.png",             "output": "templates/conscripts.png" },
+    { "dir": "native", "source": "Resources/ui/sprites/badges/squad_storm_troopers_234x234.png",         "output": "templates/storm_troopers.png" },
+    { "dir": "native", "source": "Resources/ui/sprites/badges/badge_alien_heavy_234x234.png",            "output": "templates/alien_heavy.png" },
+    { "dir": "native", "source": "Resources/ui/sprites/badges/badge_alien_light_234x234.png",            "output": "templates/alien_light.png" },
+    { "dir": "native", "source": "Resources/ui/sprites/badges/badge_allied_artillery_234x234.png",       "output": "templates/allied_artillery.png" },
+    { "dir": "native", "source": "Resources/ui/sprites/badges/badge_vip_234x234.png",                   "output": "templates/vip.png" }
   ],
 
   "leaders": [

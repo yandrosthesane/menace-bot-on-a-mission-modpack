@@ -82,7 +82,7 @@ let private handleOnTurnStart (ctx: RouteContext) (root: JsonElement) =
     let factionState = parseOnTurnStart root
     logHook (sprintf "on-turn-start  faction=%d  opponents=%d  round=%d"
         factionState.FactionIndex (List.length factionState.Opponents) factionState.Round)
-    if Config.Current.Heatmaps then
+    if Config.GameEvents.Contains "tile-scores" then
         RenderJobCollector.onRoundChange ActionLog.currentBattleDir factionState.Round ctx.BoamModDir ctx.IconBaseDir
     currentRound <- factionState.Round
     let opponentPositions = factionState.Opponents |> List.map (fun o -> o.Position)
@@ -157,7 +157,7 @@ let private handleTileScores (ctx: RouteContext) (root: JsonElement) =
     if List.isEmpty payload.Tiles then
         Results.Ok({| hook = "tile-scores"; status = "ok"; message = "no tile data" |}) :> IResult
     else
-        if Config.Current.CriterionLogging then
+        if Config.GameEvents.Contains "tile-scores" then
             match ActionLog.currentBattleDir() with
             | Some dir ->
                 let entry = JsonSerializer.Serialize({|
@@ -171,7 +171,7 @@ let private handleTileScores (ctx: RouteContext) (root: JsonElement) =
                 |})
                 IO.File.AppendAllText(IO.Path.Combine(dir, "criterion_scores.jsonl"), entry + "\n")
             | None -> ()
-        if Config.Current.Heatmaps then
+        if Config.GameEvents.Contains "tile-scores" then
             RenderJobCollector.accumulate (toTileScoreInput payload)
         // Track max absolute Combined score per actor for scaling modifiers
         let maxAbs = payload.Tiles |> List.map (fun t -> abs t.Combined) |> List.fold max 0f
@@ -184,7 +184,7 @@ let private handleMovementFinished (ctx: RouteContext) (root: JsonElement) =
     let payload = parseMovementFinished root
     logHook (sprintf "movement-finished  actor=%s  tile=(%d,%d)" payload.Actor payload.Tile.X payload.Tile.Z)
     ctx.EventBus.Push(MovementFinished(payload.Actor, payload.Tile.X, payload.Tile.Z))
-    if Config.Current.Heatmaps then
+    if Config.GameEvents.Contains "tile-scores" then
         RenderJobCollector.attachMoveDestination payload.Actor currentRound (toPos payload.Tile)
     Results.Ok({| hook = "movement-finished"; status = "ok" |}) :> IResult
 
@@ -293,7 +293,7 @@ let private handleBattleStart (ctx: RouteContext) (root: JsonElement) =
     Results.Ok({| hook = "battle-start"; status = "ok"; battleDir = dir |}) :> IResult
 
 let private handleBattleEnd (ctx: RouteContext) (_root: JsonElement) =
-    if Config.Current.Heatmaps then
+    if Config.GameEvents.Contains "tile-scores" then
         RenderJobCollector.flushAll ActionLog.currentBattleDir ctx.BoamModDir ctx.IconBaseDir
     currentRound <- 0
     ctx.Store.ClearAll()
@@ -307,9 +307,9 @@ let private handleActionDecision (ctx: RouteContext) (root: JsonElement) =
     logHook (sprintf "action-decision  round=%d  faction=%d  actor=%s  chosen=%s(%d)  alts=%d  candidates=%d"
         payload.Round payload.Faction payload.Actor payload.Chosen.Name payload.Chosen.Score
         (List.length payload.Alternatives) (List.length payload.AttackCandidates))
-    if Config.Current.ActionLogging && Config.Current.AiLogging then
+    if Config.GameEvents.Contains "action-logging" && Config.GameEvents.Contains "decision-capture" then
         ActionLog.logActionDecision payload
-    if Config.Current.Heatmaps then
+    if Config.GameEvents.Contains "tile-scores" then
         RenderJobCollector.attachDecision (toRenderDecision payload)
     Results.Ok({| hook = "action-decision"; status = "ok" |}) :> IResult
 
@@ -318,7 +318,7 @@ let private handleCombatOutcome (_ctx: RouteContext) (root: JsonElement) =
     logHook (sprintf "element-hit  round=%d  %s → %s[%d]  skill=%s  dmg=%d  hp=%d  alive=%b"
         payload.Round payload.Attacker payload.Target payload.ElementIndex payload.Skill
         payload.Damage payload.ElementHpAfter payload.ElementAlive)
-    if Config.Current.ActionLogging then
+    if Config.GameEvents.Contains "action-logging" then
         ActionLog.logElementHit payload
     Results.Ok({| hook = "combat-outcome"; status = "ok" |}) :> IResult
 
@@ -326,7 +326,7 @@ let private handleAiAction (_ctx: RouteContext) (root: JsonElement) =
     let payload = parseAiAction root
     logHook (sprintf "ai-action  round=%d  actor=%s  type=%s  skill=%s  tile=(%d,%d)"
         payload.Round payload.Actor payload.ActionType payload.SkillName payload.Tile.X payload.Tile.Z)
-    if Config.Current.ActionLogging then
+    if Config.GameEvents.Contains "action-logging" then
         ActionLog.logAiAction payload
     Results.Ok({| hook = "ai-action"; status = "ok" |}) :> IResult
 
@@ -334,7 +334,7 @@ let private handlePlayerAction (ctx: RouteContext) (root: JsonElement) =
     let payload = parsePlayerAction root
     logHook (sprintf "player-action  round=%d  actor=%s  type=%s  tile=(%d,%d)"
         payload.Round payload.Actor payload.ActionType payload.Tile.X payload.Tile.Z)
-    if Config.Current.ActionLogging then
+    if Config.GameEvents.Contains "action-logging" then
         ActionLog.logPlayerAction payload
     ctx.EventBus.Push(PlayerAction(payload.Round, payload.Actor, payload.ActionType, payload.Tile.X, payload.Tile.Z, payload.SkillName))
     Results.Ok({| hook = "player-action"; status = "ok" |}) :> IResult
@@ -344,7 +344,7 @@ let private handleSkillComplete (_ctx: RouteContext) (root: JsonElement) =
     let skill = HookPayload.tryStr root "skill" ""
     let actor = HookPayload.tryStr root "actor" ""
     logHook (sprintf "skill-complete  actor=%s  skill=%s  duration=%dms" actor skill durationMs)
-    if Config.Current.ActionLogging then
+    if Config.GameEvents.Contains "action-logging" then
         ActionLog.amendLastPlayerActionDuration actor durationMs
     Results.Ok({| hook = "skill-complete"; status = "ok" |}) :> IResult
 

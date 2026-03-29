@@ -11,6 +11,26 @@ namespace BOAM.GameEvents;
 static class TileScoresEvent
 {
     internal static bool IsActive => Boundary.GameEvents.TileScores;
+
+    internal delegate void Enrichment(int factionId, int round);
+
+    internal static readonly System.Collections.Generic.List<Enrichment> _enrichments = new();
+
+    private static readonly System.Collections.Generic.Dictionary<string, Enrichment> _enrichmentRegistry = new()
+    {
+        ["minimap-units"] = (f, r) => MinimapUnitsEvent.PopulateOverlay(f, r),
+    };
+
+    internal static void InitHooks()
+    {
+        _enrichments.Clear();
+        if (Boundary.GameEvents.Hooks.TryGetValue("tile-scores", out var names))
+        {
+            foreach (var name in names)
+                if (_enrichmentRegistry.TryGetValue(name, out var cb))
+                    _enrichments.Add(cb);
+        }
+    }
 }
 
 [HarmonyPatch(typeof(Agent), "PostProcessTileScores")]
@@ -136,8 +156,9 @@ static class Patch_PostProcessTileScores
 
             int round = BoamBridge.Instance?.Round ?? 0;
 
-            // Minimap overlay
-            MinimapUnitsEvent.PopulateOverlay(factionId, round);
+            // Enrichment hooks
+            foreach (var enrich in TileScoresEvent._enrichments)
+                enrich(factionId, round);
 
             // Send to engine
             if (!bridge.IsEngineReady || !TileScoresEvent.IsActive) return;

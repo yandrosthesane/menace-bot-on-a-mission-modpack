@@ -113,15 +113,8 @@ let main argv =
     printfn "  Icons:   %s" (if iconCount > 0 then green (sprintf "%d icons" iconCount) else yellow "no icons found")
     printfn "  Reports: %s" (dim battleReportsDir)
 
-    // Feature status
     let on label = sprintf "  %s  %s" (green "●") label
     let off label = sprintf "  %s  %s" (dim "○") (dim label)
-    printfn "  %s" (dim "─────────────────────────────────")
-    printfn "%s" (if true then on "Minimap" else off "Minimap")
-    printfn "%s" (if Config.Current.Heatmaps then on "Heatmaps" else off "Heatmaps")
-    printfn "%s" (if Config.Current.ActionLogging then on "Action logging" else off "Action logging")
-    printfn "%s" (if Config.Current.AiLogging then on "AI decision logging" else off "AI decision logging")
-    printfn "%s" (if Config.Current.CriterionLogging then on "Criterion logging" else off "Criterion logging")
     printfn "  %s" (dim "─────────────────────────────────")
     let bSrc = Config.BehaviourSource
     if bSrc.Path <> "" then
@@ -274,10 +267,10 @@ let main argv =
 
     Messaging.addQueryHandler "features" (fun _ ->
         Microsoft.AspNetCore.Http.Results.Ok({|
-            heatmaps = Config.Current.Heatmaps
-            actionLogging = Config.Current.ActionLogging
-            aiLogging = Config.Current.AiLogging
-            criterionLogging = Config.Current.CriterionLogging
+            heatmaps = Config.GameEvents.Contains "tile-scores"
+            actionLogging = Config.GameEvents.Contains "action-logging"
+            aiLogging = Config.GameEvents.Contains "decision-capture"
+            criterionLogging = Config.GameEvents.Contains "tile-scores"
         |}) :> Microsoft.AspNetCore.Http.IResult)
 
     HookHandlers.register routeCtx

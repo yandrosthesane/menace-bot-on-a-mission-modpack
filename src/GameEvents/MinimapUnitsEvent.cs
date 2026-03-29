@@ -21,6 +21,13 @@ static class MinimapUnitsEvent
         TacticalMap.TacticalMapState.UpdateUnitPosition(actorUuid, x, z);
     }
 
+    internal static void PopulateInitial(int round)
+    {
+        PopulateOverlay(0, round);
+        if (IsActive)
+            BoamBridge.Logger?.Msg($"[BOAM] TacticalMap — Initial population: {TacticalMap.TacticalMapState.GetUnitsSnapshot().Count} units");
+    }
+
     internal static void PopulateOverlay(int factionId, int round)
     {
         if (!IsActive) return;
