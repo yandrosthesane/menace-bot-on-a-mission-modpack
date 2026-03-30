@@ -7,7 +7,8 @@
 # Starts the tactical engine and returns. The engine stays running after the game exits.
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-ENGINE_DIR="$SCRIPT_DIR/tactical_engine"
+GAME_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+ENGINE_DIR="$GAME_DIR/UserData/BOAM/Engine"
 ENGINE_BIN="$ENGINE_DIR/TacticalEngine"
 PORT=7660
 LOG_DIR="$SCRIPT_DIR/logs"

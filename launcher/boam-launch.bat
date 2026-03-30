@@ -7,8 +7,8 @@ REM
 REM Starts the tactical engine and returns. The engine stays running after the game exits.
 
 set SCRIPT_DIR=%~dp0
-set ENGINE_DIR=%SCRIPT_DIR%tactical_engine
-set ENGINE_EXE=%ENGINE_DIR%\TacticalEngine.exe
+for %%I in ("%SCRIPT_DIR%\..\..\") do set GAME_DIR=%%~fI
+set ENGINE_EXE=%GAME_DIR%UserData\BOAM\Engine\TacticalEngine.bat
 set PORT=7660
 
 REM Stop any existing instance
@@ -19,8 +19,8 @@ if %errorlevel% equ 0 (
 )
 
 if not exist "%ENGINE_EXE%" (
-    echo BOAM: TacticalEngine.exe not found at %ENGINE_EXE%
+    echo BOAM: TacticalEngine not found at %ENGINE_EXE%
     exit /b 0
 )
 
-start "BOAM Tactical Engine" "%ENGINE_EXE%"
+start "BOAM Tactical Engine" call "%ENGINE_EXE%"

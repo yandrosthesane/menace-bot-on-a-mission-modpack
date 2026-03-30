@@ -29,16 +29,16 @@ All examples assume `cd /path/to/Menace/Mods/BOAM/`.
 
 ```bash
 # Render all jobs from a battle
-./tactical_engine/TacticalEngine --render battle_2026_03_15_15_14
+../UserData/BOAM/Engine/TacticalEngine --render battle_2026_03_15_15_14
 
 # Render only stingers from round 1
-./tactical_engine/TacticalEngine --render battle_2026_03_15_15_14 --pattern "r01_*_stinger_*"
+../UserData/BOAM/Engine/TacticalEngine --render battle_2026_03_15_15_14 --pattern "r01_*_stinger_*"
 
 # Render all wildlife across rounds
-./tactical_engine/TacticalEngine --render battle_2026_03_15_15_14 --pattern "*_wildlife_*"
+../UserData/BOAM/Engine/TacticalEngine --render battle_2026_03_15_15_14 --pattern "*_wildlife_*"
 
 # Render a specific unit
-./tactical_engine/TacticalEngine --render battle_2026_03_15_15_14 --pattern "*_alien_big_blaster*"
+../UserData/BOAM/Engine/TacticalEngine --render battle_2026_03_15_15_14 --pattern "*_alien_big_blaster*"
 ```
 
 </details>
@@ -48,16 +48,16 @@ All examples assume `cd /path/to/Menace/Mods/BOAM/`.
 
 ```bat
 REM Render all jobs from a battle
-tactical_engine\TacticalEngine.exe --render battle_2026_03_15_15_14
+..\UserData\BOAM\Engine\TacticalEngine.exe --render battle_2026_03_15_15_14
 
 REM Render only stingers from round 1
-tactical_engine\TacticalEngine.exe --render battle_2026_03_15_15_14 --pattern "r01_*_stinger_*"
+..\UserData\BOAM\Engine\TacticalEngine.exe --render battle_2026_03_15_15_14 --pattern "r01_*_stinger_*"
 
 REM Render all wildlife across rounds
-tactical_engine\TacticalEngine.exe --render battle_2026_03_15_15_14 --pattern "*_wildlife_*"
+..\UserData\BOAM\Engine\TacticalEngine.exe --render battle_2026_03_15_15_14 --pattern "*_wildlife_*"
 
 REM Render a specific unit
-tactical_engine\TacticalEngine.exe --render battle_2026_03_15_15_14 --pattern "*_alien_big_blaster*"
+..\UserData\BOAM\Engine\TacticalEngine.exe --render battle_2026_03_15_15_14 --pattern "*_alien_big_blaster*"
 ```
 
 </details>

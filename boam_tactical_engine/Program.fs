@@ -14,9 +14,15 @@ open BOAM.TacticalEngine.Logging
 open BOAM.TacticalEngine.EventPayload
 open BOAM.TacticalEngine.HeatmapRenderer
 open BOAM.TacticalEngine.HeatmapTypes
+open BOAM.TacticalEngine.IconSetup
 open BOAM.TacticalEngine.Routes
 
-let private version = "2.0.0"
+let private version =
+    let asm = System.Reflection.Assembly.GetExecutingAssembly()
+    let infoVer = asm.GetCustomAttributes(typeof<System.Reflection.AssemblyInformationalVersionAttribute>, false)
+    match infoVer |> Array.tryHead with
+    | Some attr -> (attr :?> System.Reflection.AssemblyInformationalVersionAttribute).InformationalVersion
+    | None -> asm.GetName().Version.ToString()
 
 [<EntryPoint>]
 let main argv =
@@ -52,14 +58,10 @@ let main argv =
     | None -> printfn "  OnTitle:   %s" (dim "none")
     printfn "  %s" (dim "─────────────────────────────────")
 
-    // Resolve paths early so they're available for the banner
-    let gameDir =
-        Environment.GetEnvironmentVariable("MENACE_GAME_DIR")
-        |> Option.ofObj
-        |> Option.defaultValue (IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            ".steam/steam/steamapps/common/Menace"))
-    let boamModDir = IO.Path.Combine(gameDir, "Mods", "BOAM")
-    let persistentDir = IO.Path.Combine(gameDir, "UserData", "BOAM")
+    // Paths from centralized Config
+    let gameDir = Config.GameDir
+    let boamModDir = Config.ModDir
+    let persistentDir = Config.PersistentDir
     let iconBaseDir = IO.Path.Combine(persistentDir, "icons")
     let battleReportsDir = IO.Path.Combine(persistentDir, "battle_reports")
 
@@ -70,38 +72,8 @@ let main argv =
         else 0
 
     if iconCount = 0 then
-        let iconsBinary = IO.Path.Combine(boamModDir, "boam-icons")
-        let iconsBinaryExe = IO.Path.Combine(boamModDir, "boam-icons.exe")
-        let binary = if IO.File.Exists(iconsBinary) then Some iconsBinary
-                     elif IO.File.Exists(iconsBinaryExe) then Some iconsBinaryExe
-                     else None
-        match binary with
-        | Some bin ->
-            logInfo "No icons found — running boam-icons to generate..."
-            let configPath =
-                let userCfg = IO.Path.Combine(persistentDir, "configs", "icon-config.json5")
-                let defaultCfg = IO.Path.Combine(boamModDir, "configs", "icon-config.json5")
-                if IO.File.Exists(userCfg) then userCfg else defaultCfg
-            let psi = Diagnostics.ProcessStartInfo(bin, sprintf "--force --config \"%s\"" configPath)
-            psi.UseShellExecute <- false
-            psi.RedirectStandardOutput <- true
-            psi.RedirectStandardError <- true
-            psi.CreateNoWindow <- true
-            try
-                let proc = Diagnostics.Process.Start(psi)
-                let stdout = proc.StandardOutput.ReadToEnd()
-                proc.WaitForExit(30000) |> ignore
-                if proc.ExitCode = 0 then
-                    iconCount <- if IO.Directory.Exists(iconBaseDir) then
-                                     IO.Directory.GetFiles(iconBaseDir, "*.png", IO.SearchOption.AllDirectories).Length
-                                 else 0
-                    logInfo (sprintf "Icon generation complete: %d icons" iconCount)
-                else
-                    logWarn (sprintf "boam-icons exited with code %d:\n%s" proc.ExitCode stdout)
-            with ex ->
-                logWarn (sprintf "Failed to run boam-icons: %s" ex.Message)
-        | None ->
-            logWarn (sprintf "No icons found and boam-icons binary missing in %s" boamModDir)
+        let result = IconSetup.interactiveSetup ()
+        iconCount <- result.Generated + result.Skipped
 
     // Config source
     let src = Config.Source

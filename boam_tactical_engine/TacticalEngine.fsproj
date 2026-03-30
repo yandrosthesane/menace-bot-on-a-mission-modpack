@@ -4,7 +4,7 @@
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
     <AssemblyName>TacticalEngine</AssemblyName>
-    <Version>2.4.0</Version>
+    <VersionPrefix>2.5.0</VersionPrefix>
   </PropertyGroup>
 
   <ItemGroup>
@@ -22,6 +22,7 @@
     <Compile Include="Boundary/Types.fs" />
     <Compile Include="Boundary/Config.fs" />
     <Compile Include="Boundary/Logging.fs" />
+    <Compile Include="Setup/IconSetup.fs" />
     <Compile Include="Boundary/ActionLog.fs" />
     <Compile Include="Boundary/EventPayload.fs" />
     <Compile Include="Boundary/EventBus.fs" />
@@ -59,6 +60,10 @@
     <!-- Game event dispatch via symmetric protocol -->
     <Compile Include="Boundary/EventHandlers.fs" />
     <Compile Include="Program.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="fallback" LogicalName="icons.zip" />
   </ItemGroup>
 
   <ItemGroup>

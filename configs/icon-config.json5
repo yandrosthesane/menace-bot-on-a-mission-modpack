@@ -1,6 +1,7 @@
-// BOAM Icon Pipeline — icon generation configuration
+// BOAM Icon Setup — icon generation configuration
 //
-// Run 'boam-icons [--force]' to build icons from source assets.
+// Icons are generated automatically by the tactical engine on first startup.
+// To regenerate: start the engine with --icons-force
 // Relative paths resolve to <game_dir>/UserData/<value>:
 //   output_base → where generated icons are written
 //   assets_base → where extracted game sprites are read from

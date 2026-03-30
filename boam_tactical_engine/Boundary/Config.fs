@@ -3,7 +3,39 @@ module BOAM.TacticalEngine.Config
 
 open System
 open System.IO
+open System.Runtime.InteropServices
 open System.Text.Json
+
+/// Resolve the game install directory. Lookup chain:
+///   1. MENACE_GAME_DIR env var
+///   2. Platform-specific Steam paths (first that exists)
+/// Fails if none found.
+let private resolveGameDir () =
+    match Environment.GetEnvironmentVariable("MENACE_GAME_DIR") |> Option.ofObj with
+    | Some dir when Directory.Exists(dir) -> dir
+    | _ ->
+        let home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
+        let candidates =
+            if RuntimeInformation.IsOSPlatform(OSPlatform.Windows) then
+                [ Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
+                               "Steam", "steamapps", "common", "Menace") ]
+            else
+                [ Path.Combine(home, ".local", "share", "Steam", "steamapps", "common", "Menace")
+                  Path.Combine(home, ".steam", "steam", "steamapps", "common", "Menace") ]
+        match candidates |> List.tryFind Directory.Exists with
+        | Some dir -> dir
+        | None ->
+            let searched = candidates |> String.concat ", "
+            failwithf "Game directory not found. Set MENACE_GAME_DIR or install to a standard Steam path. Searched: %s" searched
+
+/// Game install directory — resolved once at startup.
+let GameDir = resolveGameDir ()
+
+/// Mod directory: {GameDir}/Mods/BOAM
+let ModDir = Path.Combine(GameDir, "Mods", "BOAM")
+
+/// User-persistent data directory: {GameDir}/UserData/BOAM
+let PersistentDir = Path.Combine(GameDir, "UserData", "BOAM")
 
 type BorderConfig = { Margin: int; Thickness: int; Color: byte array }
 type RenderingConfig = {
@@ -42,7 +74,7 @@ let private parseFactionColors (el: JsonElement) : Map<int, byte array> =
     |> Map.ofList
 
 /// Strip // and /* */ comments from JSON5 so System.Text.Json can parse it.
-let private stripComments (input: string) =
+let stripComments (input: string) =
     let sb = System.Text.StringBuilder(input.Length)
     let mutable i = 0
     while i < input.Length do
@@ -84,16 +116,8 @@ type ConfigSource = { Path: string; Label: string; Version: int }
 /// Returns the resolved path and source metadata.
 /// Seeds the user config from mod default if it doesn't exist yet.
 let private resolveConfigPath () =
-    let exeDir = AppContext.BaseDirectory
-    let gameDir =
-        Environment.GetEnvironmentVariable("MENACE_GAME_DIR")
-        |> Option.ofObj
-        |> Option.defaultValue (Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            ".steam/steam/steamapps/common/Menace"))
-    let persistentDir = Path.Combine(gameDir, "UserData", "BOAM")
-    let userPath = Path.Combine(persistentDir, "configs", "engine.json5")
-    let modDir = Path.GetDirectoryName(exeDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
-    let defaultPath = Path.Combine(modDir, "configs", "engine.json5")
+    let userPath = Path.Combine(PersistentDir, "configs", "engine.json5")
+    let defaultPath = Path.Combine(ModDir, "configs", "engine.json5")
 
     // Seed user config from mod default if missing
     if not (File.Exists(userPath)) && File.Exists(defaultPath) then
@@ -120,12 +144,9 @@ let private resolveConfigPath () =
 /// The resolved config source (available after load).
 let mutable Source : ConfigSource = { Path = ""; Label = ""; Version = 0 }
 
-let private loadRendering (gameDir: string) : RenderingConfig =
-    let persistentDir = Path.Combine(gameDir, "UserData", "BOAM")
-    let userPath = Path.Combine(persistentDir, "configs", "heatmaps.json5")
-    let exeDir = AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
-    let modDir = Path.GetDirectoryName(exeDir)
-    let defaultPath = Path.Combine(modDir, "configs", "heatmaps.json5")
+let private loadRendering () : RenderingConfig =
+    let userPath = Path.Combine(PersistentDir, "configs", "heatmaps.json5")
+    let defaultPath = Path.Combine(ModDir, "configs", "heatmaps.json5")
 
     let heatmapPath =
         if File.Exists(userPath) then userPath
@@ -166,16 +187,10 @@ let private load () : TacticalEngineConfig =
     let doc = JsonDocument.Parse(json)
     let root = doc.RootElement
 
-    let gameDir =
-        Environment.GetEnvironmentVariable("MENACE_GAME_DIR")
-        |> Option.ofObj
-        |> Option.defaultValue (Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            ".steam/steam/steamapps/common/Menace"))
-
     { Port = root.GetProperty("port").GetInt32()
       BridgePort = match root.TryGetProperty("bridge_port") with | true, v -> v.GetInt32() | _ -> 7655
       CommandPort = match root.TryGetProperty("command_port") with | true, v -> v.GetInt32() | _ -> 7661
-      Rendering = loadRendering gameDir }
+      Rendering = loadRendering () }
 
 /// Singleton config — loaded once at module init.
 let Current = load ()
@@ -208,16 +223,8 @@ type BehaviourConfig = {
 let mutable BehaviourSource : ConfigSource = { Path = ""; Label = ""; Version = 0 }
 
 let private loadBehaviour () : BehaviourConfig =
-    let exeDir = AppDomain.CurrentDomain.BaseDirectory
-    let gameDir =
-        Environment.GetEnvironmentVariable("MENACE_GAME_DIR")
-        |> Option.ofObj
-        |> Option.defaultValue (Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            ".steam/steam/steamapps/common/Menace"))
-    let persistentDir = Path.Combine(gameDir, "UserData", "BOAM")
-    let userPath = Path.Combine(persistentDir, "configs", "behaviour.json5")
-    let modDir = Path.GetDirectoryName(exeDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
-    let defaultPath = Path.Combine(modDir, "configs", "behaviour.json5")
+    let userPath = Path.Combine(PersistentDir, "configs", "behaviour.json5")
+    let defaultPath = Path.Combine(ModDir, "configs", "behaviour.json5")
 
     // Seed user config from mod default if missing
     if not (File.Exists(userPath)) && File.Exists(defaultPath) then
@@ -274,16 +281,8 @@ let Behaviour = loadBehaviour ()
 let mutable GameEventsSource : ConfigSource = { Path = ""; Label = ""; Version = 0 }
 
 let private loadGameEvents () : Set<string> =
-    let exeDir = AppDomain.CurrentDomain.BaseDirectory
-    let gameDir =
-        Environment.GetEnvironmentVariable("MENACE_GAME_DIR")
-        |> Option.ofObj
-        |> Option.defaultValue (Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            ".steam/steam/steamapps/common/Menace"))
-    let persistentDir = Path.Combine(gameDir, "UserData", "BOAM")
-    let userPath = Path.Combine(persistentDir, "configs", "game_events.json5")
-    let modDir = Path.GetDirectoryName(exeDir.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
-    let defaultPath = Path.Combine(modDir, "configs", "game_events.json5")
+    let userPath = Path.Combine(PersistentDir, "configs", "game_events.json5")
+    let defaultPath = Path.Combine(ModDir, "configs", "game_events.json5")
 
     if not (File.Exists(userPath)) && File.Exists(defaultPath) then
         try

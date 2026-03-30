@@ -2,110 +2,35 @@
 order: 6
 ---
 
-# Icon Asset Pipeline (`boam_asset_pipeline/`)
+# Icon Setup
 
-Generates properly sized icon assets from game badge art for use in heatmap unit overlays and the tactical minimap.
+Icon generation is built into the tactical engine. There is no separate binary.
 
-## Overview
+On first startup, if no icons are found, the engine presents an interactive setup:
 
-Game assets are **not shipped** with BOAM. You need to extract or locate the source PNGs yourself. The badges and faction icons used in the default config can be found in the game's extracted data at:
+1. Generate from extracted game assets (if available at `UserData/ExtractedData/Assets/`)
+2. Extract the built-in fallback icon pack (embedded in the engine binary)
+3. Skip (text labels used instead of icons on the minimap)
 
-```
-<ExtractedDataPath>/Assets/Resources/ui/sprites/badges/
-<ExtractedDataPath>/Assets/Resources/ui/sprites/factions/
-```
+Icons are stored in `UserData/BOAM/icons/` and survive mod deploys.
 
-Copy the PNGs you want into `UserData/BOAM/`, point `icon-config.json5` sources at it, and run the generator.
+## Icon resolution chain
 
-## Running the Generator
+When rendering, the minimap and heatmap renderer look for icons in this order:
 
-Run from the BOAM mod folder. It reads `icon-config.json5` and resizes every source PNG to the configured output location.
+1. Leader icon (e.g., `templates/rewa.png`)
+2. Template icon (e.g., `templates/alien_stinger.png`)
+3. Faction icon (e.g., `factions/wildlife.png`)
+4. Text label fallback
 
-<details>
-<summary>Linux</summary>
+## Configuration
 
-```bash
-cd /path/to/Menace/Mods/BOAM/
-./boam-icons
-```
+Icon generation is configured via `icon-config.json5`. The engine checks:
 
-</details>
+1. User config: `UserData/BOAM/configs/icon-config.json5`
+2. Mod default: `Mods/BOAM/configs/icon-config.json5`
 
-<details>
-<summary>Windows</summary>
-
-```bat
-cd C:\path\to\Menace\Mods\BOAM\
-boam-icons.exe
-```
-
-</details>
-
-**Options:**
-
-| Flag | Description |
-|------|-------------|
-| `--force` | Overwrite existing icons (default: skip existing files) |
-| `--config <path>` | Path to config file (default: `icon-config.json5` next to the executable) |
-| `--help` | Show usage |
-
-By default, existing icons are preserved — only missing icons are generated. Use `--force` after updating source art or changing icon sizes.
-
-## When to Generate
-
-- **First install** — run once after extracting the BOAM-engine archive
-- **After updating source art** — run with `--force` to regenerate from new sources
-- **After adding new entries** — run normally (only new icons are generated)
-- **After deploy (development)** — deploy wipes the icons directory, regenerate after every deploy
-
-## Fallback Chain
-
-When rendering a unit on the heatmap or minimap overlay, the icon is resolved in this order:
-
-1. **Leader** — `icons/templates/{leader_name}.png` (e.g., `rewa.png`, `exconde.png`)
-2. **Template** — `icons/templates/{template_name}.png` (e.g., `alien_stinger.png`)
-3. **Faction** — `icons/factions/{faction}.png` (e.g., `wildlife.png`)
-4. **Colored square** — hard fallback if no icon found
-
-When a leader or template icon is missing, the engine auto-copies the faction icon to the expected path. This seeds placeholder files with the correct filenames — replace them with proper art whenever you want.
-
-## icon-config.json5
-
-The config file declares where source art lives and how each icon maps from source to output.
-
-### Structure
-
-Paths are resolved automatically — no need to set absolute paths:
-- `output_base`: relative to `Mods/BOAM/` (default: `"icons"`)
-- `sources`: relative to `UserData/BOAM/` (default: `""` = the UserData/BOAM root)
-- Absolute paths are used as-is if you need custom source locations
-
-```json
-{
-  "defaults": {
-    "size": 64,
-    "output_base": "icons"
-  },
-  "sources": {
-    "native": "",
-    "custom": "/path/to/my-custom-icons"
-  },
-  "factions": [ ... ],
-  "templates": [ ... ],
-  "leaders": [ ... ]
-}
-```
-
-| Field | Description |
-|-------|-------------|
-| `defaults.size` | Default output size in pixels (width = height). All icons are square. |
-| `defaults.output_base` | Output directory relative to `Mods/BOAM/`. Absolute paths also accepted. |
-| `sources` | Named source directories relative to `UserData/BOAM/`. Absolute paths also accepted. |
-| `factions` | Faction-level icons — one per faction. Output goes to `factions/`. |
-| `templates` | Unit template icons — one per unit archetype. Output goes to `templates/`. |
-| `leaders` | Leader icons — one per named character. Output also goes to `templates/` (leaders override templates in the fallback chain). |
-
-### Entry Format
+### Entry format
 
 Each entry in `factions`, `templates`, and `leaders`:
 
@@ -120,37 +45,14 @@ Each entry in `factions`, `templates`, and `leaders`:
 | `output` | yes | Path relative to `output_base` |
 | `size` | no | Override `defaults.size` for this entry |
 
-### Examples
+## Adding new units
 
-**Faction icon:**
-```json
-{ "dir": "native", "source": "factions/enemy_faction_01.png", "output": "factions/wildlife.png" }
-```
+1. Identify the template name from engine logs or heatmap filenames
+2. Find the source art in `UserData/ExtractedData/Assets/`
+3. Add an entry to `icon-config.json5`
+4. Delete the icons directory and restart the engine to regenerate
 
-**Template icon:**
-```json
-{ "dir": "native", "source": "badges/squad_badge_bugs_stinger_234x234.png", "output": "templates/alien_stinger.png" }
-```
-
-**Custom art:**
-```json
-{ "dir": "custom", "source": "my_alien_queen.png", "output": "templates/alien_queen.png" }
-```
-
-**Larger icon (override size):**
-```json
-{ "dir": "native", "source": "badges/squad_badge_bugs_queen_234x234.png", "output": "templates/alien_queen.png", "size": 96 }
-```
-
-## Adding an Icon for a New Unit
-
-1. **Identify the template name** from BOAM-engine logs or heatmap filenames. The engine strips the prefix before the last dot — `enemy.alien_bombardier` → `alien_bombardier`.
-2. **Find or create source art** from game data or your own PNGs.
-3. **Add entry to `icon-config.json5`** — output filename must match the template identifier.
-4. **Regenerate:** `./boam-icons --force`
-5. **Restart the game** (icon cache is in-memory).
-
-## Quick Customization Without Config
+## Quick customization without config
 
 Place 64x64 PNGs directly into the icons directory:
 
@@ -165,8 +67,4 @@ UserData/BOAM/icons/
     └── darby.png
 ```
 
-The engine and minimap overlay load icons by filename — drop a PNG with the right name and restart the game.
-
-## Troubleshooting
-
-If icons are missing or the generator reports errors, download the debug icon generator (in the tactical engine) from the [vDebugAssets release](https://github.com/yandrosthesane/menace-bot-on-a-mission-modpack/releases/tag/vDebugAssets) and run it with `--force`. This build includes fallback strategies.
+The engine and minimap load icons by filename — drop a PNG with the right name and restart the game.

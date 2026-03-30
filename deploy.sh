@@ -22,7 +22,7 @@ SRC_DIR="${SCRIPT_DIR}"
 STAGING_DIR="${USER_HOME}/Documents/MenaceModkit/staging/${MOD_NAME}"
 REPO_DIR="${USER_HOME}/workspace/menace_mods/MenaceAssetPacker"
 MCP_PROJECT="${REPO_DIR}/src/Menace.Modkit.Mcp/Menace.Modkit.Mcp.csproj"
-GAME_DIR="${USER_HOME}/.steam/steam/steamapps/common/Menace"
+GAME_DIR="${USER_HOME}/.local/share/Steam/steamapps/common/Menace"
 GAME_MODS_DIR="${GAME_DIR}/Mods"
 GAME_MOD_DIR="${GAME_MODS_DIR}/${MOD_NAME}"
 LOADER_DLL="${REPO_DIR}/src/Menace.ModpackLoader/bin/Release/net6.0/Menace.ModpackLoader.dll"
@@ -30,10 +30,8 @@ BUNDLED_DIR="${REPO_DIR}/third_party/bundled/ModpackLoader"
 RUNTIME_DIR="${USER_HOME}/Documents/MenaceModkit/runtime"
 
 ENGINE_DIR="boam_tactical_engine"
-PIPELINE_DIR="boam_asset_pipeline"
 LAUNCHER_DIR="launcher"
-PUBLISH_ENGINE=".publish-engine"
-PUBLISH_ICONS=".publish-icons"
+PERSISTENT_DIR="${GAME_DIR}/UserData/BOAM"
 
 # Validate source exists
 if [ ! -f "$SRC_DIR/modpack.json" ]; then
@@ -146,36 +144,32 @@ echo "==> C# bridge deployed."
 # ─────────────────────────────────────────────
 # Step 4: Publish tactical engine (linux-x64)
 # ─────────────────────────────────────────────
+rm -rf "$PERSISTENT_DIR/Engine"
 echo "==> Publishing tactical engine (linux-x64)..."
+BUILD_HASH="$(git -C "$SCRIPT_DIR" rev-parse --short HEAD 2>/dev/null || echo 'unknown')"
+BUILD_SUFFIX="dev.${BUILD_HASH}"
 dotnet publish "$ENGINE_DIR/TacticalEngine.fsproj" \
     -c Release -r linux-x64 --self-contained \
     -p:PublishSingleFile=false \
-    -o "$PUBLISH_ENGINE" \
+    -p:VersionSuffix="${BUILD_SUFFIX}" \
+    -o "$PERSISTENT_DIR/Engine/lib" \
     -v quiet
+chmod +x "$PERSISTENT_DIR/Engine/lib/TacticalEngine"
+
+# Wrapper script so Engine/TacticalEngine works directly
+cat > "$PERSISTENT_DIR/Engine/TacticalEngine" << 'WRAPPER'
+#!/bin/bash
+DIR="$(cd "$(dirname "$0")" && pwd)"
+exec "$DIR/lib/TacticalEngine" "$@"
+WRAPPER
+chmod +x "$PERSISTENT_DIR/Engine/TacticalEngine"
+VERSION_PREFIX="$(grep '<VersionPrefix>' "$ENGINE_DIR/TacticalEngine.fsproj" | sed 's/.*<VersionPrefix>//' | sed 's/<.*//')"
+echo "    Engine version: ${VERSION_PREFIX}-${BUILD_SUFFIX}"
 
 # ─────────────────────────────────────────────
-# Step 5: Publish icon generator (linux-x64)
+# Step 5: Install launcher + configs to game
 # ─────────────────────────────────────────────
-echo "==> Publishing icon generator (linux-x64)..."
-dotnet publish "$PIPELINE_DIR/BoamAssetPipeline.fsproj" \
-    -c Release -r linux-x64 --self-contained \
-    -p:PublishSingleFile=true \
-    -o "$PUBLISH_ICONS" \
-    -v quiet
-
-# ─────────────────────────────────────────────
-# Step 6: Install engine + tools to game
-# ─────────────────────────────────────────────
-echo "==> Installing tactical engine to ${GAME_MOD_DIR}..."
-mkdir -p "$GAME_MOD_DIR/tactical_engine"
-
-# Tactical engine — full publish output
-cp -r "$PUBLISH_ENGINE/"* "$GAME_MOD_DIR/tactical_engine/"
-chmod +x "$GAME_MOD_DIR/tactical_engine/TacticalEngine"
-
-# Icon generator — single-file binary
-cp "$PUBLISH_ICONS/boam-icons" "$GAME_MOD_DIR/"
-chmod +x "$GAME_MOD_DIR/boam-icons"
+echo "==> Installing launcher and configs..."
 
 # Launcher scripts
 cp "$LAUNCHER_DIR/start-tactical-engine.sh" "$GAME_MOD_DIR/"
@@ -191,16 +185,6 @@ echo "    All configs installed to configs/"
 
 echo "    Done."
 
-# Cleanup publish dirs
-rm -rf "$PUBLISH_ENGINE" "$PUBLISH_ICONS"
-
-# ─────────────────────────────────────────────
-# Step 7: Regenerate icons
-# ─────────────────────────────────────────────
-echo "==> Regenerating icons..."
-ICON_CONFIG="$GAME_MOD_DIR/configs/icon-config.json5"
-"$GAME_MOD_DIR/boam-icons" --force --config "$ICON_CONFIG" 2>&1 | tail -5
-echo "    Icons regenerated."
 
 echo ""
 echo "==> ${MOD_NAME} fully deployed. Restart the game to test."

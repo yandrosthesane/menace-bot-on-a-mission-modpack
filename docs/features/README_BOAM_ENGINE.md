@@ -4,9 +4,11 @@ order: 7
 
 # BOAM-engine
 
-Companion process that runs outside the game. Receives hook data from the BOAM-modpack over HTTP and provides heatmap rendering, action logging, and auto-navigation.
+Companion process that runs outside the game. Runs AI behaviour nodes, receives hook data from the BOAM-modpack over HTTP, provides heatmap rendering, action logging, and icon generation.
 
-The BOAM-engine is optional — the [BOAM-modpack](README_BOAM_MODPACK.md) works standalone for the minimap. Start the engine when you want heatmaps or action logging.
+The BOAM-engine is optional — the [BOAM-modpack](README_BOAM_MODPACK.md) works standalone for the minimap. Start the engine when you want AI behaviours, heatmaps, or action logging.
+
+The engine binary lives in `UserData/BOAM/Engine/` and resolves all paths from the game directory (via `MENACE_GAME_DIR` env var or standard Steam install paths).
 
 ![BOAM-engine startup](/docs/images/tactical_engine_startup.png)
 
@@ -34,8 +36,8 @@ All examples assume `cd /path/to/Menace/Mods/BOAM/`.
 ./start-tactical-engine.sh --on-title /navigate/tactical
 
 # Render heatmaps and exit (no server, no game needed)
-./tactical_engine/TacticalEngine --render battle_2026_03_15_15_14
-./tactical_engine/TacticalEngine --render battle_2026_03_15_15_14 --pattern "r01_*_stinger_*"
+../UserData/BOAM/Engine/TacticalEngine --render battle_2026_03_15_15_14
+../UserData/BOAM/Engine/TacticalEngine --render battle_2026_03_15_15_14 --pattern "r01_*_stinger_*"
 ```
 
 </details>
@@ -51,8 +53,8 @@ REM Start server + auto-navigate to tactical
 start-tactical-engine.bat --on-title /navigate/tactical
 
 REM Render heatmaps and exit
-tactical_engine\TacticalEngine.exe --render battle_2026_03_15_15_14
-tactical_engine\TacticalEngine.exe --render battle_2026_03_15_15_14 --pattern "r01_*_stinger_*"
+..\UserData\BOAM\Engine\TacticalEngine.exe --render battle_2026_03_15_15_14
+..\UserData\BOAM\Engine\TacticalEngine.exe --render battle_2026_03_15_15_14 --pattern "r01_*_stinger_*"
 ```
 
 </details>

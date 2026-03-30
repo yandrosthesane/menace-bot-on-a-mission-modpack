@@ -19,7 +19,6 @@ MOD_NAME=$(jq -r '.name' modpack.json)
 VERSION=$(jq -r '.version' modpack.json)
 RELEASE_DIR="release"
 ENGINE_DIR="boam_tactical_engine"
-PIPELINE_DIR="boam_asset_pipeline"
 LAUNCHER_DIR="launcher"
 
 echo "==> Building $MOD_NAME release v$VERSION"
@@ -44,7 +43,7 @@ rm -f "$MOD_ZIP"
 echo "    $MOD_ZIP"
 
 # ─────────────────────────────────────────────
-# Archive 2: Tactical engine + icon generator
+# Archive 2: Tactical engine
 # ─────────────────────────────────────────────
 
 build_engine_archive() {
@@ -69,21 +68,27 @@ build_engine_archive() {
         -o "$RELEASE_DIR/.publish-engine-$RID-$SUFFIX" \
         -v quiet
 
-    echo "==> Publishing icon generator ($RID, $SUFFIX)..."
-    dotnet publish "$PIPELINE_DIR/BoamAssetPipeline.fsproj" \
-        -c Release -r "$RID" $SELF_CONTAINED \
-        -p:PublishSingleFile=true \
-        -o "$RELEASE_DIR/.publish-icons-$RID-$SUFFIX" \
-        -v quiet
-
     local STAGE="$RELEASE_DIR/.stage-engine-$RID-$SUFFIX/$MOD_NAME"
-    mkdir -p "$STAGE/tactical_engine"
+    mkdir -p "$STAGE/Engine/lib"
 
-    # Tactical engine — full publish output
-    cp -r "$RELEASE_DIR/.publish-engine-$RID-$SUFFIX/"* "$STAGE/tactical_engine/"
+    # Tactical engine — runtime + deps into lib/
+    cp -r "$RELEASE_DIR/.publish-engine-$RID-$SUFFIX/"* "$STAGE/Engine/lib/"
 
-    # Icon generator — single-file binary
-    cp "$RELEASE_DIR/.publish-icons-$RID-$SUFFIX/boam-icons$EXT" "$STAGE/"
+    # Wrapper script/batch so Engine/TacticalEngine works directly
+    if [ "$RID" = "linux-x64" ]; then
+        cat > "$STAGE/Engine/TacticalEngine" << 'WRAPPER'
+#!/bin/bash
+DIR="$(cd "$(dirname "$0")" && pwd)"
+exec "$DIR/lib/TacticalEngine" "$@"
+WRAPPER
+        chmod +x "$STAGE/Engine/TacticalEngine"
+        chmod +x "$STAGE/Engine/lib/TacticalEngine"
+    else
+        cat > "$STAGE/Engine/TacticalEngine.bat" << 'WRAPPER'
+@echo off
+"%~dp0lib\TacticalEngine.exe" %*
+WRAPPER
+    fi
 
     # Launcher scripts
     if [ "$RID" = "linux-x64" ]; then
@@ -91,8 +96,6 @@ build_engine_archive() {
         cp "$LAUNCHER_DIR/boam-launch.sh" "$STAGE/"
         chmod +x "$STAGE/start-tactical-engine.sh"
         chmod +x "$STAGE/boam-launch.sh"
-        chmod +x "$STAGE/tactical_engine/TacticalEngine"
-        chmod +x "$STAGE/boam-icons"
     else
         cp "$LAUNCHER_DIR/start-tactical-engine.bat" "$STAGE/"
         cp "$LAUNCHER_DIR/boam-launch.bat" "$STAGE/"

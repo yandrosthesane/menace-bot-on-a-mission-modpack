@@ -1,6 +1,7 @@
 #!/bin/bash
 # Start the BOAM Tactical Engine for Linux.
-# Place this script in the game's Mods/BOAM/ directory, alongside the tactical_engine/ folder.
+# Place this script in the game's Mods/BOAM/ directory.
+# Engine binary lives in UserData/BOAM/Engine/.
 #
 # Usage:
 #   ./start-tactical-engine.sh                                              # passive start
@@ -11,7 +12,8 @@
 # Opens a dedicated terminal window with the engine output.
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-ENGINE_DIR="$SCRIPT_DIR/tactical_engine"
+GAME_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+ENGINE_DIR="$GAME_DIR/UserData/BOAM/Engine"
 ENGINE_BIN="$ENGINE_DIR/TacticalEngine"
 PORT=7660
 
@@ -24,7 +26,7 @@ fi
 
 if [ ! -f "$ENGINE_BIN" ]; then
     echo "Error: TacticalEngine binary not found at $ENGINE_BIN"
-    echo "Make sure the tactical_engine/ folder is next to this script."
+    echo "Expected at: $ENGINE_BIN"
     exit 1
 fi
 

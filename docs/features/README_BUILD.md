@@ -18,6 +18,8 @@ cd menace-bot-on-a-mission-modpack
 
 ## Tactical Engine
 
+The engine includes all functionality: behaviour nodes, heatmap rendering, action logging, and icon generation.
+
 ```bash
 # Linux
 dotnet publish boam_tactical_engine/TacticalEngine.fsproj -c Release -r linux-x64 --self-contained -o publish/engine
@@ -26,19 +28,7 @@ dotnet publish boam_tactical_engine/TacticalEngine.fsproj -c Release -r linux-x6
 dotnet publish boam_tactical_engine/TacticalEngine.fsproj -c Release -r win-x64 --self-contained -o publish/engine
 ```
 
-Copy `publish/engine/` contents to `Mods/BOAM/tactical_engine/`.
-
-## Icon Generator
-
-```bash
-# Linux
-dotnet publish boam_asset_pipeline/BoamAssetPipeline.fsproj -c Release -r linux-x64 --self-contained -p:PublishSingleFile=true -o publish/icons
-
-# Windows
-dotnet publish boam_asset_pipeline/BoamAssetPipeline.fsproj -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -o publish/icons
-```
-
-Copy `publish/icons/boam-icons` (or `boam-icons.exe`) to `Mods/BOAM/`.
+Copy `publish/engine/` contents to `UserData/BOAM/Engine/` inside the game directory.
 
 ## Slim Variant
 
@@ -46,7 +36,6 @@ For a smaller build that requires the .NET 10 runtime to be installed:
 
 ```bash
 dotnet publish boam_tactical_engine/TacticalEngine.fsproj -c Release -r linux-x64 --no-self-contained -o publish/engine-slim
-dotnet publish boam_asset_pipeline/BoamAssetPipeline.fsproj -c Release -r linux-x64 --no-self-contained -p:PublishSingleFile=true -o publish/icons-slim
 ```
 
 ## All Release Archives

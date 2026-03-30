@@ -88,33 +88,13 @@ type Registry() =
         let report = this.Validate()
         let lines = ResizeArray<string>()
 
-        lines.Add(sprintf "Registered %d nodes across %d hooks" report.TotalNodes report.TotalHooks)
-
-        // List nodes by hook
+        // Compact: one line per hook with node names
         for kv in this.ByHook() do
             let hook, timing = kv.Key
             let ns = kv.Value
-            lines.Add(sprintf "  %A.%A:" hook timing)
-            for n in ns do
-                lines.Add(sprintf "    %s (reads: [%s], writes: [%s])"
-                    n.Name
-                    (String.concat ", " n.Reads)
-                    (String.concat ", " n.Writes))
+            let names = ns |> List.map (fun n -> n.Name) |> String.concat ", "
+            lines.Add(sprintf "%A.%A: %s" hook timing names)
 
-        // Key validations
-        for v in report.Keys do
-            match v with
-            | Ok(key, ws, rs) ->
-                lines.Add(sprintf "  OK  '%s': written by [%s], read by [%s]"
-                    key (String.concat ", " ws) (String.concat ", " rs))
-            | OrphanedReader(key, rs) ->
-                lines.Add(sprintf "  WARN '%s': read by [%s] but NO WRITER installed"
-                    key (String.concat ", " rs))
-            | WriteConflict(key, ws) ->
-                lines.Add(sprintf "  WARN '%s': written by MULTIPLE nodes [%s]"
-                    key (String.concat ", " ws))
-
-        if not report.HasWarnings then
-            lines.Add("  No orphaned readers, no write conflicts")
+        lines.Add(sprintf "%d nodes, %d hooks" report.TotalNodes report.TotalHooks)
 
         lines |> Seq.toList

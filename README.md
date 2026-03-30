@@ -1,12 +1,12 @@
 # BOAM — Bot On A Mission
 
-**v2.4.0** | [Documentation](https://yandrosthesane.github.io/menace-bot-on-a-mission-modpack) | [Changelog](docs/features/CHANGELOG.md)
+**v2.5.0** | [Documentation](https://yandrosthesane.github.io/menace-bot-on-a-mission-modpack) | [Changelog](docs/features/CHANGELOG.md)
 
 AI behaviour modification mod for Menace.
 Injects per-tile score modifiers during the game's AI tile evaluation to steer enemy movement.
-Captures tactical data for offline heatmap rendering,
-provides a real-time in-game minimap overlay,
-and records full battle sessions (player actions + AI decisions + combat outcomes).
+Includes a real-time in-game minimap overlay.
+
+Opt-in features: offline heatmap rendering, battle session recording (player actions + AI decisions + combat outcomes).
 
 ## Features
 
@@ -20,7 +20,7 @@ and records full battle sessions (player actions + AI decisions + combat outcome
 
 ## Current Behaviour Nodes
 
-Five configurable nodes run in sequence during each AI actor's turn, modifying the game's tile scores to influence movement:
+Four configurable nodes run in sequence during each AI actor's turn, modifying the game's tile scores to influence movement:
 
 | Node | Score target | Effect                                                                                                                                           |
 |------|-------------|--------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -38,24 +38,28 @@ All tuning is in `behaviour.json5` — no code changes needed to adjust behaviou
 | Component | Location | Runtime | Description |
 |-----------|----------|---------|-------------|
 | [BOAM-modpack](docs/features/README_BOAM_MODPACK.md) | `src/` | In-game (MelonLoader/Wine) | Harmony patches, minimap overlay, map capture, action forwarding |
-| [BOAM-engine](docs/features/README_BOAM_ENGINE.md) | `boam_tactical_engine/` | Native (.NET 10, port 7660) | Heatmap renderer, action logger, auto-navigation |
-| [Icon Generator](docs/features/README_ICON_GENERATOR.md) | `boam_asset_pipeline/` | CLI tool | Resizes game badge art into heatmap/minimap icons |git 
+| [BOAM-engine](docs/features/README_BOAM_ENGINE.md) | `boam_tactical_engine/` | Native (.NET 10, port 7660) | Behaviour nodes, heatmap renderer, action logger, icon setup |
 
-The BOAM-modpack works standalone — the minimap needs no engine. Start the BOAM-engine only when you want heatmaps or action logging.
+The BOAM-modpack works standalone — the minimap needs the engine to be run once for setup to generate assets. 
+Start the BOAM-engine only when you want AI behaviours, heatmaps, or action logging.
 
 **First time?** Follow the [Installation Guide](docs/features/README_INSTALL.md).
 
 ## Downloads
 
-Pre-built engine binaries (Linux and Windows) are available on the [Releases page](https://github.com/yandrosthesane/menace-bot-on-a-mission-modpack/releases/). This is the only distribution channel — binaries are not hosted elsewhere.
+Pre-built engine binaries (Linux and Windows) are available on the [Releases page](https://github.com/yandrosthesane/menace-bot-on-a-mission-modpack/releases/).
 
 Each release includes:
 - **BOAM-modpack** — C# source (compiled at deploy time by the Menace Modkit)
 - **BOAM-tactical-engine** — pre-built binaries for Linux and Windows (bundled and slim variants)
 
+The engine is a standalone binary — put it anywhere you like. It finds the game directory automatically via `MENACE_GAME_DIR` env var or standard Steam install paths. No need to place it inside the game folder.
+
 Prefer to build yourself? See [Building from Source](docs/features/README_BUILD.md).
 
 ## Install Layout
+
+The BOAM-modpack is deployed inside the game directory. The engine can live anywhere.
 
 ```
 Menace/
@@ -63,18 +67,15 @@ Menace/
 │   ├── dlls/BOAM.dll              C# bridge (compiled by ModpackLoader)
 │   ├── modpack.json               Mod manifest
 │   ├── configs/                   Mod default configs (reset on deploy)
-│   │   ├── engine.json5           Engine ports, rendering, heatmaps toggle
+│   │   ├── engine.json5           Engine ports, rendering
 │   │   ├── behaviour.json5       AI behaviour node chains and tuning presets
+│   │   ├── game_events.json5     Active game events and feature gates
 │   │   ├── tactical_map.json5     Minimap keybindings, visual defaults
 │   │   ├── tactical_map_presets.json5  Display presets (sizes, styles, anchors)
 │   │   └── icon-config.json5      Icon generation source mappings
-│   ├── tactical_engine/           Engine binary + runtime
-│   │   └── TacticalEngine(.exe)
 │   ├── start-tactical-engine.sh   Launcher (opens terminal, logs to file)
-│   ├── boam-icons(.exe)           Icon generator
 │   ├── boam-launch.sh(.bat)       Steam launch helper
-│   └── logs/                      Engine log (overwritten each run)
-│       └── tactical_engine.log
+│   └── logs/                      Engine log
 └── UserData/BOAM/
     ├── configs/                   User configs (persistent, checked first)
     ├── icons/                     Generated heatmap/minimap icons
@@ -89,6 +90,9 @@ Menace/
             ├── round_log.jsonl    Action log (player actions + AI decisions)
             ├── render_jobs/       Self-contained render job JSON files
             └── heatmaps/          Rendered heatmap PNGs
+
+Anywhere/
+└── TacticalEngine(.exe)           Engine binary — runs from any location
 ```
 
 ## Usage
@@ -140,9 +144,9 @@ After playing a round, render job data is flushed to disk. Render heatmaps on de
 <summary>Linux</summary>
 
 ```bash
-./tactical_engine/TacticalEngine --render battle_2026_03_15_15_14                              # all
-./tactical_engine/TacticalEngine --render battle_2026_03_15_15_14 --pattern "r01_*"            # round 1 only
-./tactical_engine/TacticalEngine --render battle_2026_03_15_15_14 --pattern "*_alien_stinger*" # one unit
+../UserData/BOAM/Engine/TacticalEngine --render battle_2026_03_15_15_14                              # all
+../UserData/BOAM/Engine/TacticalEngine --render battle_2026_03_15_15_14 --pattern "r01_*"            # round 1 only
+../UserData/BOAM/Engine/TacticalEngine --render battle_2026_03_15_15_14 --pattern "*_alien_stinger*" # one unit
 ```
 
 </details>
@@ -151,9 +155,9 @@ After playing a round, render job data is flushed to disk. Render heatmaps on de
 <summary>Windows</summary>
 
 ```bat
-tactical_engine\TacticalEngine.exe --render battle_2026_03_15_15_14
-tactical_engine\TacticalEngine.exe --render battle_2026_03_15_15_14 --pattern "r01_*"
-tactical_engine\TacticalEngine.exe --render battle_2026_03_15_15_14 --pattern "*_alien_stinger*"
+..\UserData\BOAM\Engine\TacticalEngine.exe --render battle_2026_03_15_15_14
+..\UserData\BOAM\Engine\TacticalEngine.exe --render battle_2026_03_15_15_14 --pattern "r01_*"
+..\UserData\BOAM\Engine\TacticalEngine.exe --render battle_2026_03_15_15_14 --pattern "*_alien_stinger*"
 ```
 
 </details>
@@ -165,27 +169,11 @@ curl -s -X POST http://127.0.0.1:7660/render/battle/battle_2026_03_15_15_14 -d '
 
 See [Heatmap Renderer](docs/features/README_HEATMAPS.md).
 
-### Generate Icons
+### Icons
 
-<details>
-<summary>Linux</summary>
-
-```bash
-./boam-icons --force
-```
-
-</details>
-
-<details>
-<summary>Windows</summary>
-
-```bat
-boam-icons.exe --force
-```
-
-</details>
-
-See [Icon Generator](docs/features/README_ICON_GENERATOR.md).
+Icons are generated automatically on first engine startup via an interactive setup prompt.
+To regenerate, start the engine with `--icons-force`.
+A built-in fallback icon pack is embedded in the engine binary for users without extracted game assets.
 
 ## Documentation
 
@@ -195,7 +183,6 @@ See [Icon Generator](docs/features/README_ICON_GENERATOR.md).
 - [Heatmap Renderer](docs/features/README_HEATMAPS.md) — Render API, pattern matching, what each heatmap shows
 - [Configuration](docs/features/README_CONFIG.md) — Two-tier config system, versioning, all config options
 - [BOAM-modpack](docs/features/README_BOAM_MODPACK.md) — In-game mod: minimap, hooks, map capture
-- [BOAM-engine](docs/features/README_BOAM_ENGINE.md) — External engine: heatmaps, logging, CLI, HTTP API
-- [Icon Generator](docs/features/README_ICON_GENERATOR.md) — Config format, fallback chain, customization
+- [BOAM-engine](docs/features/README_BOAM_ENGINE.md) — External engine: behaviours, heatmaps, logging, icon setup, CLI, HTTP API
 - [Building from Source](docs/features/README_BUILD.md) — Clone, build, and install from source
 - [Changelog](docs/features/CHANGELOG.md) — Version history

@@ -1,6 +1,7 @@
 @echo off
 REM Start the BOAM Tactical Engine for Windows.
-REM Place this script in the game's Mods\BOAM\ directory, alongside the tactical_engine\ folder.
+REM Place this script in the game's Mods\BOAM\ directory.
+REM Engine binary lives in UserData\BOAM\Engine\.
 REM
 REM Usage:
 REM   start-tactical-engine.bat                                              passive start
@@ -10,8 +11,8 @@ REM
 REM The engine runs in this window — close it or press Ctrl+C to stop.
 
 set SCRIPT_DIR=%~dp0
-set ENGINE_DIR=%SCRIPT_DIR%tactical_engine
-set ENGINE_EXE=%ENGINE_DIR%\TacticalEngine.exe
+for %%I in ("%SCRIPT_DIR%\..\..\") do set GAME_DIR=%%~fI
+set ENGINE_EXE=%GAME_DIR%UserData\BOAM\Engine\TacticalEngine.bat
 set PORT=7660
 
 REM Stop any existing instance
@@ -23,11 +24,11 @@ if %errorlevel% equ 0 (
 )
 
 if not exist "%ENGINE_EXE%" (
-    echo Error: TacticalEngine.exe not found at %ENGINE_EXE%
-    echo Make sure the tactical_engine\ folder is next to this script.
+    echo Error: TacticalEngine not found at %ENGINE_EXE%
+    echo Expected at: %GAME_DIR%UserData\BOAM\Engine\
     pause
     exit /b 1
 )
 
 REM Run in foreground — keeps this window open with live output
-"%ENGINE_EXE%" %*
+call "%ENGINE_EXE%" %*

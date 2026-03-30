@@ -4,6 +4,32 @@ order: 10
 
 # Changelog
 
+## v2.5.0
+
+### Engine infrastructure
+
+- All paths resolved from game directory. Engine binary no longer needs to be adjacent to configs. Lookup chain: `MENACE_GAME_DIR` env var, then platform-specific Steam paths (Linux XDG + legacy, Windows Program Files).
+- Engine binary moved from `Mods/BOAM/tactical_engine/` to `UserData/BOAM/Engine/`. Configs still in `Mods/BOAM/configs/` (mod defaults) and `UserData/BOAM/configs/` (user overrides).
+- Engine version read from assembly metadata at runtime, stamped at build time with git hash (e.g. `2.5.0-dev.abc1234`).
+- Windows support: path resolution uses `Program Files (x86)\Steam\...` when `MENACE_GAME_DIR` is not set.
+
+### Icon setup
+
+- Icon generator (`boam_asset_pipeline`) merged into the tactical engine. No separate `boam-icons` binary.
+- Interactive setup on first startup when no icons found: generate from extracted game assets, fallback pack, or skip (colored squares used instead).
+
+### Minimap
+
+- Unit labels no longer show the actor index suffix (e.g. "Carda" instead of "Carda.1").
+
+### Startup output
+
+- Node registration output trimmed: one line per hook with node names, no per-node reads/writes detail, no state key validation warnings.
+
+### Deploy
+
+- `deploy.sh` publishes engine directly to `UserData/BOAM/Engine/`. Icon generation removed from deploy — handled by engine startup.
+
 ## v2.4.0
 
 ### Behaviour fixes

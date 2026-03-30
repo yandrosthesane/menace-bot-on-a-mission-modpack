@@ -4,13 +4,7 @@ module BOAM.TacticalEngine.Logging
 open System
 open System.IO
 
-let private logDir =
-    let gameDir =
-        Environment.GetEnvironmentVariable("MENACE_GAME_DIR")
-        |> Option.ofObj
-        |> Option.defaultValue (Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            ".steam/steam/steamapps/common/Menace"))
-    Path.Combine(gameDir, "Mods", "BOAM", "logs")
+let private logDir = Path.Combine(Config.ModDir, "logs")
 
 let private logFilePath =
     Directory.CreateDirectory(logDir) |> ignore
